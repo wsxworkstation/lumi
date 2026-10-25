@@ -1,0 +1,165 @@
+<!doctype html><html lang="zh-Hans"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+<title>微光 Lumi 字体挑选</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600&family=Noto+Serif+SC:wght@400;600&family=ZCOOL+XiaoWei&family=ZCOOL+KuaiLe&family=ZCOOL+QingKe+HuangYou&family=Ma+Shan+Zheng&family=Long+Cang&family=Lexend:wght@400;600&family=Figtree:wght@400;700&family=Fredoka:wght@400;600&family=Sora:wght@400;600&family=Poppins:wght@400;600&family=Nunito:wght@400;700&family=Plus+Jakarta+Sans:wght@400;700&family=Outfit:wght@400;600&family=Quicksand:wght@400;700&family=Manrope:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/lxgwwenkai@3.0.0/dist/LXGWWenKai-Regular/result.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/hcqyt@2.0.0/dist/ChillRoundFRegular/result.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/yozai@3.0.0/dist/Yozai-Regular/result.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/xiaolai@3.0.0/dist/Xiaolai/result.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/lxgwmanhei@3.0.0/dist/LXGWMarkerGothic/result.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/dyh@3.0.0/dist/SmileySans-Oblique/result.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/ysbth@3.0.0/dist/%E4%BC%98%E8%AE%BE%E6%A0%87%E9%A2%98%E9%BB%91/result.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/jxzk@3.0.0/dist/%E6%B1%9F%E8%A5%BF%E6%8B%99%E6%A5%B7/result.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/lxgw-neo-zhi-song@2.0.0/dist/LXGWNeoZhiSong/result.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/zqfs@3.0.0/dist/ZhuqueFangsong-Regular/result.css">
+<style>
+/* Layout: two stacked sections (中文 / English) of comparable specimen cards, then a live combo preview. */
+:root{
+  --bg:#f6f7fc; --surface:#ffffff; --ink:#1d2433; --muted:#667085; --line:#dfe3ef;
+  --accent:#4a55e0; --accent-soft:#eceeff; --ok:#2f7d5b; --warn:#b5473f;
+  --ui:system-ui,-apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12141c; --surface:#1b1e29; --ink:#e8eaf3; --muted:#9aa1b5; --line:#2c3142;
+  --accent:#8f97ff; --accent-soft:#262a45; --ok:#6cc79c; --warn:#f08a80; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12141c; --surface:#1b1e29; --ink:#e8eaf3; --muted:#9aa1b5; --line:#2c3142;
+  --accent:#8f97ff; --accent-soft:#262a45; --ok:#6cc79c; --warn:#f08a80; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--ui);line-height:1.6}
+.wrap{max-width:1100px;margin:0 auto;padding-block:32px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:40px}
+header h1{font-size:26px;margin:0 0 6px;text-wrap:balance}
+header p{margin:0;color:var(--muted);max-width:62ch}
+section{display:grid;gap:14px}
+.sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.sec-head h2{font-size:18px;margin:0}
+.sec-head span{color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:12px;align-content:start;min-width:0}
+.card.rec{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.code{font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:5px;padding:1px 7px;font-size:12px}
+.pick{font-weight:600;color:var(--accent)}
+.sample{display:grid;gap:8px}
+.brand{font-size:30px;line-height:1.2}
+.line{font-size:17px}
+.row{display:flex;justify-content:space-between;gap:10px;font-size:14px;border-top:1px solid var(--line);padding-top:8px;font-variant-numeric:tabular-nums}
+.row b{font-weight:600}
+.st{color:var(--ok)} .miss{color:var(--warn)}
+.note{font-size:12.5px;color:var(--muted);margin:0}
+.combo{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:16px}
+.controls{display:flex;gap:12px;flex-wrap:wrap}
+.controls label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+select{font:inherit;font-size:14px;padding:8px 10px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:200px;max-width:100%}
+select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mock{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.mock-top{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.mock-top strong{font-size:20px}
+.mock-top small{color:var(--muted);font-size:12px;margin-left:auto}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:500}
+td small{display:block;color:var(--muted);font-size:12px}
+.pill{display:inline-block;border-radius:6px;padding:2px 9px;font-size:12px;border:1px solid var(--line)}
+.pill.on{border-color:var(--ok);color:var(--ok)}
+.pill.off{border-color:var(--warn);color:var(--warn)}
+</style>
+
+</head><body>
+<div class="wrap">
+  <header>
+    <h1>微光 Lumi 字体挑选</h1>
+    <p>中文和英文分开选，共 18 款中文、10 款英文。每张卡片都用 app 里真实会出现的文字示范，蓝框是推荐。中文字体较大，第一次打开要等几秒才显示。最下面可以把中英文配在一起，看实际录入表的效果。</p>
+  </header>
+
+  <section aria-labelledby="zh">
+    <div class="sec-head"><h2 id="zh">中文字体</h2><span>正文与表格需要清楚；标题可以有个性</span></div>
+    <div class="grid" id="zh-grid"></div>
+  </section>
+
+  <section aria-labelledby="en">
+    <div class="sec-head"><h2 id="en">English font</h2><span>学生英文名、数字、按钮文字都会用到</span></div>
+    <div class="grid" id="en-grid"></div>
+  </section>
+
+  <section aria-labelledby="mix">
+    <div class="sec-head"><h2 id="mix">配在一起看看</h2><span>模拟功课录入表</span></div>
+    <div class="combo">
+      <div class="controls">
+        <label for="pick-zh">中文<select id="pick-zh"></select></label>
+        <label for="pick-en">English<select id="pick-en"></select></label>
+      </div>
+      <div class="mock" id="mock">
+        <div class="mock-top"><strong>微光 Lumi</strong><span>· 中四 化学</span><small>已同步 · 云端</small></div>
+        <div class="tbl"><table>
+          <thead><tr><th>学生</th><th>功课 10/24</th><th>小考</th><th>欠交</th></tr></thead>
+          <tbody>
+            <tr><td>Tan Wei Ming<small>陈伟明</small></td><td><span class="pill on">已交</span></td><td>85 / 100</td><td>0</td></tr>
+            <tr><td>Nur Aisyah<small>努尔·艾莎</small></td><td><span class="pill off">未交</span></td><td>缺席</td><td>2</td></tr>
+            <tr><td>Lim Jia Hui<small>林佳慧</small></td><td><span class="pill on">补交</span></td><td>0 / 100</td><td>1</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const zh=[
+  {code:'A',name:'思源黑体',family:'"Noto Sans SC"',rec:true,note:'清楚、端正，表格和小字都好读。最适合整个 app 用。'},
+  {code:'B',name:'系统默认（微软雅黑／苹方）',family:'"Microsoft YaHei","PingFang SC"',note:'现在用的就是这个。完全不用下载，最快，但电脑和手机看起来会不一样。'},
+  {code:'C',name:'思源宋体',family:'"Noto Serif SC"',note:'有书卷气、稳重。适合标题，用在表格会显得比较正式、拥挤。'},
+  {code:'D',name:'站酷小薇',family:'"ZCOOL XiaoWei"',note:'细长优雅，适合「微光 Lumi」这类大标题，不适合正文。'},
+  {code:'E',name:'站酷快乐体',family:'"ZCOOL KuaiLe"',note:'圆润活泼，像补习班海报。只适合做标题点缀。'},
+  {code:'F',name:'站酷庆科黄油体',family:'"ZCOOL QingKe HuangYou"',note:'方正、有设计感，像品牌招牌。适合 logo 文字和大标题。'},
+  {code:'G',name:'马善政楷书',family:'"Ma Shan Zheng"',note:'毛笔楷书，有华文学校的味道。只适合标题或标语。'},
+  {code:'H',name:'龙藏体',family:'"Long Cang"',note:'像老师手写的字，亲切有温度。适合登录页标语，不适合名单。'},
+  {code:'I',name:'霞鹜文楷',family:'"LXGW WenKai"',rec:true,note:'楷书但工整，温暖又好读，教育类 app 很爱用。正文也可以。'},
+  {code:'J',name:'寒蝉全圆体',family:'"寒蝉全圆体"',note:'全圆角黑体，柔和清楚，跟「微光」最搭的正文字体之一。'},
+  {code:'K',name:'悠哉字体',family:'"Yozai"',note:'手写感但很整齐，可爱不幼稚，名单也看得清楚。'},
+  {code:'L',name:'小赖字体',family:'"Xiaolai SC"',note:'像日系手写，很有个性。适合标题，正文略累。'},
+  {code:'M',name:'霞鹜漫黑',family:'"LXGW Marker Gothic"',note:'像马克笔写的黑体，活泼有力，适合标题和按钮。'},
+  {code:'N',name:'得意黑',family:'"Smiley Sans Oblique"',note:'斜体粗黑，很有品牌感，适合 logo「微光」两个字。'},
+  {code:'O',name:'优设标题黑',family:'"YouSheBiaoTiHei"',note:'厚重有冲击力，像海报大字。只适合大标题。'},
+  {code:'P',name:'江西拙楷',family:'"jiangxizhuokai"',note:'朴拙的楷书，有手作感，适合登录页标语。'},
+  {code:'Q',name:'霞鹜新致宋',family:'"LXGW Neo ZhiSong"',note:'清秀的宋体，比思源宋体轻盈，适合标题。'},
+  {code:'R',name:'朱雀仿宋',family:'"Zhuque Fangsong (technical preview)"',note:'仿宋，像正式公文和试卷，稳重有书香味。'},
+];
+const en=[
+  {code:'1',name:'Nunito',family:'"Nunito"',rec:true,note:'圆角、温和，跟「微光」柔和的感觉最配，数字也清楚。'},
+  {code:'2',name:'Plus Jakarta Sans',family:'"Plus Jakarta Sans"',note:'现代、利落，比较像专业的 SaaS 工具。'},
+  {code:'3',name:'Outfit',family:'"Outfit"',note:'几何感、干净，标题很好看，长英文名稍窄。'},
+  {code:'4',name:'Quicksand',family:'"Quicksand"',note:'最圆最可爱，但笔画细，手机上小字比较淡。'},
+  {code:'5',name:'Manrope',family:'"Manrope"',note:'稳重清晰，数字对齐好，个性比较低调。'},
+  {code:'6',name:'Lexend',family:'"Lexend"',note:'专为易读设计，字距宽松，学生名字一眼就认得。'},
+  {code:'7',name:'Figtree',family:'"Figtree"',note:'友善、干净，介于 Nunito 和 Jakarta 之间，不会太可爱。'},
+  {code:'8',name:'Fredoka',family:'"Fredoka"',note:'圆滚滚、很童趣，适合小学生补习班的品牌感。'},
+  {code:'9',name:'Sora',family:'"Sora"',note:'偏科技感、宽一点，看起来很新潮。'},
+  {code:'10',name:'Poppins',family:'"Poppins"',note:'非常常见、几何圆润，稳妥但比较没有个性。'}
+];
+const fallback=',system-ui,"Microsoft YaHei","PingFang SC",sans-serif';
+function card(f,lang){
+  const el=document.createElement('article');el.className='card'+(f.rec?' rec':'');
+  el.style.fontFamily=f.family+fallback;
+  const sample=lang==='zh'
+    ?`<div class="brand">微光</div><div class="line">每一点进步，都是一束微光。</div>
+      <div class="row"><b>陈伟明</b><span class="st">已交</span><span>85 / 100</span></div>
+      <div class="row"><b>林佳慧</b><span class="miss">欠交 2 份</span><span>学校考试</span></div>`
+    :`<div class="brand">Lumi</div><div class="line">Every bit of progress is a glimmer of light.</div>
+      <div class="row"><b>Tan Wei Ming</b><span class="st">Submitted</span><span>85 / 100</span></div>
+      <div class="row"><b>Nur Aisyah</b><span class="miss">2 missing</span><span>0123456789</span></div>`;
+  el.innerHTML=`<div class="meta" style="font-family:var(--ui)"><span class="code">${f.code}</span><span>${f.name}</span>${f.rec?'<span class="pick">推荐</span>':''}</div>
+    <div class="sample">${sample}</div><p class="note" style="font-family:var(--ui)">${f.note}</p>`;
+  return el;
+}
+const zg=document.getElementById('zh-grid'),eg=document.getElementById('en-grid');
+zh.forEach(f=>zg.appendChild(card(f,'zh')));en.forEach(f=>eg.appendChild(card(f,'en')));
+const pz=document.getElementById('pick-zh'),pe=document.getElementById('pick-en'),mock=document.getElementById('mock');
+zh.forEach((f,i)=>pz.add(new Option(`${f.code} · ${f.name}`,i)));en.forEach((f,i)=>pe.add(new Option(`${f.code} · ${f.name}`,i)));
+function apply(){mock.style.fontFamily=en[pe.value].family+','+zh[pz.value].family+fallback;}
+pz.addEventListener('change',apply);pe.addEventListener('change',apply);apply();
+</script>
+
+</body></html>
