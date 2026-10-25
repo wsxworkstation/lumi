@@ -15,4 +15,4 @@ const server=http.createServer((req,res)=>{
     });
   }catch{res.writeHead(400);res.end('Bad request');}
 });
-server.listen(4173,'127.0.0.1',()=>console.log('Studylog ready at http://127.0.0.1:4173'));
+server.listen(4173,'127.0.0.1',()=>console.log('Lumi ready at http://127.0.0.1:4173'));

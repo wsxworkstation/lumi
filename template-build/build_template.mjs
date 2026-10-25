@@ -59,7 +59,7 @@ const guide = wb.worksheets.add("使用说明");
 guide.showGridLines = false;
 guide.tabColor = green;
 guide.getRange("A1:F25").format.font = { name: font, size: 10, color: ink };
-guide.getRange("A2").values = [["学迹 Studylog · Excel 导入模板"]];
+guide.getRange("A2").values = [["微光 Lumi · Excel 导入模板"]];
 guide.getRange("A2:F2").format = { font: { name: font, size: 16, bold: true, color: green }, rowHeight: 30 };
 guide.getRange("A3").values = [["选择一种导入方式填写，不要同时填写 Quick_成绩 和完整资料页。上传后系统会先预览、检查，再由你确认导入。"]];
 guide.mergeCells("A3:F3");
