@@ -108,16 +108,27 @@
 
   /* ---------- overlay screens ---------- */
   const overlay=document.createElement('div');overlay.id='cloud-overlay';overlay.hidden=true;document.body.appendChild(overlay);
-  function screen(html){overlay.innerHTML=`<div class="cloud-card"><div class="cloud-brand">学迹 <span>Studylog</span></div>${html}</div>`;overlay.hidden=false;}
+  function screen(html,variant=''){overlay.className=variant;overlay.innerHTML=`<div class="cloud-card"><div class="cloud-brand">学迹 <span>Studylog</span></div>${html}</div>`;overlay.hidden=false;}
   function hideScreen(){overlay.hidden=true;overlay.innerHTML='';}
   function showLoading(msg){screen(`<p class="cloud-text">${esc(msg)}</p>`);}
   function showLogin(note='',relogin=false){
-    screen(`<h1>老师登录</h1>${note?`<p class="cloud-note">${esc(note)}</p>`:''}
-      <form id="cloud-login"><label>邮箱<input name="email" type="email" autocomplete="username" required value="${esc(session?.user?.email||meta.email||'')}"></label>
-      <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
+    screen(`<section class="login-story" aria-label="学迹 Studylog">
+      <div class="login-brand"><img src="./assets/studylog-starloop-3d.png" width="44" height="44" alt=""><span>学迹<small>Studylog</small></span></div>
+      <div class="login-story-copy"><span class="login-kicker">记录 · 看见 · 成长</span><h2>每一份努力，<br>都有迹可循<span>。</span></h2><p>把功课、成绩和小小进步，<br>好好记在一起。</p></div>
+      <div class="login-art" aria-hidden="true"><div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div><div class="art-shadow"></div>
+        <div class="floating-starloop"><img src="./assets/studylog-starloop-3d.png" width="320" height="320" alt="" fetchpriority="high" decoding="async"></div>
+        <div class="art-spark spark-one">✦</div><div class="art-spark spark-two">✦</div><div class="art-dot"></div>
+      </div><p class="login-story-foot"><span></span>让教学轻一点，让进步清晰一点。</p>
+    </section><section class="login-form-panel">
+      <div class="login-mobile-brand"><img src="./assets/studylog-starloop-3d.png" width="34" height="34" alt=""><span>学迹 <small>Studylog</small></span></div>
+      <div class="login-form-heading"><span class="login-eyebrow">老师工作台</span><h1>欢迎回来<span>。</span></h1><p>登录，继续记录今天的进步。</p></div>${note?`<p class="cloud-note">${esc(note)}</p>`:''}
+      <form id="cloud-login"><label>邮箱<span class="login-input"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg><input name="email" type="email" autocomplete="username" placeholder="你的邮箱地址" required value="${esc(session?.user?.email||meta.email||'')}"></span></label>
+      <label>密码<span class="login-input"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg><input name="password" type="password" autocomplete="current-password" placeholder="输入密码" required></span></label>
       <p class="cloud-error" id="cloud-error" role="alert"></p>
-      <button class="btn primary" type="submit">登录</button></form>
-      <p class="cloud-text small">资料保存在你的 Supabase 云端，电脑和手机登录同一账号即可看到同一份。</p>`);
+      <button class="btn primary" type="submit">登录工作台</button></form>
+      <p class="login-sync-note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18a4 4 0 0 1-1-8 7 7 0 0 1 13-1 4.5 4.5 0 0 1 0 9H6Z"/><path d="m9 13 3-3 3 3m-3-3v7"/></svg><span>云端保存，电脑与手机轻松接续。</span></p>
+      <div class="login-form-foot">学迹 Studylog <span>为专注教学的你而设计</span></div>
+    </section>`,'login-scene');
     const form=overlay.querySelector('#cloud-login');
     (form.email.value?form.password:form.email).focus();
     form.addEventListener('submit',async ev=>{
