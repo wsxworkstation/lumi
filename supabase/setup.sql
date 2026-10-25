@@ -2,8 +2,8 @@
 -- 在 Supabase → SQL Editor 新建查询，全部贴上，按 Run。重复运行也安全。
 --
 -- 设计：每位老师账号一行完整资料（studylog_state），rev 版本号用来检测
--- 两台设备同时修改的冲突；每次覆盖前至多每 2 小时把旧版本存入
--- studylog_backups（保留最近 100 份），用于误操作后恢复。
+-- 两台设备同时修改的冲突；每天（马来西亚时间）第一次修改前，把当时的资料
+-- 存入 studylog_backups（保留最近 120 份），老师可在设置页恢复。
 
 create table if not exists public.studylog_state (
   owner uuid primary key references auth.users(id) on delete cascade,
@@ -20,6 +20,7 @@ create table if not exists public.studylog_backups (
   data jsonb not null,
   created_at timestamptz not null default now()
 );
+alter table public.studylog_backups add column if not exists reason text not null default 'daily';
 create index if not exists studylog_backups_owner_time on public.studylog_backups (owner, created_at desc);
 
 alter table public.studylog_state enable row level security;
@@ -72,12 +73,13 @@ begin
 
   if not exists (
     select 1 from public.studylog_backups b
-    where b.owner = uid and b.created_at > now() - interval '2 hours'
+    where b.owner = uid and b.reason = 'daily'
+      and (b.created_at at time zone 'Asia/Kuala_Lumpur')::date = (now() at time zone 'Asia/Kuala_Lumpur')::date
   ) then
-    insert into public.studylog_backups (owner, rev, data) values (uid, cur_rev, cur_data);
+    insert into public.studylog_backups (owner, rev, data, reason) values (uid, cur_rev, cur_data, 'daily');
     delete from public.studylog_backups b
       where b.owner = uid and b.id not in (
-        select k.id from public.studylog_backups k where k.owner = uid order by k.created_at desc limit 100
+        select k.id from public.studylog_backups k where k.owner = uid order by k.created_at desc limit 120
       );
   end if;
 
@@ -91,3 +93,25 @@ $$;
 
 revoke all on function public.studylog_save(jsonb, bigint, text) from public, anon;
 grant execute on function public.studylog_save(jsonb, bigint, text) to authenticated;
+
+-- 恢复旧版本之前，先把目前的资料另存一份，恢复错了还能回来。
+create or replace function public.studylog_snapshot()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'STUDYLOG_AUTH';
+  end if;
+  insert into public.studylog_backups (owner, rev, data, reason)
+    select s.owner, s.rev, s.data, 'before-restore' from public.studylog_state s where s.owner = uid;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.studylog_snapshot() from public, anon;
+grant execute on function public.studylog_snapshot() to authenticated;

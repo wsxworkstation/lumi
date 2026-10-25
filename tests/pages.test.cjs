@@ -6,7 +6,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 
-function boot(saved,view){
+function boot(saved,view,cloud){
   const elements=new Map(),stored=new Map();
   if(saved)stored.set('studylog-demo-v1',JSON.stringify(saved));
   if(view)stored.set('studylog-view-v1',JSON.stringify(view));
@@ -15,6 +15,7 @@ function boot(saved,view){
     return elements.get(id);
   }
   const ctx=vm.createContext({console,structuredClone,crypto:crypto.webcrypto,document:{querySelector:element,documentElement:{}},window:{scrollTo(){},addEventListener(){}},localStorage:{getItem:k=>stored.get(k)||null,setItem:(k,v)=>stored.set(k,v)},setTimeout(){},clearTimeout(){}});
+  if(cloud){ctx.window.StudyCloud=cloud;ctx.StudyCloud=cloud;}
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist/core.js'),'utf8'),ctx);
   const source=fs.readFileSync(path.join(__dirname,'../dist/app.js'),'utf8').replace(
     '  persist();render();\n})();',
@@ -111,4 +112,19 @@ test('overview has one add-student entry and selected month includes new homewor
   const {api,elements}=boot();api.getData().activities.push({id:'new-oct',classId:'c1',kind:'homework',date:'2027-10-25',max:1,students:['s1'],results:{s1:{status:'missing',score:null}}});
   api.state.month='10';api.render();assert.equal(api.stat('s1').missing,1);
   const html=elements.get('#content').innerHTML;assert.equal((html.match(/data-action="add-student"/g)||[]).length,1);assert.ok(html.includes('data-action="student-missing"'));
+});
+
+test('with cloud sync the settings page shows account, restore and sign-out, and status label',()=>{
+  const pushed=[];
+  const cloud={state:'synced',dirty:false,email:'teacher@example.com',label:l=>l==='en'?'Synced · cloud':'已同步 · 云端',changed:j=>pushed.push(j),onStatus:null};
+  const {api,elements}=boot(undefined,undefined,cloud);
+  for(const lang of ['zh','en']){
+    Object.assign(api.state,{lang,page:'settings'});api.render();
+    const html=elements.get('#content').innerHTML;
+    assert.ok(html.includes('teacher@example.com'));
+    assert.ok(html.includes('cloud-versions')&&html.includes('cloud-logout'));
+    assert.ok(!html.includes('Supabase, student sign-in')&&!html.includes('尚未连接 Supabase'));
+  }
+  assert.ok(pushed.length>=1,'persist hands the JSON to the cloud');
+  assert.equal(typeof cloud.onStatus,'function');
 });

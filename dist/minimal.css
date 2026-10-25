@@ -98,3 +98,8 @@ dialog{border-radius:12px;box-shadow:0 24px 90px #17233b24}dialog::backdrop{back
 .saved[data-state=offline] .dot{background:#d29b3a}
 .saved[data-state=conflict],.saved[data-state=expired],.saved[data-state=error]{cursor:pointer;color:#b94c49}
 .saved[data-state=conflict] .dot,.saved[data-state=expired] .dot,.saved[data-state=error] .dot{background:#b94c49}
+
+/* Restore older version list */
+.version-list{display:grid;gap:8px;max-height:55vh;overflow:auto}
+.version-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #dce2eb;border-radius:8px}
+.version-row strong{display:block;font-size:13px;font-weight:500}.version-row small{display:block;font-size:11px;color:#748197;margin-top:3px}

@@ -111,7 +111,7 @@
     const names={overview:t('学习概览','Overview'),records:t('快速录入','Quick entry'),imports:t('Excel 导入','Excel import'),students:t('学生档案','Students'),classes:t('我的班级','Classes'),goals:t('学习目标','Goals'),settings:t('设置','Settings'),trash:t('回收站','Recycle bin')};
     const years=[...new Set([2026,2027,2028,2029,state.year,...data.classes.map(c=>c.year)])].sort();
     return `<div class="mobile-overlay" data-action="menu"></div><aside class="sidebar">
-      <a class="brand row" href="#overview" data-page="overview"><span class="brand-mark starloop-brand"><img src="./assets/studylog-starloop-3d.png" width="44" height="44" alt=""></span><div><strong>${t('学迹','Studylog')}</strong><small>${t('STUDYLOG','LEARNING JOURNAL')}</small></div></a>
+      <a class="brand row" href="#overview" data-page="overview"><span class="brand-mark starloop-brand"><img src="./assets/studylog-starloop-96.png" width="44" height="44" alt=""></span><div><strong>${t('学迹','Studylog')}</strong><small>${t('STUDYLOG','LEARNING JOURNAL')}</small></div></a>
       <nav>${nav('overview','班级工作台','Workspace','grid')}${nav('records','功课与成绩','Records','check')}${nav('students','学生','Students','users')}${nav('classes','班级','Classes','book')}
       <details class="more-nav" ${['imports','goals','settings','trash'].includes(state.page)?'open':''}><summary>${t('更多','More')}</summary>${nav('imports','批量导入','Import','upload')}${nav('goals','目标','Goals','target')}${nav('settings','设置','Settings','settings')}${nav('trash','回收站','Recycle bin','trash')}</details></nav>
       <div class="sidebar-bottom"><p class="help" style="margin-bottom:16px">${window.StudyCloud?t('资料同步到云端','Synced to the cloud'):t('资料保存在此浏览器','Saved in this browser')}</p>
@@ -267,7 +267,7 @@
     <p class="help full">${t('功课统计跟随当前年份和月份，不需要调整参考日期。','Homework statistics follow the selected year and month.')}</p>
     ${[['pass','及格线 (%)','Passing score (%)',0,100],['low','低分提醒 (%)','Low-score alert (%)',0,100],['missing','连续未交次数','Consecutive missing assignments',1,20],['declines','连续下降次数','Consecutive score declines',1,10],['termEnd','第一学期结束月份','Last month of term 1',1,11]].map(([key,zh,en,min,max])=>`<label>${t(zh,en)}<input type="number" min="${min}" max="${max}" step="1" value="${data.settings[key]}" data-setting="${key}"></label>`).join('')}</div><div class="divider"></div><p class="help">${t('功课：补交计入完成率，不计入准时率。分母按截止日期和当次应交名单计算。考试：百分比等权平均，学校与补习分开；缺席和空白不计作 0 分；小考不计入学期平均。排名并列时采用 1、2、2、4。等级 A/B/C 的界线尚未确定。','Homework: made-up work counts as completed, not on-time. Denominator uses due dates and assigned students. Exams: equal-weight percentages, school and tuition separate. Absence and blanks are not zero. Quizzes are excluded from term averages. Ties use competition ranking: 1, 2, 2, 4. Grade boundaries are not configured.')}</p></section>
     <div class="stack"><section class="card"><div class="card-head"><h2>${t('记录种类','Record types')}</h2>${button(t('新增','Add'),'add-type','sm','','plus')}</div>${data.types.map(type=>`<div class="row between" style="margin:12px 0"><span class="small">${esc(type)}</span>${button(t('移除','Remove'),'remove-type','sm',`data-type="${esc(type)}"`)}</div>`).join('')}<p class="help">${t('种类名称可自定义，每次记录仍需选择功课或考试的计算方式。移除种类不会删除旧记录。','Types are labels; each record also selects a homework or exam calculation. Removing a type keeps historical records.')}</p></section>
-    ${window.StudyCloud?`<section class="card"><div class="card-head"><h2>${t('云端同步','Cloud sync')}</h2></div><p class="help">${t('登录账号','Signed in as')}：<strong>${esc(StudyCloud.email)}</strong></p><p class="help">${t('每次修改会自动上传到 Supabase；云端每 2 小时自动保留一份旧版本，最多 100 份。仍建议定期下载 JSON 备份。','Every change uploads to Supabase automatically; the cloud keeps an older version every 2 hours (up to 100). Still download a JSON backup regularly.')}</p><div class="row wrap" style="margin-top:12px">${button(t('退出登录','Sign out'),'cloud-logout','','','back')}</div></section>`:''}<section class="card"><div class="card-head"><h2>${t('备份','Backup')}</h2></div><div class="row wrap">${button(t('下载 JSON 备份','Download JSON'),'backup','','','down')}${button(t('恢复 JSON 备份','Restore JSON'),'restore-backup','','','restore')}</div><input id="backup-file" type="file" accept=".json,application/json" hidden><p class="help" style="margin-top:12px">${t('JSON 保存全部记录；单次功课或考试可在录入页导出 CSV。恢复 JSON 后会同步到云端。','JSON contains all records. Export a record as CSV from Quick entry. A restored JSON syncs to the cloud.')}</p></section></div></div>`+footer();}
+    ${window.StudyCloud?`<section class="card"><div class="card-head"><h2>${t('云端同步','Cloud sync')}</h2></div><p class="help">${t('登录账号','Signed in as')}：<strong>${esc(StudyCloud.email)}</strong></p><p class="help">${t('每次修改会自动上传。云端每天自动保留一份旧版本，误删时可以恢复。','Every change uploads automatically. The cloud keeps one older version per day, so mistakes can be undone.')}</p><div class="row wrap" style="margin-top:12px">${button(t('恢复旧版本','Restore an older version'),'cloud-versions','','','restore')}${button(t('退出登录','Sign out'),'cloud-logout','','','back')}</div></section>`:''}<section class="card"><div class="card-head"><h2>${t('备份','Backup')}</h2></div><div class="row wrap">${button(t('下载 JSON 备份','Download JSON'),'backup','','','down')}${button(t('恢复 JSON 备份','Restore JSON'),'restore-backup','','','restore')}</div><input id="backup-file" type="file" accept=".json,application/json" hidden><p class="help" style="margin-top:12px">${t('JSON 保存全部记录；单次功课或考试可在录入页导出 CSV。恢复 JSON 后会同步到云端。','JSON contains all records. Export a record as CSV from Quick entry. A restored JSON syncs to the cloud.')}</p></section></div></div>`+footer();}
   function importsPage(){
     const p=state.importPlan,hasBackup=!!localStorage.getItem(IMPORT_BACKUP_KEY),c=p?.counts||{};
     const countCards=p?`<div class="import-counts">${[['students',t('学生','Students')],['classes',t('班级','Classes')],['enrollments',t('入班关系','Enrollments')],['records',t('功课 / 考试','Records')],['results',t('学生结果','Results')],['goals',t('目标','Goals')],['updates',t('更新','Updates')]].map(([k,l])=>`<div><strong>${c[k]||0}</strong><span>${l}</span></div>`).join('')}</div>`:'';
@@ -430,6 +430,20 @@
     showModal(title,`<p class="help full">${message}</p>`,()=>onConfirm());
     modal.querySelector('button[type=submit]').textContent=t('确认','Confirm');
   }
+  const versionTime=iso=>new Date(iso).toLocaleString(state.lang==='en'?'en-GB':'zh-CN',{timeZone:'Asia/Kuala_Lumpur',month:'short',day:'numeric',weekday:'short',hour:'2-digit',minute:'2-digit'});
+  async function showVersions(){
+    let list;
+    try{list=await StudyCloud.listBackups();}catch{toast(t('连不上云端，请检查网络。','Cannot reach the cloud. Check the connection.'));return;}
+    const rows=list.map(b=>`<div class="version-row"><div><strong>${esc(versionTime(b.created_at))}</strong><small>${b.reason==='before-restore'?t('恢复旧版本前自动另存','Saved before a restore'):t('当天第一次修改之前的资料','Data before the first change that day')}</small></div>${button(t('恢复','Restore'),'cloud-restore','sm',`type="button" data-id="${Number(b.id)}" data-when="${esc(versionTime(b.created_at))}"`)}</div>`).join('');
+    showModal(t('恢复旧版本','Restore an older version'),`<div class="full version-list">${rows||`<p class="help">${t('还没有旧版本。从明天起，每天第一次修改前会自动保存一份。','No older versions yet. From tomorrow, one is saved before the first change each day.')}</p>`}</div>`,()=>{});
+    modal.querySelector('button[type=submit]').hidden=true;
+  }
+  async function restoreVersion(id,when){
+    if(StudyCloud.state!=='synced'){toast(t('请等右上角显示“已同步”再恢复。','Wait until it shows “Synced” before restoring.'));return;}
+    let loaded;
+    try{loaded=await StudyCloud.getBackup(id);validateBackup(loaded);}catch{toast(t('这个版本读取失败。','This version could not be loaded.'));return;}
+    confirmation(t('恢复旧版本','Restore an older version'),t(`资料会变回 ${esc(when)} 之前的样子。目前的资料会先自动另存一份，恢复错了可以再恢复回来。`,`Data will return to how it was before ${esc(when)}. Current data is saved first, so you can switch back.`),()=>{StudyCloud.snapshot().catch(()=>{});data=loaded;undoAction=null;});
+  }
   function download(name,content,type){
     const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
   }
@@ -512,6 +526,8 @@
       const group={class:data.classes,student:data.students,activity:data.activities,goal:data.goals}[el.dataset.kind];group.find(o=>o.id===id).archived=false;persist();render();toast(t('已恢复','Restored'));
     }
     else if(action==='export-csv')exportCsv();
+    else if(action==='cloud-versions')showVersions();
+    else if(action==='cloud-restore')restoreVersion(el.dataset.id,el.dataset.when);
     else if(action==='cloud-logout'){if(StudyCloud.dirty)confirmation(t('退出登录','Sign out'),t('还有修改没上传到云端，退出会丢失这些修改。请先联网等待显示“已同步”，或先下载 JSON 备份。确定仍要退出？','Some changes have not uploaded yet and will be lost. Wait for “Synced” or download a JSON backup first. Sign out anyway?'),()=>StudyCloud.logout());else StudyCloud.logout();}
     else if(action==='backup')download(`studylog-backup-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(data,null,2),'application/json');
     else if(action==='restore-backup')document.querySelector('#backup-file').click();
