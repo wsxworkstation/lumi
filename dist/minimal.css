@@ -1,4 +1,7 @@
 /* Minimal data theme — intentionally separate from the application layout. */
+.sidebar .brand-mark.starloop-brand{background:transparent;padding:0;border-radius:0;display:flex;align-items:center;justify-content:center;flex:none}
+.starloop-brand img{display:block;object-fit:contain;filter:drop-shadow(0 2px 4px #6555cc18)}
+.cloud-card>.cloud-brand{display:flex;align-items:center;gap:8px}.cloud-brand>img{display:block;object-fit:contain}
 .name-english,.name-chinese{display:block}.name-chinese{font-weight:400;color:#697586;margin-top:2px}
 .row-note summary{cursor:pointer;color:#748197;padding:10px 0;font-size:12px;list-style:none}
 .row-note summary::-webkit-details-marker{display:none}

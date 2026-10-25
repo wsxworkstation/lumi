@@ -109,7 +109,7 @@
 
   /* ---------- overlay screens ---------- */
   const overlay=document.createElement('div');overlay.id='cloud-overlay';overlay.hidden=true;document.body.appendChild(overlay);
-  function screen(html,variant=''){overlay.className=variant;overlay.innerHTML=`<div class="cloud-card"><div class="cloud-brand">学迹 <span>Studylog</span></div>${html}</div>`;overlay.hidden=false;}
+  function screen(html,variant=''){overlay.className=variant;overlay.innerHTML=`<div class="cloud-card"><div class="cloud-brand"><img src="./assets/studylog-starloop-3d.png" width="32" height="32" alt="">学迹 <span>Studylog</span></div>${html}</div>`;overlay.hidden=false;}
   function hideScreen(){overlay.hidden=true;overlay.innerHTML='';}
   function showLoading(msg){screen(`<p class="cloud-text">${esc(msg)}</p>`);}
   function showLogin(note='',relogin=false){

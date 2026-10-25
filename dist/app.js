@@ -111,7 +111,7 @@
     const names={overview:t('学习概览','Overview'),records:t('快速录入','Quick entry'),imports:t('Excel 导入','Excel import'),students:t('学生档案','Students'),classes:t('我的班级','Classes'),goals:t('学习目标','Goals'),settings:t('设置','Settings'),trash:t('回收站','Recycle bin')};
     const years=[...new Set([2026,2027,2028,2029,state.year,...data.classes.map(c=>c.year)])].sort();
     return `<div class="mobile-overlay" data-action="menu"></div><aside class="sidebar">
-      <a class="brand row" href="#overview" data-page="overview"><span class="brand-mark">${icon('book')}</span><div><strong>${t('学迹','Studylog')}</strong><small>${t('STUDYLOG','LEARNING JOURNAL')}</small></div></a>
+      <a class="brand row" href="#overview" data-page="overview"><span class="brand-mark starloop-brand"><img src="./assets/studylog-starloop-3d.png" width="44" height="44" alt=""></span><div><strong>${t('学迹','Studylog')}</strong><small>${t('STUDYLOG','LEARNING JOURNAL')}</small></div></a>
       <nav>${nav('overview','班级工作台','Workspace','grid')}${nav('records','功课与成绩','Records','check')}${nav('students','学生','Students','users')}${nav('classes','班级','Classes','book')}
       <details class="more-nav" ${['imports','goals','settings','trash'].includes(state.page)?'open':''}><summary>${t('更多','More')}</summary>${nav('imports','批量导入','Import','upload')}${nav('goals','目标','Goals','target')}${nav('settings','设置','Settings','settings')}${nav('trash','回收站','Recycle bin','trash')}</details></nav>
       <div class="sidebar-bottom"><p class="help" style="margin-bottom:16px">${window.StudyCloud?t('资料同步到云端','Synced to the cloud'):t('资料保存在此浏览器','Saved in this browser')}</p>
