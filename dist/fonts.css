@@ -1,0 +1,6 @@
+/* Lumi typography: Figtree for Latin text and numbers, LXGW Marker Gothic (霞鹜漫黑) for Chinese.
+   Marker Gothic ships a single weight, so faux bold is disabled — synthesized bold makes its strokes merge. */
+html,body{font-family:'Figtree','LXGW Marker Gothic','Microsoft YaHei','PingFang SC',system-ui,sans-serif;font-synthesis-weight:none;font-synthesis:none}
+/* Brand wordmark: open spacing so 微光 reads as two clear characters. */
+.brand strong,.login-brand,.login-mobile-brand,.cloud-brand{letter-spacing:.08em}
+.login-brand small,.login-mobile-brand small,.cloud-brand span,.brand small{letter-spacing:.12em}
