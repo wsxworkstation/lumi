@@ -4,3 +4,9 @@ html,body{font-family:'Figtree','LXGW Marker Gothic','Microsoft YaHei','PingFang
 /* Brand wordmark: open spacing so 微光 reads as two clear characters. */
 .brand strong,.login-brand,.login-mobile-brand,.cloud-brand{letter-spacing:.08em}
 .login-brand small,.login-mobile-brand small,.cloud-brand span,.brand small{letter-spacing:.12em}
+/* Wordmark sized to balance the 44px starloop icon. */
+.brand strong{font-size:28px;line-height:1.1}
+.brand small{font-size:11px;margin-top:4px}
+.login-brand{font-size:30px}
+.login-brand small{font-size:12px}
+@media(max-width:640px){.login-brand{font-size:26px}}
