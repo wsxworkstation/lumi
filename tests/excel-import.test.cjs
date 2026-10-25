@@ -1,7 +1,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-global.JSZip=require('../template-build/node_modules/jszip');
+global.JSZip=require('../dist/vendor/jszip.min.js');
 const Xlsx=require('../dist/xlsx-lite.js');
 const Import=require('../dist/excel-import.js');
 const Core=require('../dist/core.js');
