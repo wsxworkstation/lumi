@@ -9,7 +9,8 @@
   const read=k=>{try{return JSON.parse(localStorage.getItem(k)||'null');}catch{return null;}};
   const write=(k,v)=>{try{v===null?localStorage.removeItem(k):localStorage.setItem(k,JSON.stringify(v));}catch{}};
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  function loadApp(){const s=document.createElement('script');s.src='./app.js';document.body.appendChild(s);}
+  const VER=(document.currentScript?.src||'').split('?')[1]||'';
+  function loadApp(){const s=document.createElement('script');s.src='./app.js'+(VER?'?'+VER:'');document.body.appendChild(s);}
   if(!cfg.url||!cfg.key){loadApp();return;}
 
   const device=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)?'手机':'电脑';
