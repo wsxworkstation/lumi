@@ -10,3 +10,5 @@ html,body{font-family:'Figtree','Zhuque Fangsong (technical preview)','Microsoft
 .login-brand{font-size:30px}
 .login-brand small{font-size:12px}
 @media(max-width:640px){.login-brand{font-size:26px}}
+.theme-toggle{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px}
+.theme-toggle .ico{width:18px;height:18px}
