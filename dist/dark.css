@@ -239,6 +239,18 @@ html[data-theme=dark] .saved[data-state=conflict],html[data-theme=dark] .saved[d
 html[data-theme=dark] .saved[data-state=conflict] .dot,html[data-theme=dark] .saved[data-state=expired] .dot,html[data-theme=dark] .saved[data-state=error] .dot{background:#b94c49}
 html[data-theme=dark] .version-row{border:1px solid #303337}
 html[data-theme=dark] .version-row small{color:#98a5bc}
+html[data-theme=dark] .group-members li{background:#121315}
+html[data-theme=dark] .group-members li.is-leader{background:#13161b;color:#8dadf9}
+html[data-theme=dark] .leader-tag{color:#7da4f7}
+html[data-theme=dark] .chip{border:1px solid #303337;background:#222222;color:#a2b2cc}
+html[data-theme=dark] .chip:hover{border-color:#3564db;color:#7da4f7}
+html[data-theme=dark] .gp-list{border:1px solid #2d2f33}
+html[data-theme=dark] .gp-row:hover{background:#121315}
+html[data-theme=dark] .gp-member small{color:#d39f5e}
+html[data-theme=dark] .gp-leader{color:#99a6b8}
+html[data-theme=dark] .gp-member input,html[data-theme=dark] .gp-leader input{accent-color:#3564db}
+html[data-theme=dark] .gp-check span{color:#a2b2cc}
+html[data-theme=dark] .gp-check input{accent-color:#3564db}
 /* login.css */
 html[data-theme=dark] #cloud-overlay.login-scene{background:#131417;background-image:radial-gradient(ellipse at 15% 12%,#161821 0,transparent 52%),radial-gradient(ellipse at 95% 90%,#16181c 0,transparent 45%)}
 html[data-theme=dark] .login-scene>.cloud-card{border:1px solid #383838;box-shadow:0 28px 80px -30px #00000074,0 2px 8px #00000013}

@@ -128,3 +128,19 @@ test('with cloud sync the settings page shows account, restore and sign-out, and
   assert.ok(pushed.length>=1,'persist hands the JSON to the cloud');
   assert.equal(typeof cloud.onStatus,'function');
 });
+
+test('groups page renders empty state, groups with leaders, and ungrouped students in both languages',()=>{
+  const {api,elements,ctx}=boot();
+  const d=api.getData(),cid=d.classes[0].id;
+  for(const lang of ['zh','en']){
+    Object.assign(api.state,{lang,classId:cid,page:'groups'});d.classes[0].groups=[];api.render();
+    let html=elements.get('#content').innerHTML;
+    assert.ok(html.includes('group-auto')&&html.includes('group-new'),'empty state offers both ways to start');
+    const ids=d.classes[0].students;
+    ctx.StudyCore.saveGroup(d,cid,{name:'第1组',members:ids.slice(0,3),leaderId:ids[1]});
+    api.render();html=elements.get('#content').innerHTML;
+    assert.ok(html.includes('is-leader')&&html.includes('group-edit')&&html.includes('group-delete'));
+    assert.ok(html.includes('group-join'),'students outside groups are listed');
+    assert.ok(!html.includes('undefined')&&!html.includes('NaN'));
+  }
+});

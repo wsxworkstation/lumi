@@ -144,7 +144,42 @@
     data.recordHistory??=[];data.recordHistory.unshift({id:uid(),activityId:id,before,after:{title,date,max,topic:a.topic,note:a.note},at:new Date().toISOString()});
     return before;
   }
-  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity};
+  /* ---------- Class groups: each class keeps its own groups; a student belongs to at most one group per class. ---------- */
+  function classOf(data,classId){const c=data.classes.find(c=>c.id===classId);if(!c)throw Error('找不到班级 / Class not found');return c;}
+  function activeIds(data,c){const live=new Set(data.students.filter(s=>!s.archived).map(s=>s.id));return c.students.filter(id=>live.has(id));}
+  function groupsOf(data,classId){
+    const c=classOf(data,classId),inClass=new Set(activeIds(data,c));
+    return (c.groups||[]).map(g=>{const members=g.members.filter(id=>inClass.has(id));return {...g,members,leaderId:members.includes(g.leaderId)?g.leaderId:null};});
+  }
+  function saveGroup(data,classId,input){
+    const c=classOf(data,classId),inClass=new Set(activeIds(data,c));c.groups??=[];
+    const name=String(input.name||'').trim();
+    if(!name||name.length>30)throw Error('请填写组名（30 字以内） / Enter a group name (up to 30 characters)');
+    const members=[...new Set(input.members||[])];
+    if(members.some(id=>!inClass.has(id)))throw Error('组员必须是这个班的学生 / Members must be in this class');
+    const leaderId=input.leaderId||null;
+    if(leaderId&&!members.includes(leaderId))throw Error('队长必须是组员 / The leader must be a member');
+    let g=input.id?c.groups.find(x=>x.id===input.id):null;
+    if(input.id&&!g)throw Error('找不到这一组 / Group not found');
+    if(c.groups.some(x=>x!==g&&x.name.trim()===name))throw Error('这个班已经有同名的组 / A group with this name already exists');
+    for(const other of c.groups){if(other===g)continue;other.members=other.members.filter(id=>!members.includes(id));if(!other.members.includes(other.leaderId))other.leaderId=null;}
+    if(!g){g={id:uid()};c.groups.push(g);}
+    const en=g.name===name?g.en:(input.en||'');
+    Object.assign(g,{name,en,leaderId,members});
+    return g;
+  }
+  function deleteGroup(data,classId,groupId){const c=classOf(data,classId),before=(c.groups||[]).length;c.groups=(c.groups||[]).filter(g=>g.id!==groupId);if(c.groups.length===before)throw Error('找不到这一组 / Group not found');}
+  function autoGroups(data,classId,count,{leaders=true,random=Math.random}={}){
+    const c=classOf(data,classId),ids=activeIds(data,c),n=Math.floor(Number(count));
+    if(!ids.length)throw Error('这个班还没有学生 / This class has no students');
+    if(!(n>=1&&n<=ids.length))throw Error(`组数要在 1 到 ${ids.length} 之间 / Number of groups must be 1–${ids.length}`);
+    const order=[...ids];for(let i=order.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+    c.groups=Array.from({length:n},(_,i)=>({id:uid(),name:`第${i+1}组`,en:`Group ${i+1}`,leaderId:null,members:[]}));
+    order.forEach((id,i)=>c.groups[i%n].members.push(id));
+    if(leaders)c.groups.forEach(g=>{g.leaderId=g.members[0]||null;});
+    return c.groups;
+  }
+  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.StudyCore=api;
 })(globalThis);

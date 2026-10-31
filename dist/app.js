@@ -14,7 +14,7 @@
   let undoAction=null,restoredView=false;
   try{
     const view=JSON.parse(localStorage.getItem(VIEW_KEY)||'null');
-    if(view&&['overview','records','imports','students','student','classes','goals','settings','trash'].includes(view.page)){
+    if(view&&['overview','records','imports','students','student','classes','groups','goals','settings','trash'].includes(view.page)){
       for(const key of ['classId','studentId','activityId','focusStudentId'])if(typeof view[key]==='string')state[key]=view[key];
       state.page=view.page;state.year=Number.isInteger(view.year)?view.year:2027;
       state.kind=view.kind==='exam'?'exam':'homework';state.lang=view.lang==='en'?'en':'zh';
@@ -53,6 +53,7 @@
     edit:'<path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14z"/>',
     restore:'<path d="M3 10a9 9 0 1 1 1 8M3 3v7h7"/>'
     ,upload:'<path d="M12 16V4m-5 5 5-5 5 5M4 15v6h16v-6"/>'
+    ,group:'<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20v-1a5 5 0 0 1 10 0v1M12 20v-1a5 5 0 0 1 10 0v1"/>'
     ,moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/>'
     ,sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
   };
@@ -110,7 +111,7 @@
   }
   function nav(page,name,en,ico){return `<a href="#${page}" class="nav-item ${state.page===page?'active':''}" data-page="${page}">${icon(ico)}<span>${t(name,en)}</span>${page==='classes'?`<span class="nav-count">${classes().length}</span>`:''}</a>`;}
   function shell(){
-    const names={overview:t('学习概览','Overview'),records:t('快速录入','Quick entry'),imports:t('Excel 导入','Excel import'),students:t('学生档案','Students'),classes:t('我的班级','Classes'),goals:t('学习目标','Goals'),settings:t('设置','Settings'),trash:t('回收站','Recycle bin')};
+    const names={groups:t('分组','Groups'),overview:t('学习概览','Overview'),records:t('快速录入','Quick entry'),imports:t('Excel 导入','Excel import'),students:t('学生档案','Students'),classes:t('我的班级','Classes'),goals:t('学习目标','Goals'),settings:t('设置','Settings'),trash:t('回收站','Recycle bin')};
     const years=[...new Set([2026,2027,2028,2029,state.year,...data.classes.map(c=>c.year)])].sort();
     return `<div class="mobile-overlay" data-action="menu"></div><aside class="sidebar">
       <a class="brand row" href="#overview" data-page="overview"><span class="brand-mark starloop-brand"><img src="./assets/studylog-starloop-96.png" width="44" height="44" alt=""></span><div><strong>${t('微光','Lumi')}</strong><small>${t('LUMI','LEARNING JOURNAL')}</small></div></a>
@@ -170,8 +171,60 @@
   function overview(){
     const c=cls();
     if(!c)return heading(t('我的班级','My classes'),'')+classStrip()+empty(t('这个年份还没有班级','No classes in this year'));
-    return heading(esc(label(c)),'',button(t('新增记录','New record'),'new-record','primary','','plus')+button(t('加学生','Add students'),'add-student','','','users'))+classStrip()+resumeRecord()+workspaceRoster()+
+    return heading(esc(label(c)),'',button(t('新增记录','New record'),'new-record','primary','','plus')+button(t('加学生','Add students'),'add-student','','','users')+button(t('分组','Groups'),'groups','','','group'))+classStrip()+resumeRecord()+workspaceRoster()+
       `<details class="secondary-panel"><summary>${t('查看图表与统计','Show charts and statistics')}</summary><div class="stack"><section class="card"><div class="card-head"><h2>${t('考试趋势','Exam trend')}</h2><button class="icon-btn" data-action="download-chart" aria-label="${t('下载图表','Download chart')}">${icon('down')}</button></div>${examChart()}</section><section class="card"><h2>${t('每月功课完成率','Monthly homework completion')}</h2>${monthlyChart()}</section><section class="card"><div class="card-head"><h2>${t('功课提交记录','Homework submissions')}</h2></div>${heatmap()}</section></div></details>`;
+  }
+  /* ---------- Groups ---------- */
+  function groupsPage(){
+    const c=cls();
+    if(!c)return heading(t('分组','Groups'),'')+classStrip()+empty(t('这个年份还没有班级','No classes in this year'));
+    const list=roster(),groups=C.groupsOf(data,c.id),grouped=new Set(groups.flatMap(g=>g.members));
+    const free=list.filter(s=>!grouped.has(s.id));
+    const actions=list.length?button(t('自动分组','Auto split'),'group-auto','','','group')+button(t('新建组','New group'),'group-new','primary','','plus'):'';
+    let body;
+    if(!list.length)body=empty(t('这个班还没有学生。先在首页加学生。','This class has no students yet. Add students on the home page first.'));
+    else if(!groups.length)body=empty(t('还没有分组。用「自动分组」一次分好，或「新建组」自己挑人。','No groups yet. Use Auto split, or New group to pick members yourself.'),`<div class="row" style="justify-content:center">${actions}</div>`);
+    else body=`<div class="group-grid">${groups.map(g=>{
+      const members=[...(g.leaderId?[g.leaderId]:[]),...g.members.filter(id=>id!==g.leaderId)].map(student).filter(Boolean);
+      return `<section class="card group-card"><div class="group-head"><h2>${esc(label(g))}</h2><span class="small muted">${t(`${g.members.length} 人`,`${g.members.length} people`)}</span></div>
+        <ul class="group-members">${members.map(m=>`<li class="${m.id===g.leaderId?'is-leader':''}">${m.id===g.leaderId?`<span class="leader-tag">★ ${t('队长','Leader')}</span>`:''}<span>${esc(label(m))}</span></li>`).join('')||`<li class="muted">${t('还没有组员','No members yet')}</li>`}</ul>
+        ${g.leaderId?'':`<p class="small muted">${t('还没选队长','No leader yet')}</p>`}
+        <div class="row group-actions">${button(t('编辑','Edit'),'group-edit','sm',`data-id="${g.id}"`,'edit')}${button(t('删除','Delete'),'group-delete','sm danger',`data-id="${g.id}"`,'trash')}</div></section>`;}).join('')}</div>
+      ${free.length?`<section class="card group-free"><div class="card-head"><h2>${t('未分组','Not in a group')} <span class="small muted">${free.length}</span></h2></div><p class="help">${t('点名字，选要加入哪一组。','Tap a name to choose a group.')}</p><div class="row wrap">${free.map(s=>`<button class="chip" data-action="group-join" data-sid="${s.id}">${esc(label(s))}</button>`).join('')}</div></section>`:''}`;
+    return heading(`${t('分组','Groups')} · ${esc(label(c))}`,'',actions)+classStrip()+body;
+  }
+  function groupForm(id){
+    const c=cls(),groups=C.groupsOf(data,c.id),g=groups.find(x=>x.id===id),where=new Map();
+    groups.forEach(x=>x.members.forEach(m=>where.set(m,x)));
+    const name=g?g.name:(()=>{let i=groups.length+1;while(groups.some(x=>x.name===`第${i}组`))i++;return `第${i}组`;})();
+    const rows=roster().map(s=>{const inThis=g?.members.includes(s.id),other=where.get(s.id);
+      return `<div class="gp-row"><label class="gp-member"><input type="checkbox" name="m" value="${s.id}" ${inThis?'checked':''}><span>${esc(label(s))}${other&&other.id!==g?.id?`<small>${t(`在${esc(other.name)}`,`in ${esc(label(other))}`)}</small>`:''}</span></label><label class="gp-leader"><input type="radio" name="leader" value="${s.id}" ${g?.leaderId===s.id?'checked':''}>${t('队长','Leader')}</label></div>`;}).join('');
+    showModal(g?t('编辑组','Edit group'):t('新建组','New group'),`<label class="form-field full">${t('组名','Group name')}<input name="name" required maxlength="30" value="${esc(name)}"></label>
+      <div class="full"><p class="help">${t('勾选组员，再点一位当队长。已在别组的学生会移到这一组。','Tick members, then pick a leader. Students from another group move here.')}</p><div class="gp-list">${rows}</div></div>`,fd=>{
+      const members=fd.getAll('m'),leader=fd.get('leader')||null;
+      if(leader&&!members.includes(leader))members.push(leader);
+      C.saveGroup(data,c.id,{id:g?.id,name:fd.get('name'),members,leaderId:leader});
+    });
+    const form=modal.querySelector('form');
+    form.addEventListener('change',e=>{
+      const el=e.target;
+      if(el.name==='leader'&&el.checked)form.querySelector(`input[name=m][value="${el.value}"]`).checked=true;
+      if(el.name==='m'&&!el.checked){const r=form.querySelector(`input[name=leader][value="${el.value}"]`);if(r)r.checked=false;}
+    });
+  }
+  function autoGroupForm(){
+    const c=cls(),n=roster().length,existing=C.groupsOf(data,c.id).length;
+    showModal(t('自动分组','Auto split'),`<label class="form-field">${t('分成几组','Number of groups')}<input name="count" type="number" min="1" max="${n}" step="1" required value="${Math.min(n,Math.max(1,Math.round(n/5)))}"></label>
+      <label class="form-field gp-check"><span><input type="checkbox" name="leaders" checked> ${t('每组随机挑一位队长','Pick a random leader for each group')}</span></label>
+      <p class="help full">${t(`全班 ${n} 人会随机平均分配，之后可以再调整。`,`All ${n} students are split evenly at random. You can adjust afterwards.`)}${existing?`<br><strong>${t(`会取代现在的 ${existing} 个组。`,`This replaces the current ${existing} groups.`)}</strong>`:''}</p>`,fd=>{
+      C.autoGroups(data,c.id,fd.get('count'),{leaders:fd.get('leaders')==='on'});
+    });
+    modal.querySelector('button[type=submit]').textContent=t('分组','Split');
+  }
+  function joinGroupForm(sid){
+    const c=cls(),s=student(sid),groups=C.groupsOf(data,c.id);
+    showModal(t(`${esc(label(s))} 加入哪一组？`,`Add ${esc(label(s))} to which group?`),`<div class="full gp-join">${groups.map(g=>`<button type="button" class="btn" data-action="group-pick" data-id="${g.id}" data-sid="${sid}">${esc(label(g))}<span class="small muted">${t(`${g.members.length} 人`,`${g.members.length}`)}</span></button>`).join('')}</div>`,()=>{});
+    modal.querySelector('button[type=submit]').hidden=true;
   }
   function workspaceRoster(){
     const list=roster();
@@ -288,7 +341,7 @@
   function render(){
     normalize();document.documentElement.lang=state.lang==='zh'?'zh-Hans':'en';
     app.innerHTML=shell();
-    const pages={overview,records,imports:importsPage,students:studentList,student:studentPage,classes:classesPage,goals:goalsPage,settings:settingsPage,trash:trashPage};
+    const pages={groups:groupsPage,overview,records,imports:importsPage,students:studentList,student:studentPage,classes:classesPage,goals:goalsPage,settings:settingsPage,trash:trashPage};
     document.querySelector('#content').innerHTML=(pages[state.page]||overview)();
     if(restoredView){restoredView=false;if(state.page==='records'&&state.focusStudentId)app.querySelector(`[data-result=score][data-sid="${esc(state.focusStudentId)}"]`)?.focus?.({preventScroll:true});window.scrollTo({top:state.scrollY||0});}
     saveView();
@@ -528,6 +581,13 @@
       const group={class:data.classes,student:data.students,activity:data.activities,goal:data.goals}[el.dataset.kind];group.find(o=>o.id===id).archived=false;persist();render();toast(t('已恢复','Restored'));
     }
     else if(action==='export-csv')exportCsv();
+    else if(action==='groups')go('groups');
+    else if(action==='group-new')groupForm();
+    else if(action==='group-edit')groupForm(el.dataset.id);
+    else if(action==='group-auto')autoGroupForm();
+    else if(action==='group-join')joinGroupForm(el.dataset.sid);
+    else if(action==='group-pick'){const g=C.groupsOf(data,state.classId).find(x=>x.id===el.dataset.id);if(g){C.saveGroup(data,state.classId,{id:g.id,name:g.name,members:[...g.members,el.dataset.sid],leaderId:g.leaderId});persist();modal.close();render();toast(t('已加入','Added'));}}
+    else if(action==='group-delete'){const g=C.groupsOf(data,state.classId).find(x=>x.id===el.dataset.id);if(g)confirmation(t(`删除「${esc(label(g))}」`,`Delete “${esc(label(g))}”`),t('组员不会被删除，只是变成未分组。','Members are not deleted; they become ungrouped.'),()=>C.deleteGroup(data,state.classId,g.id));}
     else if(action==='theme'){LumiTheme.toggle();render();}
     else if(action==='theme-mode'){LumiTheme.set(el.dataset.mode);render();}
     else if(action==='cloud-versions')showVersions();
@@ -637,6 +697,7 @@
     if(ids.size!==v.students.length||cids.size!==v.classes.length)throw Error('Duplicates');
     for(const s of v.students)if(typeof s.id!=='string'||typeof s.name!=='string'||typeof s.code!=='string')throw Error('Student');
     for(const c of v.classes)if(typeof c.name!=='string'||!Number.isInteger(c.year)||!Array.isArray(c.students)||!c.students.every(id=>ids.has(id)))throw Error('Class');
+    for(const c of v.classes)if(c.groups!==undefined&&(!Array.isArray(c.groups)||!c.groups.every(g=>g&&typeof g.id==='string'&&typeof g.name==='string'&&Array.isArray(g.members)&&g.members.every(id=>ids.has(id))&&(g.leaderId==null||g.members.includes(g.leaderId)))))throw Error('Groups');
     for(const a of v.activities)if(!cids.has(a.classId)||!Array.isArray(a.students)||!a.students.every(id=>ids.has(id))||!a.results||!(a.max>0)||typeof a.date!=='string'||typeof a.title!=='string')throw Error('Activity');
     for(const g of v.goals)if(!cids.has(g.classId)||!ids.has(g.studentId)||typeof g.title!=='string')throw Error('Goal');
     for(const h of v.history)if(!ids.has(h.studentId)||!h.before||!h.after)throw Error('History');
