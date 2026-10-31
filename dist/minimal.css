@@ -104,6 +104,71 @@ dialog{border-radius:12px;box-shadow:0 24px 90px #17233b24}dialog::backdrop{back
 .version-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #dce2eb;border-radius:8px}
 .version-row strong{display:block;font-size:13px;font-weight:500}.version-row small{display:block;font-size:11px;color:#748197;margin-top:3px}
 
+/* Lumi refinement: quiet surfaces, clear recording and restrained feedback. */
+:root{--bg:#f6f8fc;--paper:#fff;--ink:#27354b;--muted:#64718a;--line:#e3e9f2;--green:#5268cc;--pale:#eef2ff;--red:#b74754;--amber:#936b25;--radius:14px}
+.sidebar{border-right-color:#e7ebf3}.brand{gap:12px}.starloop-brand img{filter:none}
+.nav-item{border-radius:9px;padding:12px 14px;transition:background-color .15s,color .15s}
+.nav-item.active{background:#eef2ff;color:#4b5fb9}.nav-count{background:#e2e8fc;color:#5365b1}
+.topbar{background:#fff;border-bottom-color:#e7ebf3}.breadcrumb{color:#7c879b}.breadcrumb span{color:#4d5b73}
+.page-heading{margin-bottom:24px}.page-heading p{max-width:58ch;line-height:1.75}
+.card,.metric{border-color:#e3e9f2;border-radius:14px;box-shadow:0 2px 5px #28395c03}
+.card-head{margin-bottom:18px}.card-head p{line-height:1.7}
+.btn{min-height:42px;border-radius:9px;padding:10px 15px;border-color:#dde4ef;transition:background-color .15s,border-color .15s,color .15s,box-shadow .15s,transform .12s}
+.btn.primary{background:#5268cc;border-color:#5268cc;box-shadow:0 3px 8px #5268cc14}
+.btn.primary:hover{background:#445bbd;border-color:#445bbd}.btn.soft{background:#f0f3ff;border-color:#e5eafc;color:#5265b3}
+.btn:active:not(:disabled),.icon-btn:active{transform:translateY(1px)}
+.class-pill{min-height:41px;border-radius:9px;color:#647188;transition:background-color .15s,border-color .15s}
+.class-pill.active{background:#f2f5ff;border-color:#a4b3e4;box-shadow:inset 0 -2px #7186d8;color:#425bad}
+.pill-number{color:#6a7890;background:#fff;border-color:#e0e6f1}
+table{font-variant-numeric:tabular-nums}th{background:#f7f9fc;color:#637087;font-size:12px;padding:12px 14px;font-weight:500}
+td{padding:14px;border-color:#edf0f6;line-height:1.65}.table-wrap tbody tr:nth-child(even){background:#fafbfe}
+.table-wrap tbody tr:hover{background:#f5f7fd}.student-name{font-size:14px;line-height:1.6;text-underline-offset:4px}
+.student-name:hover{text-decoration:underline;text-decoration-color:#a5b4e8}.student-name small{font-size:11px;color:#66748b}
+.name-english{color:#34435a;line-height:1.5}.name-chinese{color:#65738b;line-height:1.65;margin-top:2px}
+.record-table tr[data-student-row]>td:nth-child(2){min-width:200px;width:200px;max-width:200px;background:#fff}
+.record-table tr[data-student-row]:nth-child(even)>td:nth-child(2){background:#fafbfe}
+.record-table tr[data-student-row]:focus-within>td{background:#eff3ff;transition:background-color .15s}
+.record-table tr[data-student-row]:focus-within>td:nth-child(2){box-shadow:inset 3px 0 #8094df,1px 0 #e3e9f2}
+.record-table .score{width:88px;min-height:42px;padding:9px 12px;text-align:right;font-size:16px;line-height:1.3;font-variant-numeric:tabular-nums;border-color:#dce3ef;border-radius:8px;background:#fff;box-shadow:none;transition:border-color .15s,box-shadow .15s}
+.record-table .score:focus{outline:none;border-color:#8196dc;box-shadow:0 0 0 3px #607bd215}
+.record-table .score.score-error{border-color:#bd5862!important;background:#fff5f5!important}
+.record-table .note-input{min-height:40px;border-radius:8px}
+.homework-buttons{gap:5px}.hw-state{min-height:40px;min-width:51px;border-radius:8px;border-color:#e5e9f0;background:#fff;color:#6b778d;transition:background-color .14s,border-color .14s,color .14s,transform .1s;box-shadow:none}
+.hw-state:hover{background:#f5f7fc;border-color:#bac7e6}.hw-state:active{transform:scale(.97)}
+.hw-state[aria-pressed=true]{box-shadow:none;font-weight:500}
+.hw-state.submitted[aria-pressed=true]{background:#edf4f0;color:#426c5a;border-color:#cadfd2}
+.hw-state.missing[aria-pressed=true],.exam-buttons .hw-state.absent[aria-pressed=true]{background:#fff1f2;color:#ad3f4c;border-color:#e9b8be}
+.hw-state.late[aria-pressed=true],.hw-state.makeup[aria-pressed=true]{background:#faf5e9;color:#886521;border-color:#e7d8b4}
+.exam-indicator{font-size:12px;color:#64728a}.exam-indicator.recorded{color:#4c7865}
+.hw-reset{color:#8a95a8}.badge{border-radius:6px;padding:4px 8px;font-size:11px}.badge.red{background:#fff0f2;color:#ad3f4c}
+.row-note summary{font-size:12px;color:#64728a}.row-note[open] summary{color:#5268b9}.row-note summary:hover{color:#4b62ba}
+.saved{font-size:11px;line-height:1.4}.saved[data-state=synced] .dot{background:#67967d;animation:lumi-saved .24s ease-out}
+.icon-btn{border-radius:8px;transition:background-color .15s,color .15s,transform .12s}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #8094df;outline-offset:3px}
+dialog{border-radius:16px;border-color:#e0e6f1;box-shadow:0 24px 80px #20345822}
+dialog[open]{animation:lumi-dialog .16s ease-out}dialog::backdrop{background:#1f2c474f;backdrop-filter:blur(2px)}
+dialog .form-field{line-height:1.65}dialog .form-field input,dialog .form-field select{min-height:44px}
+.empty{line-height:1.9;color:#76839a}.footer{color:#8590a4}
+@keyframes lumi-dialog{from{opacity:0;transform:translateY(7px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes lumi-saved{from{opacity:.4;transform:scale(.65)}to{opacity:1;transform:scale(1)}}
+@media(max-width:920px){.content{padding:24px}.card{padding:21px}}
+@media(max-width:640px){
+  .content{padding:22px 16px 30px}.card{padding:18px}.page-heading{margin-bottom:20px}.page-heading>.row{gap:8px}
+  .btn{min-height:44px}.topbar{gap:7px}.class-strip{gap:8px}.class-pill{min-height:42px}
+  .record-table tr[data-student-row]{padding:16px;border-radius:12px;margin-bottom:12px;gap:11px 12px;transition:background-color .15s,border-color .15s}
+  .record-table tr[data-student-row]:focus-within{background:#f3f6ff;border-color:#a6b6e5}
+  .record-table tr[data-student-row]:focus-within>td:nth-child(2){box-shadow:none!important}
+  .record-table tr[data-student-row]>td:nth-child(2){padding-bottom:5px}
+  .record-table tr[data-student-row]>td:nth-child(2) .student-name{font-size:15px;line-height:1.7}
+  .record-table .name-english{font-size:14px}.record-table .name-chinese{font-size:16px}
+  .record-table .homework-buttons{gap:6px}.record-table .hw-state{min-height:44px;min-width:55px;font-size:13px}
+  .record-table .score{width:106px;min-height:46px;font-size:18px}.record-table td:has(.score)::before{font-size:13px}
+  .record-table .row-note summary{font-size:13px;padding:6px 0}.record-table .exam-indicator{font-size:13px}
+  .workspace-roster td,.workspace-roster th{padding:12px 9px}.workspace-roster .name-chinese{font-size:15px}
+  .top-actions .saved{font-size:10px;max-width:126px}.top-actions{gap:5px}dialog{padding:22px}
+}
+@media(prefers-reduced-motion:reduce){dialog[open],.saved .dot{animation:none!important}.btn,.hw-state,.class-pill,.nav-item,.icon-btn,.record-table tr,.record-table td,.record-table .score{transition:none!important}}
+
 /* Class groups */
 .group-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:18px}
 .group-card{display:grid;gap:12px;align-content:start}

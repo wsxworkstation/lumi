@@ -76,3 +76,20 @@
 }
 @media(max-height:700px) and (min-width:641px){#cloud-overlay.login-scene{align-items:start;padding-top:22px;padding-bottom:22px}.login-scene>.cloud-card{min-height:595px}.login-story-copy{margin-top:30px}.login-form-panel{padding-top:65px}.login-art{min-height:215px}}
 @media(prefers-reduced-motion:reduce){.login-scene *,.login-scene *::before,.login-scene *::after{animation:none!important;transition:none!important}}
+
+/* Keep the animated brand on the welcome screen; recording stays still. */
+.login-scene>.cloud-card{border-color:#e8ecf6;box-shadow:0 24px 72px -30px #34417126}
+.login-story{background:#eef1ff;background-image:radial-gradient(ellipse at 50% 70%,#e1e6ff 0,transparent 68%),linear-gradient(145deg,#f4f5ff,#e9eeff)}
+.login-story::before{opacity:.09}.login-brand{color:#344276}.login-kicker{color:#7280a7}
+.login-story-copy p{color:#6a789c;font-size:13px;line-height:1.85}.login-story-foot{color:#7280a2;font-size:11px}
+.art-orbit{opacity:.3}.spark-one{opacity:.65}.spark-two{opacity:.5}
+.login-form-panel{padding-left:48px;padding-right:48px}.login-form-heading p{color:#62728b;font-size:13px}
+.login-eyebrow{color:#65738b}.login-scene #cloud-login label{font-size:14px;line-height:1.65}
+.login-scene #cloud-login input{background:#fafbfe;border-color:#dde4f0;border-radius:10px}
+.login-scene #cloud-login input::placeholder{color:#8491a7;font-size:13px}
+.login-scene #cloud-login .btn.primary{background:#5268cc;border-color:#5268cc}
+.login-scene #cloud-login .btn.primary:hover{background:#445bbd;border-color:#445bbd}
+.login-sync-note{color:#62728b;font-size:11px}.login-sync-note svg{stroke:#8592a8}
+.login-form-foot{color:#66748b;font-size:10px}
+@media(max-width:850px){.login-form-panel{padding-left:30px;padding-right:30px}}
+@media(max-width:640px){.login-form-panel{padding-left:25px;padding-right:25px}.login-story-copy p{font-size:12px}.login-scene #cloud-login label{font-size:15px}.login-form-heading p{font-size:13px}.login-sync-note{font-size:11px}.login-form-foot{font-size:10px}}

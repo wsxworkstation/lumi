@@ -12,3 +12,18 @@ html,body{font-family:'Figtree','Zhuque Fangsong (technical preview)','Microsoft
 @media(max-width:640px){.login-brand{font-size:26px}}
 .theme-toggle{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px}
 .theme-toggle .ico{width:18px;height:18px}
+
+/* Readable hierarchy without synthesizing a bold Chinese weight. */
+body{font-size:15px;line-height:1.6}
+button,input,select,textarea{font-family:inherit;font-synthesis:none}
+h1{font-size:28px;line-height:1.45;letter-spacing:0}h2{font-size:18px;line-height:1.55}h3{font-size:15px;line-height:1.55}
+.page-heading p,.card-head p,.chart-caption,.help{font-size:12px;line-height:1.8}
+.form-field,.setting-grid label{font-size:14px;line-height:1.7}
+.student-name{font-size:14px}.student-name .name-chinese{font-size:15px}
+.btn{font-size:13px}.btn.sm{font-size:12px}.metric-label{font-size:12px}.metric-foot{font-size:11px;line-height:1.7}
+.brand strong{font-size:28px}.brand small{font-size:11px}.small{font-size:12px}.tiny{font-size:11px}
+@media(max-width:640px){
+  h1{font-size:25px}h2{font-size:18px}.page-heading p,.help,.chart-caption{font-size:13px}
+  .form-field,.setting-grid label{font-size:15px}.form-field input,.form-field select,.form-field textarea{font-size:16px}
+  .student-name .name-chinese{font-size:16px}.btn.sm{font-size:12px}
+}

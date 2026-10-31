@@ -239,6 +239,57 @@ html[data-theme=dark] .saved[data-state=conflict],html[data-theme=dark] .saved[d
 html[data-theme=dark] .saved[data-state=conflict] .dot,html[data-theme=dark] .saved[data-state=expired] .dot,html[data-theme=dark] .saved[data-state=error] .dot{background:#b94c49}
 html[data-theme=dark] .version-row{border:1px solid #303337}
 html[data-theme=dark] .version-row small{color:#98a5bc}
+html[data-theme=dark]{--bg:#121315;--paper:#222222;--ink:#afc1dc;--muted:#98a6c0;--line:#2c2f34;--green:#5268cc;--pale:#14151b;--red:#f17b85;--amber:#c79d5a}
+html[data-theme=dark] .sidebar{border-right-color:#2c2e32}
+html[data-theme=dark] .nav-item.active{background:#14151b;color:#8ba3fa}
+html[data-theme=dark] .nav-count{background:#171922;color:#8ca2f4}
+html[data-theme=dark] .topbar{background:#222222;border-bottom-color:#2c2e32}
+html[data-theme=dark] .breadcrumb{color:#9aa5ba}
+html[data-theme=dark] .breadcrumb span{color:#9fafca}
+html[data-theme=dark] .card,html[data-theme=dark] .metric{border-color:#2c2f34;box-shadow:0 2px 5px #00000011}
+html[data-theme=dark] .btn{border-color:#2e3237}
+html[data-theme=dark] .btn.primary{background:#5268cc;border-color:#5268cc;box-shadow:0 3px 8px #00000036}
+html[data-theme=dark] .btn.primary:hover{background:#445bbd;border-color:#445bbd}
+html[data-theme=dark] .btn.soft{background:#14151a;border-color:#2b2e37;color:#8ba2f6}
+html[data-theme=dark] .class-pill{color:#98a6bf}
+html[data-theme=dark] .class-pill.active{background:#131418;border-color:#3f4762;box-shadow:inset 0 -2px #000000ff;color:#8ba8f8}
+html[data-theme=dark] .pill-number{color:#96a5bf;background:#222222;border-color:#2e3136}
+html[data-theme=dark] th{background:#121314;color:#98a6bf}
+html[data-theme=dark] td{border-color:#2a2c2f}
+html[data-theme=dark] .table-wrap tbody tr:nth-child(even){background:#121213}
+html[data-theme=dark] .table-wrap tbody tr:hover{background:#131416}
+html[data-theme=dark] .student-name:hover{text-decoration-color:#8896c8}
+html[data-theme=dark] .student-name small{color:#97a5be}
+html[data-theme=dark] .name-english{color:#a8bad6}
+html[data-theme=dark] .name-chinese{color:#96a5bf}
+html[data-theme=dark] .record-table tr[data-student-row]>td:nth-child(2){background:#222222}
+html[data-theme=dark] .record-table tr[data-student-row]:nth-child(even)>td:nth-child(2){background:#121213}
+html[data-theme=dark] .record-table tr[data-student-row]:focus-within>td{background:#13151a}
+html[data-theme=dark] .record-table tr[data-student-row]:focus-within>td:nth-child(2){box-shadow:inset 3px 0 #000000ff,1px 0 #000000ff}
+html[data-theme=dark] .record-table .score{border-color:#2f3238;background:#222222}
+html[data-theme=dark] .record-table .score:focus{border-color:#8094da;box-shadow:0 0 0 3px #00000038}
+html[data-theme=dark] .record-table .score.score-error{border-color:#bd5862!important;background:#161212!important}
+html[data-theme=dark] .hw-state{border-color:#2d2f33;background:#222222;color:#98a5bc}
+html[data-theme=dark] .hw-state:hover{background:#131416;border-color:#383f4f}
+html[data-theme=dark] .hw-state.submitted[aria-pressed=true]{background:#131715;color:#8bb7a3;border-color:#2f3a33}
+html[data-theme=dark] .hw-state.missing[aria-pressed=true],html[data-theme=dark] .exam-buttons .hw-state.absent[aria-pressed=true]{background:#191313;color:#f47f88;border-color:#51373b}
+html[data-theme=dark] .hw-state.late[aria-pressed=true],html[data-theme=dark] .hw-state.makeup[aria-pressed=true]{background:#16140f;color:#c6a160;border-color:#3d3623}
+html[data-theme=dark] .exam-indicator{color:#97a6bf}
+html[data-theme=dark] .exam-indicator.recorded{color:#85b39e}
+html[data-theme=dark] .hw-reset{color:#9aa5b9}
+html[data-theme=dark] .badge.red{background:#191314;color:#f47f88}
+html[data-theme=dark] .row-note summary{color:#97a6bf}
+html[data-theme=dark] .row-note[open] summary{color:#87a1f7}
+html[data-theme=dark] .row-note summary:hover{color:#89a3f8}
+html[data-theme=dark] .saved[data-state=synced] .dot{background:#324e3f}
+html[data-theme=dark] button:focus-visible,html[data-theme=dark] a:focus-visible,html[data-theme=dark] summary:focus-visible{outline:2px solid #7f93de}
+html[data-theme=dark] dialog{border-color:#2e3136;box-shadow:0 24px 80px #00000055}
+html[data-theme=dark] dialog::backdrop{background:#1f2c474f}
+html[data-theme=dark] .empty{color:#98a5bd}
+html[data-theme=dark] .footer{color:#9aa5ba}
+@media(max-width:640px){
+html[data-theme=dark] .record-table tr[data-student-row]:focus-within{background:#131418;border-color:#3d4660}
+}
 html[data-theme=dark] .group-members li{background:#121315}
 html[data-theme=dark] .group-members li.is-leader{background:#13161b;color:#8dadf9}
 html[data-theme=dark] .leader-tag{color:#7da4f7}
@@ -298,4 +349,60 @@ html[data-theme=dark] .login-scene #cloud-login .btn.primary:hover{background:#4
 html[data-theme=dark] .login-sync-note{color:#9ca5b7}
 html[data-theme=dark] .login-sync-note svg{stroke:#343943}
 html[data-theme=dark] .login-form-foot{color:#9ea5b4}
+html[data-theme=dark] .login-scene>.cloud-card{border-color:#2c2e32;box-shadow:0 24px 72px -30px #0000005e}
+html[data-theme=dark] .login-story{background:#14151c;background-image:radial-gradient(ellipse at 50% 70%,#171924 0,transparent 68%),linear-gradient(145deg,#131418,#15171e)}
+html[data-theme=dark] .login-brand{color:#a1b5f2}
+html[data-theme=dark] .login-kicker{color:#95a4cc}
+html[data-theme=dark] .login-story-copy p{color:#95a4ca}
+html[data-theme=dark] .login-story-foot{color:#95a4c8}
+html[data-theme=dark] .login-form-heading p{color:#95a6c1}
+html[data-theme=dark] .login-eyebrow{color:#96a5bf}
+html[data-theme=dark] .login-scene #cloud-login input{background:#121213;border-color:#2e3238}
+html[data-theme=dark] .login-scene #cloud-login input::placeholder{color:#98a5bc}
+html[data-theme=dark] .login-scene #cloud-login .btn.primary{background:#5268cc;border-color:#5268cc}
+html[data-theme=dark] .login-scene #cloud-login .btn.primary:hover{background:#445bbd;border-color:#445bbd}
+html[data-theme=dark] .login-sync-note{color:#95a6c1}
+html[data-theme=dark] .login-sync-note svg{stroke:#3c434f}
+html[data-theme=dark] .login-form-foot{color:#97a5be}
 /* fonts.css */
+/* Lumi: calm navy surfaces and readable recording states. */
+html[data-theme=dark]{--bg:#161d29;--paper:#1e2736;--ink:#e5ebf5;--muted:#a6b3c8;--line:#36435a;--green:#a5b8f5;--pale:#283750;--red:#f0b3bc;--amber:#e2cc9d}
+html[data-theme=dark] body{background:var(--bg);color:var(--ink)}
+html[data-theme=dark] .sidebar,html[data-theme=dark] .topbar{background:#1b2433;border-color:#344056}
+html[data-theme=dark] .card,html[data-theme=dark] .metric,html[data-theme=dark] dialog{background:#1e2736;border-color:#36435a}
+html[data-theme=dark] .brand strong,html[data-theme=dark] .name-english{color:#e5ebf5}
+html[data-theme=dark] .name-chinese,html[data-theme=dark] .student-name small{color:#b1bdd0}
+html[data-theme=dark] .btn{background:#222d40;color:#d1daeb;border-color:#43516a}
+html[data-theme=dark] .btn.primary,html[data-theme=dark] .login-scene #cloud-login .btn.primary{background:#5268c7;border-color:#6c81d7;color:#fff}
+html[data-theme=dark] .btn.primary:hover,html[data-theme=dark] .login-scene #cloud-login .btn.primary:hover{background:#5b70ce;border-color:#8a9bdf}
+html[data-theme=dark] .btn.soft{background:#293651;color:#bfceff;border-color:#42567b}
+html[data-theme=dark] .class-pill{background:#202c3e;color:#b5c1d6;border-color:#3a4963}
+html[data-theme=dark] .class-pill.active{background:#2b3b58;color:#d4dfff;border-color:#8096d8;box-shadow:inset 0 -2px #8299df}
+html[data-theme=dark] .pill-number{background:#26344a;color:#bdc9df;border-color:#45536d}
+html[data-theme=dark] th{background:#222d40;color:#bdc9df}
+html[data-theme=dark] td{border-color:#344056}
+html[data-theme=dark] .table-wrap tbody tr:nth-child(even){background:#222d3f}
+html[data-theme=dark] .table-wrap tbody tr:hover{background:#27354d}
+html[data-theme=dark] .record-table tr[data-student-row]>td:nth-child(2){background:#1e2736}
+html[data-theme=dark] .record-table tr[data-student-row]:nth-child(even)>td:nth-child(2){background:#222d3f}
+html[data-theme=dark] .record-table tr[data-student-row]:focus-within>td{background:#2a3b59}
+html[data-theme=dark] .record-table tr[data-student-row]:focus-within>td:nth-child(2){box-shadow:inset 3px 0 #9baff1,1px 0 #435371}
+html[data-theme=dark] input,html[data-theme=dark] select,html[data-theme=dark] textarea,html[data-theme=dark] .record-table .score,html[data-theme=dark] .login-scene #cloud-login input{background:#222d40;color:#e5ebf5;border-color:#495a76}
+html[data-theme=dark] input::placeholder,html[data-theme=dark] textarea::placeholder,html[data-theme=dark] .login-scene #cloud-login input::placeholder{color:#a2b0c8}
+html[data-theme=dark] .record-table .score:focus{border-color:#a8bbfb;box-shadow:0 0 0 3px #8299df30}
+html[data-theme=dark] .record-table .score.score-error{background:#432b34!important;border-color:#cc8795!important}
+html[data-theme=dark] .hw-state{background:#222d40;color:#b9c5db;border-color:#465570}
+html[data-theme=dark] .hw-state:hover{background:#30415d;border-color:#8da2df}
+html[data-theme=dark] .hw-state.submitted[aria-pressed=true]{background:#263d35;color:#b1d3c0;border-color:#597867}
+html[data-theme=dark] .hw-state.missing[aria-pressed=true],html[data-theme=dark] .exam-buttons .hw-state.absent[aria-pressed=true],html[data-theme=dark] .badge.red{background:#462d37;color:#f0b3bc;border-color:#996875}
+html[data-theme=dark] .hw-state.late[aria-pressed=true],html[data-theme=dark] .hw-state.makeup[aria-pressed=true]{background:#3d3629;color:#e2cc9d;border-color:#8a774d}
+html[data-theme=dark] .exam-indicator.recorded{color:#b1d3c0}
+html[data-theme=dark] .saved[data-state=error],html[data-theme=dark] .saved[data-state=expired],html[data-theme=dark] .saved[data-state=conflict]{color:#f0b3bc}
+html[data-theme=dark] .login-form-panel{background:#1e2736}
+html[data-theme=dark] .login-scene .login-form-heading h1{color:#e5ebf5}
+html[data-theme=dark] .login-form-heading p,html[data-theme=dark] .login-eyebrow,html[data-theme=dark] .login-sync-note{color:#b1bdd0}
+html[data-theme=dark] .login-scene #cloud-login label{color:#d1daeb}
+@media(max-width:640px){
+html[data-theme=dark] .record-table tr[data-student-row]{background:#1e2736;border-color:#43516a}
+html[data-theme=dark] .record-table tr[data-student-row]:focus-within{background:#283a57;border-color:#9baff1}
+}
