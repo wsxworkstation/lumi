@@ -64,3 +64,43 @@ test('archived or removed students drop out of groups automatically',()=>{
   const [g]=C.groupsOf(d,cid);
   assert.deepEqual(g.members,[b]);assert.equal(g.leaderId,null);
 });
+
+test('each group gets its own colour; colour can be changed but must come from the palette',()=>{
+  const d=fresh(),cid=d.classes[0].id,[a,b]=roster(d);
+  const g1=C.saveGroup(d,cid,{name:'A',members:[a]}),g2=C.saveGroup(d,cid,{name:'B',members:[b]});
+  assert.ok(C.TEAM_COLORS.includes(g1.color)&&C.TEAM_COLORS.includes(g2.color));
+  assert.notEqual(g1.color,g2.color);
+  C.saveGroup(d,cid,{id:g1.id,name:'A',members:[a],color:C.TEAM_COLORS[6]});
+  assert.equal(C.groupsOf(d,cid)[0].color,C.TEAM_COLORS[6]);
+  assert.throws(()=>C.saveGroup(d,cid,{id:g1.id,name:'A',members:[a],color:'#123456'}));
+  const auto=C.autoGroups(d,cid,3);
+  assert.equal(new Set(auto.map(g=>g.color)).size,3);
+});
+
+test('points add and subtract, undo removes one click, reset starts a new round but keeps history',()=>{
+  const d=fresh(),cid=d.classes[0].id,[a,b]=roster(d);
+  const g=C.saveGroup(d,cid,{name:'A',members:[a]}),h=C.saveGroup(d,cid,{name:'B',members:[b]});
+  C.addPoints(d,cid,g.id,1);C.addPoints(d,cid,g.id,1);const minus=C.addPoints(d,cid,g.id,-1);
+  C.addPoints(d,cid,h.id,5,'抢答第一');
+  let [x,y]=C.groupsOf(d,cid);
+  assert.equal(x.score,1);assert.equal(y.score,5);
+  assert.equal(d.classes[0].groups[1].log[0].note,'抢答第一');
+  C.removePoints(d,cid,g.id,minus.id);
+  assert.equal(C.groupsOf(d,cid)[0].score,2,'undo of the -1');
+  for(const bad of [0,1.5,'abc',1001,-1001])assert.throws(()=>C.addPoints(d,cid,g.id,bad));
+  C.resetPoints(d,cid);
+  [x,y]=C.groupsOf(d,cid);
+  assert.equal(x.score,0);assert.equal(y.score,0);
+  assert.equal(d.classes[0].groups[0].log.length,2,'older points stay in the log');
+  C.addPoints(d,cid,h.id,-2);
+  assert.equal(C.groupsOf(d,cid)[1].score,-2,'scores can go below zero');
+});
+
+test('groups saved before colours and points existed still work',()=>{
+  const d=fresh(),cid=d.classes[0].id,[a]=roster(d);
+  d.classes[0].groups=[{id:'old',name:'旧组',leaderId:a,members:[a]}];
+  const [g]=C.groupsOf(d,cid);
+  assert.ok(C.TEAM_COLORS.includes(g.color));assert.equal(g.score,0);
+  C.addPoints(d,cid,'old',3);
+  assert.equal(C.groupsOf(d,cid)[0].score,3);
+});

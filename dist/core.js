@@ -147,10 +147,27 @@
   /* ---------- Class groups: each class keeps its own groups; a student belongs to at most one group per class. ---------- */
   function classOf(data,classId){const c=data.classes.find(c=>c.id===classId);if(!c)throw Error('找不到班级 / Class not found');return c;}
   function activeIds(data,c){const live=new Set(data.students.filter(s=>!s.archived).map(s=>s.id));return c.students.filter(id=>live.has(id));}
+  /* Team colours: readable on light and dark backgrounds. Order = 红 橙 黄 绿 青 蓝 紫 粉. */
+  const TEAM_COLORS=['#e5484d','#f76b15','#d4a017','#30a46c','#12a594','#3e63dd','#8e4ec6','#d6409f'];
+  const nextColor=groups=>{const used=new Set(groups.map(g=>g.color));return TEAM_COLORS.find(c=>!used.has(c))||TEAM_COLORS[groups.length%TEAM_COLORS.length];};
+  const roundOf=c=>Number.isInteger(c.scoreRound)&&c.scoreRound>0?c.scoreRound:1;
   function groupsOf(data,classId){
-    const c=classOf(data,classId),inClass=new Set(activeIds(data,c));
-    return (c.groups||[]).map(g=>{const members=g.members.filter(id=>inClass.has(id));return {...g,members,leaderId:members.includes(g.leaderId)?g.leaderId:null};});
+    const c=classOf(data,classId),inClass=new Set(activeIds(data,c)),round=roundOf(c);
+    return (c.groups||[]).map((g,i)=>{const members=g.members.filter(id=>inClass.has(id));
+      const score=(g.log||[]).filter(e=>(e.round||1)===round).reduce((sum,e)=>sum+e.delta,0);
+      return {...g,members,leaderId:members.includes(g.leaderId)?g.leaderId:null,color:TEAM_COLORS.includes(g.color)?g.color:TEAM_COLORS[i%TEAM_COLORS.length],score};});
   }
+  /* Points: an append-only log per group, so totals are explainable and a click can be undone. */
+  function findGroup(data,classId,groupId){const c=classOf(data,classId),g=(c.groups||[]).find(x=>x.id===groupId);if(!g)throw Error('找不到这一组 / Group not found');return {c,g};}
+  function addPoints(data,classId,groupId,delta,note=''){
+    const {c,g}=findGroup(data,classId,groupId),n=Number(delta);
+    if(!Number.isInteger(n)||n===0||Math.abs(n)>1000)throw Error('分数要是 -1000 到 1000 之间的整数，不能是 0 / Points must be a whole number from -1000 to 1000, not 0');
+    g.log??=[];const entry={id:uid(),delta:n,note:String(note||'').trim().slice(0,60),round:roundOf(c),at:new Date().toISOString()};
+    g.log.push(entry);return entry;
+  }
+  function removePoints(data,classId,groupId,entryId){const {g}=findGroup(data,classId,groupId);g.log=(g.log||[]).filter(e=>e.id!==entryId);}
+  function resetPoints(data,classId){const c=classOf(data,classId);c.scoreRound=roundOf(c)+1;return c.scoreRound;}
+
   function saveGroup(data,classId,input){
     const c=classOf(data,classId),inClass=new Set(activeIds(data,c));c.groups??=[];
     const name=String(input.name||'').trim();
@@ -163,7 +180,9 @@
     if(input.id&&!g)throw Error('找不到这一组 / Group not found');
     if(c.groups.some(x=>x!==g&&x.name.trim()===name))throw Error('这个班已经有同名的组 / A group with this name already exists');
     for(const other of c.groups){if(other===g)continue;other.members=other.members.filter(id=>!members.includes(id));if(!other.members.includes(other.leaderId))other.leaderId=null;}
-    if(!g){g={id:uid()};c.groups.push(g);}
+    if(input.color!==undefined&&!TEAM_COLORS.includes(input.color))throw Error('请选择一个颜色 / Choose a colour');
+    if(!g){g={id:uid(),color:input.color||nextColor(c.groups),log:[]};c.groups.push(g);}
+    else if(input.color)g.color=input.color;
     const en=g.name===name?g.en:(input.en||'');
     Object.assign(g,{name,en,leaderId,members});
     return g;
@@ -174,12 +193,12 @@
     if(!ids.length)throw Error('这个班还没有学生 / This class has no students');
     if(!(n>=1&&n<=ids.length))throw Error(`组数要在 1 到 ${ids.length} 之间 / Number of groups must be 1–${ids.length}`);
     const order=[...ids];for(let i=order.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
-    c.groups=Array.from({length:n},(_,i)=>({id:uid(),name:`第${i+1}组`,en:`Group ${i+1}`,leaderId:null,members:[]}));
+    c.groups=Array.from({length:n},(_,i)=>({id:uid(),name:`第${i+1}组`,en:`Group ${i+1}`,color:TEAM_COLORS[i%TEAM_COLORS.length],leaderId:null,members:[],log:[]}));c.scoreRound=1;
     order.forEach((id,i)=>c.groups[i%n].members.push(id));
     if(leaders)c.groups.forEach(g=>{g.leaderId=g.members[0]||null;});
     return c.groups;
   }
-  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups};
+  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.StudyCore=api;
 })(globalThis);

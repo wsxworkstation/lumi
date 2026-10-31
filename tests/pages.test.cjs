@@ -141,6 +141,8 @@ test('groups page renders empty state, groups with leaders, and ungrouped studen
     api.render();html=elements.get('#content').innerHTML;
     assert.ok(html.includes('is-leader')&&html.includes('group-edit')&&html.includes('group-delete'));
     assert.ok(html.includes('group-join'),'students outside groups are listed');
+    assert.ok(html.includes('data-action="points"')&&html.includes('data-delta="1"')&&html.includes('data-delta="-1"'),'score buttons');
+    assert.ok(html.includes('--team:#')&&html.includes('points-reset'),'team colour and reset');
     assert.ok(!html.includes('undefined')&&!html.includes('NaN'));
   }
 });

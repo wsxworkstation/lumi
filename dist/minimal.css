@@ -193,3 +193,26 @@ dialog .form-field{line-height:1.65}dialog .form-field input,dialog .form-field 
 .gp-check input{width:18px;height:18px;min-height:0;accent-color:#3564db}
 .gp-join{display:grid;gap:8px}
 .gp-join .btn{justify-content:space-between;min-height:46px;font-size:14px}
+
+/* Team colours and scores. --team is set per card; tints use color-mix so they work in light and dark. */
+.group-card{border-top:4px solid var(--team,#3e63dd)}
+.group-head h2{display:flex;align-items:center;gap:8px}
+.team-dot{width:12px;height:12px;border-radius:50%;background:var(--team,#3e63dd);flex:none}
+.group-card .group-members li.is-leader{background:color-mix(in srgb,var(--team,#3e63dd) 14%,transparent);color:inherit}
+.group-card .leader-tag{color:var(--team,#3e63dd);font-weight:600}
+.score-box{display:grid;gap:10px;padding:12px;border-radius:10px;background:color-mix(in srgb,var(--team,#3e63dd) 9%,transparent)}
+.score-main{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.score-num{font-family:'Figtree',system-ui,sans-serif;font-size:40px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums}
+.score-rank{font-size:12px;font-weight:600;color:var(--team,#3e63dd)}
+.score-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.score-btn{min-height:48px;border-radius:9px;font-family:'Figtree',system-ui,sans-serif;font-size:20px;font-weight:700;border:1px solid #dce2eb;background:#fff;color:#48566d;touch-action:manipulation;user-select:none}
+.score-btn.plus{background:var(--team,#3e63dd);border-color:var(--team,#3e63dd);color:#fff}
+.score-btn:active{transform:scale(.97)}
+.score-other{justify-self:start;font-size:12px}
+.swatches{display:flex;flex-wrap:wrap;gap:10px}
+.swatch{position:relative;cursor:pointer}
+.swatch input{position:absolute;opacity:0;width:0;height:0}
+.swatch span[aria-hidden]{display:block;width:32px;height:32px;border-radius:50%;background:var(--team);border:3px solid transparent;box-shadow:0 0 0 1px #dce2eb}
+.swatch input:checked+span{border-color:#fff;box-shadow:0 0 0 2px var(--team)}
+.swatch input:focus-visible+span{outline:2px solid #3564db;outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

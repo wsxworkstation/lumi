@@ -89,6 +89,7 @@
   }
   function undoLast(){
     const action=undoAction;if(!action)return;
+    if(action.kind==='points'){C.removePoints(data,action.classId,action.groupId,action.entryId);undoAction=null;persist();render();toast(t('已撤销','Undone'));return;}
     const a=data.activities.find(a=>a.id===action.activityId&&!a.archived);if(!a){undoAction=null;savedIndicator();return;}
     if(action.metadata)C.editActivity(data,a.id,action.metadata);
     else for(const [sid,before] of Object.entries(action.before)){C.updateResult(data,a.id,sid,before);a.results[sid]=structuredClone(before);}
@@ -180,13 +181,18 @@
     if(!c)return heading(t('分组','Groups'),'')+classStrip()+empty(t('这个年份还没有班级','No classes in this year'));
     const list=roster(),groups=C.groupsOf(data,c.id),grouped=new Set(groups.flatMap(g=>g.members));
     const free=list.filter(s=>!grouped.has(s.id));
-    const actions=list.length?button(t('自动分组','Auto split'),'group-auto','','','group')+button(t('新建组','New group'),'group-new','primary','','plus'):'';
+    const actions=list.length?(groups.length?button(t('全部归零','Reset scores'),'points-reset','','','restore'):'')+button(t('自动分组','Auto split'),'group-auto','','','group')+button(t('新建组','New group'),'group-new','primary','','plus'):'';
+    const ranks=new Map(groups.map(g=>[g.id,1+groups.filter(o=>o.score>g.score).length]));
     let body;
     if(!list.length)body=empty(t('这个班还没有学生。先在首页加学生。','This class has no students yet. Add students on the home page first.'));
     else if(!groups.length)body=empty(t('还没有分组。用「自动分组」一次分好，或「新建组」自己挑人。','No groups yet. Use Auto split, or New group to pick members yourself.'),`<div class="row" style="justify-content:center">${actions}</div>`);
     else body=`<div class="group-grid">${groups.map(g=>{
       const members=[...(g.leaderId?[g.leaderId]:[]),...g.members.filter(id=>id!==g.leaderId)].map(student).filter(Boolean);
-      return `<section class="card group-card"><div class="group-head"><h2>${esc(label(g))}</h2><span class="small muted">${t(`${g.members.length} 人`,`${g.members.length} people`)}</span></div>
+      return `<section class="card group-card" style="--team:${g.color}"><div class="group-head"><h2><i class="team-dot" aria-hidden="true"></i>${esc(label(g))}</h2><span class="small muted">${t(`${g.members.length} 人`,`${g.members.length} people`)}</span></div>
+        <div class="score-box"><div class="score-main"><strong class="score-num">${g.score}</strong><span class="score-rank">${t(`第 ${ranks.get(g.id)} 名`,`#${ranks.get(g.id)}`)}</span></div>
+        <div class="score-buttons"><button class="score-btn minus" data-action="points" data-id="${g.id}" data-delta="-1" aria-label="${t(`${esc(label(g))} 扣 1 分`,`${esc(label(g))} minus 1`)}">−1</button><button class="score-btn plus" data-action="points" data-id="${g.id}" data-delta="1" aria-label="${t(`${esc(label(g))} 加 1 分`,`${esc(label(g))} plus 1`)}">+1</button></div>
+        <button class="text-link score-other" data-action="points-custom" data-id="${g.id}">${t('其他分数…','Other amount…')}</button></div>
+
         <ul class="group-members">${members.map(m=>`<li class="${m.id===g.leaderId?'is-leader':''}">${m.id===g.leaderId?`<span class="leader-tag">★ ${t('队长','Leader')}</span>`:''}<span>${esc(label(m))}</span></li>`).join('')||`<li class="muted">${t('还没有组员','No members yet')}</li>`}</ul>
         ${g.leaderId?'':`<p class="small muted">${t('还没选队长','No leader yet')}</p>`}
         <div class="row group-actions">${button(t('编辑','Edit'),'group-edit','sm',`data-id="${g.id}"`,'edit')}${button(t('删除','Delete'),'group-delete','sm danger',`data-id="${g.id}"`,'trash')}</div></section>`;}).join('')}</div>
@@ -199,11 +205,13 @@
     const name=g?g.name:(()=>{let i=groups.length+1;while(groups.some(x=>x.name===`第${i}组`))i++;return `第${i}组`;})();
     const rows=roster().map(s=>{const inThis=g?.members.includes(s.id),other=where.get(s.id);
       return `<div class="gp-row"><label class="gp-member"><input type="checkbox" name="m" value="${s.id}" ${inThis?'checked':''}><span>${esc(label(s))}${other&&other.id!==g?.id?`<small>${t(`在${esc(other.name)}`,`in ${esc(label(other))}`)}</small>`:''}</span></label><label class="gp-leader"><input type="radio" name="leader" value="${s.id}" ${g?.leaderId===s.id?'checked':''}>${t('队长','Leader')}</label></div>`;}).join('');
-    showModal(g?t('编辑组','Edit group'):t('新建组','New group'),`<label class="form-field full">${t('组名','Group name')}<input name="name" required maxlength="30" value="${esc(name)}"></label>
+    const used=new Set(groups.filter(x=>x.id!==g?.id).map(x=>x.color)),pick=g?.color||C.TEAM_COLORS.find(col=>!used.has(col))||C.TEAM_COLORS[0];
+    const swatches=C.TEAM_COLORS.map((col,i)=>`<label class="swatch" style="--team:${col}" title="${teamColorName(i)}"><input type="radio" name="color" value="${col}" ${col===pick?'checked':''}><span aria-hidden="true"></span><span class="sr">${teamColorName(i)}</span></label>`).join('');
+    showModal(g?t('编辑组','Edit group'):t('新建组','New group'),`<label class="form-field full">${t('组名','Group name')}<input name="name" required maxlength="30" value="${esc(name)}"></label><div class="form-field full">${t('颜色','Colour')}<div class="swatches">${swatches}</div></div>
       <div class="full"><p class="help">${t('勾选组员，再点一位当队长。已在别组的学生会移到这一组。','Tick members, then pick a leader. Students from another group move here.')}</p><div class="gp-list">${rows}</div></div>`,fd=>{
       const members=fd.getAll('m'),leader=fd.get('leader')||null;
       if(leader&&!members.includes(leader))members.push(leader);
-      C.saveGroup(data,c.id,{id:g?.id,name:fd.get('name'),members,leaderId:leader});
+      C.saveGroup(data,c.id,{id:g?.id,name:fd.get('name'),members,leaderId:leader,color:fd.get('color')||undefined});
     });
     const form=modal.querySelector('form');
     form.addEventListener('change',e=>{
@@ -220,6 +228,21 @@
       C.autoGroups(data,c.id,fd.get('count'),{leaders:fd.get('leaders')==='on'});
     });
     modal.querySelector('button[type=submit]').textContent=t('分组','Split');
+  }
+  const teamColorName=i=>[t('红','Red'),t('橙','Orange'),t('黄','Yellow'),t('绿','Green'),t('青','Teal'),t('蓝','Blue'),t('紫','Purple'),t('粉','Pink')][i]||'';
+  function givePoints(groupId,delta,note=''){
+    const entry=C.addPoints(data,state.classId,groupId,delta,note);
+    undoAction={kind:'points',classId:state.classId,groupId,entryId:entry.id};
+    persist();render();
+  }
+  function customPointsForm(groupId){
+    const g=C.groupsOf(data,state.classId).find(x=>x.id===groupId);if(!g)return;
+    showModal(t(`${esc(label(g))} 加分／扣分`,`Points for ${esc(label(g))}`),`<label class="form-field">${t('分数（扣分请写负数，例如 -3）','Points (use a minus for deductions, e.g. -3)')}<input name="delta" type="number" step="1" min="-1000" max="1000" required inputmode="numeric" value="3"></label>
+      <label class="form-field">${t('原因（可不填）','Reason (optional)')}<input name="note" maxlength="60" placeholder="${t('例如：抢答第一','e.g. First to answer')}"></label>`,fd=>{
+      const entry=C.addPoints(data,state.classId,groupId,fd.get('delta'),fd.get('note'));
+      undoAction={kind:'points',classId:state.classId,groupId,entryId:entry.id};
+    });
+    modal.querySelector('input[name=delta]').select();
   }
   function joinGroupForm(sid){
     const c=cls(),s=student(sid),groups=C.groupsOf(data,c.id);
@@ -581,6 +604,9 @@
       const group={class:data.classes,student:data.students,activity:data.activities,goal:data.goals}[el.dataset.kind];group.find(o=>o.id===id).archived=false;persist();render();toast(t('已恢复','Restored'));
     }
     else if(action==='export-csv')exportCsv();
+    else if(action==='points')givePoints(el.dataset.id,Number(el.dataset.delta));
+    else if(action==='points-custom')customPointsForm(el.dataset.id);
+    else if(action==='points-reset')confirmation(t('全部归零','Reset scores'),t('所有组的分数会变回 0，开始新一轮。以前的加分记录会保留。','All groups go back to 0 for a new round. Earlier point records are kept.'),()=>{C.resetPoints(data,state.classId);undoAction=null;});
     else if(action==='groups')go('groups');
     else if(action==='group-new')groupForm();
     else if(action==='group-edit')groupForm(el.dataset.id);
@@ -697,7 +723,7 @@
     if(ids.size!==v.students.length||cids.size!==v.classes.length)throw Error('Duplicates');
     for(const s of v.students)if(typeof s.id!=='string'||typeof s.name!=='string'||typeof s.code!=='string')throw Error('Student');
     for(const c of v.classes)if(typeof c.name!=='string'||!Number.isInteger(c.year)||!Array.isArray(c.students)||!c.students.every(id=>ids.has(id)))throw Error('Class');
-    for(const c of v.classes)if(c.groups!==undefined&&(!Array.isArray(c.groups)||!c.groups.every(g=>g&&typeof g.id==='string'&&typeof g.name==='string'&&Array.isArray(g.members)&&g.members.every(id=>ids.has(id))&&(g.leaderId==null||g.members.includes(g.leaderId)))))throw Error('Groups');
+    for(const c of v.classes)if(c.groups!==undefined&&(!Array.isArray(c.groups)||!c.groups.every(g=>g&&typeof g.id==='string'&&typeof g.name==='string'&&Array.isArray(g.members)&&g.members.every(id=>ids.has(id))&&(g.leaderId==null||g.members.includes(g.leaderId))&&(g.log===undefined||Array.isArray(g.log)&&g.log.every(e=>e&&typeof e.id==='string'&&Number.isInteger(e.delta))))))throw Error('Groups');
     for(const a of v.activities)if(!cids.has(a.classId)||!Array.isArray(a.students)||!a.students.every(id=>ids.has(id))||!a.results||!(a.max>0)||typeof a.date!=='string'||typeof a.title!=='string')throw Error('Activity');
     for(const g of v.goals)if(!cids.has(g.classId)||!ids.has(g.studentId)||typeof g.title!=='string')throw Error('Goal');
     for(const h of v.history)if(!ids.has(h.studentId)||!h.before||!h.after)throw Error('History');

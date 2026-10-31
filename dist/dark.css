@@ -302,6 +302,17 @@ html[data-theme=dark] .gp-leader{color:#99a6b8}
 html[data-theme=dark] .gp-member input,html[data-theme=dark] .gp-leader input{accent-color:#3564db}
 html[data-theme=dark] .gp-check span{color:#a2b2cc}
 html[data-theme=dark] .gp-check input{accent-color:#3564db}
+html[data-theme=dark] .group-card{border-top:4px solid var(--team,#3e63dd)}
+html[data-theme=dark] .team-dot{background:var(--team,#3e63dd)}
+html[data-theme=dark] .group-card .group-members li.is-leader{background:color-mix(in srgb,var(--team,#3e63dd) 14%,transparent)}
+html[data-theme=dark] .group-card .leader-tag{color:var(--team,#81a2f7)}
+html[data-theme=dark] .score-box{background:color-mix(in srgb,var(--team,#3e63dd) 9%,transparent)}
+html[data-theme=dark] .score-rank{color:var(--team,#81a2f7)}
+html[data-theme=dark] .score-btn{border:1px solid #303337;background:#222222;color:#a2b2cc}
+html[data-theme=dark] .score-btn.plus{background:var(--team,#3e63dd);border-color:var(--team,#3e63dd);color:#fff}
+html[data-theme=dark] .swatch span[aria-hidden]{box-shadow:0 0 0 1px #000000ff}
+html[data-theme=dark] .swatch input:checked+span{border-color:#383838}
+html[data-theme=dark] .swatch input:focus-visible+span{outline:2px solid #3564db}
 /* login.css */
 html[data-theme=dark] #cloud-overlay.login-scene{background:#131417;background-image:radial-gradient(ellipse at 15% 12%,#161821 0,transparent 52%),radial-gradient(ellipse at 95% 90%,#16181c 0,transparent 45%)}
 html[data-theme=dark] .login-scene>.cloud-card{border:1px solid #383838;box-shadow:0 28px 80px -30px #00000074,0 2px 8px #00000013}
