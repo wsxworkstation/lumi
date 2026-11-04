@@ -322,7 +322,7 @@
     return heading(t('功课与成绩','Homework & scores'),t('全班一起录入，修改后自动保存到当前浏览器。','Enter a whole class at once. Changes save in this browser.'),button(t('新增记录','New record'),'new-record','primary','','plus'))+classStrip()+
       `<div class="filters"><div class="tab-group"><button class="${state.kind==='homework'?'active':''}" data-action="record-kind" data-kind="homework">${t('功课记录','Homework')}</button><button class="${state.kind!=='homework'?'active':''}" data-action="record-kind" data-kind="exam">${t('考试成绩','Exams')}</button></div><select id="activity-select" aria-label="${t('选择记录','Select record')}">${list.map(r=>`<option value="${r.id}" ${a?.id===r.id?'selected':''}>${esc(label(r))} · ${r.date}</option>`).join('')}</select><select id="record-filter" aria-label="${t('筛选状态','Filter status')}">${[['all',t('全部学生','All students')],['missing',t('只看未交','Missing only')],['unrecorded',t('只看未记录','Unrecorded only')]].map(([v,l])=>`<option value="${v}" ${state.filter===v?'selected':''}>${l}</option>`).join('')}</select></div>`+
       (!a?empty(t('这个班级还没有记录，新增一份试试看。','No records in this class. Add one to get started.')):`
-      <section class="card"><div class="activity-header"><div class="row between"><div><h2>${esc(label(a))}</h2><p class="help">${typeName(a.kind)} · ${t(a.kind==='homework'?'截止日期':'考试日期',a.kind==='homework'?'Due date':'Exam date')} ${a.date}${a.kind==='homework'?'':` · ${t('满分','Out of')} ${a.max}`}${a.topic?` · ${esc(a.topic)}`:''}</p>${a.note?`<p class="help">${esc(a.note)}</p>`:''}</div><div class="row">${button(t('编辑','Edit'),'edit-activity','sm',`data-id="${a.id}"`,'edit')}${a.kind==='homework'?button(t('剩余未记录 → 已交','Mark remaining submitted'),'bulk-submit','soft sm'):button(t('贴成绩','Paste scores'),'paste-scores','sm','','upload')}${button(t('导出 CSV','Export CSV'),'export-csv','sm','','down')}${button(t('回收','Archive'),'archive-activity','sm danger',`data-id="${a.id}"`,'trash')}</div></div></div>
+      <section class="card"><div class="activity-header"><div class="row between"><div><h2>${esc(label(a))}</h2><p class="help">${typeName(a.kind)} · ${t(a.kind==='homework'?'截止日期':'考试日期',a.kind==='homework'?'Due date':'Exam date')} ${a.date}${a.kind==='homework'?'':` · ${t('满分','Out of')} ${a.max}`}${a.topic?` · ${esc(topicShort(a.topic))}`:''}</p>${a.note?`<p class="help">${esc(a.note)}</p>`:''}</div><div class="row">${button(t('编辑','Edit'),'edit-activity','sm',`data-id="${a.id}"`,'edit')}${a.kind==='homework'?button(t('剩余未记录 → 已交','Mark remaining submitted'),'bulk-submit','soft sm'):button(t('贴成绩','Paste scores'),'paste-scores','sm','','upload')}${button(t('导出 CSV','Export CSV'),'export-csv','sm','','down')}${button(t('回收','Archive'),'archive-activity','sm danger',`data-id="${a.id}"`,'trash')}</div></div></div>
       <div class="info-banner">${icon('info')}${t(a.kind==='homework'?'选择提交状态，需要时填写备注。':'空白不是零分；缺席单独记录。不同满分自动换算为百分比。',a.kind==='homework'?'Select a submission status and optionally add a note.':'Blank is not zero. Absences are separate. Scores are converted to percentages.')}</div>
       <div class="table-wrap record-table-wrap"><table class="record-table"><thead><tr><th>#</th><th>${t('学生','Student')}</th><th>${t('状态','Status')}</th>${a.kind==='homework'?'':`<th>${t('得分','Score')} / ${a.max}</th><th>%</th>`}<th>${t('备注','Notes')}</th><th></th></tr></thead><tbody>${a.students.filter(id=>student(id)).filter(id=>state.filter==='all'||(a.results[id]?.status||'unrecorded')===state.filter).map((id,i)=>recordRow(a,id,i)).join('')}</tbody></table></div>
       <p class="chart-caption">${t('修改自动保存。可复制「姓名＋分数」两列，系统按姓名配对。','Changes save automatically. Paste name and score columns to match students.')}</p></section>`)+footer();
@@ -469,11 +469,32 @@
       });
   }
   /* Topic: a dropdown of this class's KSSM chapters (from its level + subject), with "other" for anything else. */
-  function topicField(){
+  /* "3. Indeks / Indices" → number, Malay, English. Teacher-typed lines without the pattern keep their text. */
+  function topicParts(text){const m=String(text||'').match(/^\s*(\d+)\.\s*(.*)$/),rest=m?m[2]:String(text||''),[bm,...en]=rest.split(' / ');return {no:m?m[1]:'',bm:bm.trim(),en:en.join(' / ').trim()};}
+  const topicShort=text=>{const p=topicParts(text);return `${p.no?`${p.no}. `:''}${state.lang==='en'&&p.en?p.en:p.bm}`;};
+  /* Chapter tiles: Malay on top, English below; tap to pick, tap again to clear. Last tile = type your own. */
+  function topicField(selected=''){
     const T=window.LumiTopics,key=T?.keyFor(cls())||'',topics=T?T.list(data,key):[];
-    const other=`<input name="topic" maxlength="120" placeholder="${t('自己填章节','Type a topic')}" aria-label="${t('章节','Topic')}">`;
-    if(!topics.length)return `<label class="form-field">${t('章节（选填）','Topic (optional)')}${other}<small>${t('在「设置 → 章节库」加入这个科目的章节，以后就能直接选。','Add chapters for this subject in Settings → Topic library to pick them next time.')}</small></label>`;
-    return `<label class="form-field">${t('章节（选填）','Topic (optional)')}<select name="topicPick"><option value="">${t('不选','None')}</option>${topics.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}<option value="__other">${t('其他（自己填）','Other (type it)')}</option></select>${other}</label>`;
+    const custom=selected&&!topics.includes(selected);
+    const other=`<input name="topic" maxlength="120" placeholder="${t('自己填章节','Type a topic')}" aria-label="${t('章节','Topic')}" value="${esc(custom?selected:'')}">`;
+    if(!topics.length)return `<label class="form-field full">${t('章节（选填）','Topic (optional)')}${other}<small>${t('在「设置 → 章节库」加入这个科目的章节，以后就能直接选。','Add chapters for this subject in Settings → Topic library to pick them next time.')}</small></label>`;
+    const tile=(value,no,top,bottom,on)=>`<label class="topic-tile ${on?'on':''}"><input type="radio" name="topicPick" value="${esc(value)}" ${on?'checked':''}><span class="topic-no">${esc(no)}</span><span class="topic-text"><b>${esc(top)}</b>${bottom?`<small>${esc(bottom)}</small>`:''}</span></label>`;
+    return `<div class="form-field full">${t('章节（选填）','Topic (optional)')}<div class="topic-grid" role="radiogroup" aria-label="${t('章节','Topic')}">${topics.map((x,i)=>{const p=topicParts(x);return tile(x,p.no||String(i+1),p.bm,p.en,x===selected);}).join('')}${tile('__other','+',t('其他','Other'),t('自己填','Type your own'),custom)}</div>${other}</div>`;
+  }
+  /* Wire the tiles inside the open modal; returns a reader for the chosen topic text. */
+  function wireTopicPicker(titleInput){
+    const radios=[...(modal.querySelectorAll?.('input[name=topicPick]')||[])],other=modal.querySelector('input[name=topic]');
+    let current=radios.find(r=>r.checked)?.value||'';
+    const sync=(enabled=true)=>{radios.forEach(r=>{r.disabled=!enabled;r.closest('.topic-tile')?.classList.toggle('on',r.checked);});if(radios.length){other.hidden=current!=='__other';other.disabled=!enabled||current!=='__other';}else other.disabled=!enabled;};
+    radios.forEach(r=>r.addEventListener('click',()=>{
+      if(r.value===current){r.checked=false;current='';}else current=r.value;
+      sync();
+      if(current==='__other'){other.focus();return;}
+      if(current&&titleInput&&(!titleInput.value.trim()||titleInput.dataset.auto==='1')){const p=topicParts(current);titleInput.value=(state.lang==='en'&&p.en)?p.en:p.bm;titleInput.dataset.auto='1';}
+    }));
+    titleInput?.addEventListener('input',()=>{titleInput.dataset.auto='';});
+    sync();
+    return {sync,read:f=>current==='__other'||!radios.length?String(f.get('topic')||'').trim():current};
   }
   function topicLibraryForm(){
     const T=window.LumiTopics;if(!T)return;
@@ -502,11 +523,11 @@
       selectField('category',t('类别','Category'),[['homework',t('功课','Homework')],['tuition',t('补习考试','Tuition exam')],['school',t('学校考试','School exam')],['quiz',t('小考','Quiz')]],initial)+
       field('title',t('名称','Title'),'text','','required maxlength="100"')+
       field('date',t('日期','Date'),'date',recordDate(),`required min="${state.year}-01-01" max="${state.year}-12-31"`)+
-      `<div data-homework-fields>${topicField()}</div><div data-exam-fields>${field('max',t('满分','Maximum score'),'number',50,'required min="1" max="10000"')}</div>`+
+      `<div class="full" data-homework-fields>${topicField()}</div><div data-exam-fields>${field('max',t('满分','Maximum score'),'number',50,'required min="1" max="10000"')}</div>`+
       `<details class="full note-toggle"><summary>${t('+ 备注','+ Note')}</summary><textarea name="note" rows="2" maxlength="500" aria-label="${t('备注','Note')}"></textarea></details>`,
       f=>{
         const category=f.get('category'),isHW=category==='homework';
-        const pick=f.get('topicPick');if(pick!==null)f.set('topic',pick==='__other'?String(f.get('topic')||'').trim():pick);
+        f.set('topic',isHW?picker.read(f):'');
         if(!['homework','tuition','school','quiz'].includes(category))throw Error(t('请选择类别','Choose a category'));
         const title=f.get('title').trim(),max=isHW?1:Number(f.get('max'));
         if(!title)throw Error(t('请输入名称','Enter a title'));
@@ -518,19 +539,17 @@
         const a={id:C.uid(),recordCode,classId:state.classId,kind:category,type:({homework:'Homework',tuition:'Tuition Exam',school:'School Exam',quiz:'Quiz'})[category],title,date:f.get('date'),max,topic:isHW?(f.get('topic')||''):'',note:f.get('note'),students:ids,results,archived:false};
         data.activities.push(a);state.activityId=a.id;state.kind=isHW?'homework':'exam';state.page='records';state.filter='all';
       });
-    const category=modal.querySelector('[name=category]'),pick=modal.querySelector('[name=topicPick]'),other=modal.querySelector('[name=topic]'),title=modal.querySelector('[name=title]');
+    const category=modal.querySelector('[name=category]');
+    // Picking a chapter fills in the record name when it is still empty, so most homework needs no typing.
+    const picker=wireTopicPicker(modal.querySelector('[name=title]'));
     const updateFields=()=>{
       const isHW=category.value==='homework';
       modal.querySelector('[data-homework-fields]').hidden=!isHW;
-      if(pick)pick.disabled=!isHW;
-      other.disabled=!isHW||(pick&&pick.value!=='__other');other.hidden=!!pick&&pick.value!=='__other';
+      picker.sync(isHW);
       modal.querySelector('[data-exam-fields]').hidden=isHW;
       modal.querySelector('[name=max]').disabled=isHW;
     };
     category.onchange=updateFields;
-    // Picking a topic fills in the record name when it is still empty, so most homework needs no typing.
-    if(pick)pick.onchange=()=>{updateFields();if(pick.value==='__other'){other.focus();return;}if(pick.value&&(!title.value.trim()||title.dataset.auto==='1')){title.value=pick.value.replace(/^\d+\.\s*/,'').split(' / ')[state.lang==='en'?1:0]||pick.value;title.dataset.auto='1';}};
-    title.addEventListener('input',()=>{title.dataset.auto='';});
     updateFields();
   }
   function addGoal(){
@@ -552,12 +571,13 @@
     showModal(t('编辑记录','Edit record'),
       field('title',t('名称','Title'),'text',a.title,'required maxlength="100"')+
       field('date',t('日期','Date'),'date',a.date,`required min="${state.year}-01-01" max="${state.year}-12-31"`)+
-      (a.kind==='homework'?field('topic',t('章节（选填）','Topic (optional)'),'text',a.topic||'','maxlength="60"'):field('max',t('满分','Maximum score'),'number',a.max,'required min="1" max="10000"'))+
-      `<label class="form-field full">${t('备注','Notes')}<textarea name="note" rows="2" maxlength="500">${esc(a.note||'')}</textarea></label>`,
+      (a.kind==='homework'?topicField(a.topic||''):field('max',t('满分','Maximum score'),'number',a.max,'required min="1" max="10000"'))+
+      `<details class="full note-toggle" ${a.note?'open':''}><summary>${t('+ 备注','+ Note')}</summary><textarea name="note" rows="2" maxlength="500" aria-label="${t('备注','Note')}">${esc(a.note||'')}</textarea></details>`,
       f=>{
-        const before=C.editActivity(data,a.id,{title:f.get('title'),date:f.get('date'),max:f.get('max'),topic:f.get('topic'),note:f.get('note')});
+        const before=C.editActivity(data,a.id,{title:f.get('title'),date:f.get('date'),max:f.get('max'),topic:a.kind==='homework'?picker.read(f):'',note:f.get('note')});
         undoAction={activityId:a.id,metadata:before};
       });
+    const picker=a.kind==='homework'?wireTopicPicker(null):null;
   }
   function showMissing(sid){
     const s=student(sid);if(!s)return;

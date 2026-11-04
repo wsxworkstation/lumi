@@ -176,6 +176,8 @@ test('new homework offers the class chapters; note starts hidden; home roster st
   assert.ok(!home.includes(d.students[0].code),'student code hidden when no name clash');
   api.onClick({preventDefault(){},target:{closest:s=>s==='[data-action]'?{dataset:{action:'new-record'}}:null}});
   const form=elements.get('#modal').innerHTML;
-  assert.ok(form.includes('name="topicPick"')&&form.includes('1. Indeks / Indices'),'F3 MM chapters');
+  assert.ok(form.includes('class="topic-grid"')&&form.includes('type="radio" name="topicPick"'),'chapter tiles');
+  assert.ok(form.includes('<b>Indeks</b><small>Indices</small>'),'Malay on top, English below, no slash');
+  assert.ok(!form.includes('<b>Indeks / Indices'),'no slash in the tile');
   assert.ok(form.includes('class="full note-toggle"')&&!form.includes('note-toggle" open'),'note hidden');
 });

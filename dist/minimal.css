@@ -255,3 +255,19 @@ dialog .form-field{line-height:1.65}dialog .form-field input,dialog .form-field 
 .note-toggle>summary::-webkit-details-marker{display:none}
 .note-toggle[open]>summary{color:#697586;margin-bottom:6px}
 .note-toggle textarea{width:100%}
+
+/* Chapter tiles in the record form: Malay on top, English below; picked tile turns blue */
+.topic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;max-height:46vh;overflow:auto;padding:2px;margin-top:6px}
+.topic-tile{position:relative;display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid #dce2eb;border-radius:10px;background:#fff;cursor:pointer;transition:border-color .12s,background .12s}
+.topic-tile:hover{border-color:#9db0ec}
+.topic-tile input{position:absolute;opacity:0;width:0;height:0}
+.topic-no{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-family:'Figtree',system-ui,sans-serif;font-size:12px;font-weight:600;background:#eef2fb;color:#48566d}
+.topic-text{display:grid;gap:2px;min-width:0}
+.topic-text b{font-weight:600;font-size:13px;line-height:1.35;color:#202938}
+.topic-text small{font-size:12px;line-height:1.35;color:#748197}
+.topic-tile.on{border-color:#3564db;background:#edf2ff;box-shadow:0 0 0 1px #3564db}
+.topic-tile.on .topic-no{background:#3564db;color:#fff}
+.topic-tile:has(input:focus-visible){outline:2px solid #3564db;outline-offset:2px}
+.topic-grid+input{margin-top:8px}
+@media (max-width:520px){.topic-grid{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.topic-tile{transition:none}}

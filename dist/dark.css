@@ -322,6 +322,14 @@ html[data-theme=dark] .roster-owing{color:#f17e78}
 html[data-theme=dark] .roster-chevron{color:#98a5bc}
 html[data-theme=dark] .note-toggle>summary{color:#7da4f7}
 html[data-theme=dark] .note-toggle[open]>summary{color:#99a6b8}
+html[data-theme=dark] .topic-tile{border:1px solid #303337;background:#222222}
+html[data-theme=dark] .topic-tile:hover{border-color:#8396d0}
+html[data-theme=dark] .topic-no{background:#14161a;color:#a2b2cc}
+html[data-theme=dark] .topic-text b{color:#bac6da}
+html[data-theme=dark] .topic-text small{color:#98a5bc}
+html[data-theme=dark] .topic-tile.on{border-color:#3564db;background:#13161b;box-shadow:0 0 0 1px #000000ff}
+html[data-theme=dark] .topic-tile.on .topic-no{background:#3564db;color:#fff}
+html[data-theme=dark] .topic-tile:has(input:focus-visible){outline:2px solid #3564db}
 /* login.css */
 html[data-theme=dark] #cloud-overlay.login-scene{background:#131417;background-image:radial-gradient(ellipse at 15% 12%,#161821 0,transparent 52%),radial-gradient(ellipse at 95% 90%,#16181c 0,transparent 45%)}
 html[data-theme=dark] .login-scene>.cloud-card{border:1px solid #383838;box-shadow:0 28px 80px -30px #00000074,0 2px 8px #00000013}
