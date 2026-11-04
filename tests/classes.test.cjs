@@ -20,15 +20,46 @@ test('bulk import links a student who already takes another subject instead of r
 });
 
 test('matches existing students stored with separate English and Chinese names; true namesakes are flagged',()=>{
-  const d=C.seed(),c=C.saveClass(d,{grade:'F1',subject:'英文',year:2027});
-  const s=d.students[0];
+  const d=C.seed(),home=d.classes[0],c=C.saveClass(d,{grade:home.grade,subject:'英文',year:home.year});
+  const s=d.students.find(x=>x.id===home.students[0]);
   const r=C.enrollNames(d,c.id,[`${s.en} ${s.name}`]);
   assert.deepEqual(r.linked.map(x=>x.id),[s.id]);
-  d.students.push({id:'twin',name:s.name,en:'',code:'S900',tag:'',archived:false});
+  d.students.push({id:'twin',name:s.name,en:'Someone Else',code:'S900',tag:'',archived:false});home.students.push('twin');
   const r2=C.enrollNames(d,c.id,[s.name]);
-  assert.deepEqual(r2.ambiguous,[s.name],'two different students share this name');
+  assert.deepEqual(r2.ambiguous,[s.name],'two different students at this level share the Chinese name');
+  const r3=C.enrollNames(d,c.id,[`${s.en} ${s.name}`]);
+  assert.deepEqual(r3.already.map(x=>x.id),[s.id],'adding the English name tells them apart');
   assert.throws(()=>C.enrollNames(d,c.id,['  ']));
   assert.throws(()=>C.enrollNames(d,c.id,['名字\t85']));
+});
+
+test('English only, Chinese only, or both: same level → same student and same code',()=>{
+  const d=C.seed(),mm=C.saveClass(d,{grade:'F5',subject:'MM',year:2027}),am=C.saveClass(d,{grade:'F5',subject:'AM',year:2027}),sa=C.saveClass(d,{grade:'F5',subject:'SA',year:2027});
+  const [chin]=C.enrollNames(d,mm.id,['CHIN WING SHUAN 陈颖萱']).created;
+  assert.deepEqual(C.enrollNames(d,am.id,['陈颖萱']).linked.map(s=>s.code),[chin.code],'Chinese only');
+  assert.deepEqual(C.enrollNames(d,sa.id,['chin wing  shuan']).linked.map(s=>s.code),[chin.code],'English only, any case and spacing');
+  assert.equal(d.students.filter(s=>s.name.includes('陈颖萱')).length,1,'still one record');
+  const alan=C.enrollNames(d,sa.id,['ALAN 陈颖萱']);
+  assert.equal(alan.created.length,1,'same Chinese name but a different English name is another person');
+});
+
+test('a namesake in another level is a different student',()=>{
+  const d=C.seed(),f5=C.saveClass(d,{grade:'F5',subject:'MM',year:2027}),f4=C.saveClass(d,{grade:'F4',subject:'MM',year:2027});
+  const [a]=C.enrollNames(d,f5.id,['陈颖萱']).created;
+  const r=C.enrollNames(d,f4.id,['陈颖萱']);
+  assert.equal(r.created.length,1);assert.notEqual(r.created[0].id,a.id);
+});
+
+test('a later paste fills in the half of the name that was missing',()=>{
+  const d=C.seed(),mm=C.saveClass(d,{grade:'F5',subject:'MM',year:2027}),am=C.saveClass(d,{grade:'F5',subject:'AM',year:2027});
+  const [s]=C.enrollNames(d,mm.id,['陈颖萱']).created;
+  C.enrollNames(d,am.id,['CHIN WING SHUAN 陈颖萱']);
+  assert.equal(s.en,'CHIN WING SHUAN');assert.equal(s.name,'陈颖萱');
+  const [t]=C.enrollNames(d,mm.id,['TAN MEI LING']).created;
+  C.enrollNames(d,am.id,['TAN MEI LING 陈美玲']);
+  assert.equal(t.name,'TAN MEI LING 陈美玲');
+  const same=C.enrollNames(d,am.id,['陈颖萱','CHIN WING SHUAN']);
+  assert.equal(same.created.length,0,'two lines for the same person in one paste');
 });
 
 test('class name is built from level and subject, can be customised and edited, code is generated',()=>{

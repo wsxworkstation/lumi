@@ -432,7 +432,12 @@
         if(!name||!code)throw Error(t('请填写姓名和编号','Enter a name and code'));
         if(data.students.some(o=>o.code===code&&o.id!==s?.id))throw Error(t('学生编号已存在','Student code already exists'));
         if(s)Object.assign(s,{name,en:f.get('en').trim(),code,tag:f.get('tag')});
-        else {const n={id:C.uid(),name,en:f.get('en').trim(),code,tag:f.get('tag'),archived:false};data.students.push(n);cls().students.push(n.id);}
+        else {
+          const en=f.get('en').trim(),same=C.matchStudent(data,state.classId,`${en} ${name}`);
+          if(same.length>1)throw Error(t('这个年级有几位学生同名，请在上面「加入已有学生」里挑选，或加上英文名。','Several students at this level share this name. Pick one under “enroll an existing student”, or add the English name.'));
+          if(same.length===1){const o=same[0];if(cls().students.includes(o.id))throw Error(t(`${o.name} 已经在这个班了`,`${o.name} is already in this class`));cls().students.push(o.id);setTimeout(()=>toast(t(`${o.name} 已在别科，直接加入`,`${o.name} already takes another subject — added`)),0);return;}
+          const n={id:C.uid(),name,en,code,tag:f.get('tag'),archived:false};data.students.push(n);cls().students.push(n.id);
+        }
       });
   }
   function addActivity(kind='homework'){

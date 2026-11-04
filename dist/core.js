@@ -145,28 +145,54 @@
     return before;
   }
   /* ---------- Tuition classes = level + subject. One student can take several subjects. ---------- */
-  const normName=s=>String(s||'').normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();
-  function studentKeys(s){return [s.name,s.en&&`${s.en} ${s.name}`,s.en&&`${s.name} ${s.en}`].filter(Boolean).map(normName);}
-  /* Paste a list of names into a class: existing students (taking another subject) are enrolled, not duplicated. */
+  /* A name may be English only, Chinese only, or both ("CHIN WING SHUAN 陈颖萱"); split it into the two parts. */
+  const HAN=/[㐀-鿿豈-﫿]/g;
+  function nameParts(text){
+    const s=String(text||'').normalize('NFKC');
+    const han=(s.match(HAN)||[]).join('');
+    const latin=s.replace(HAN,' ').replace(/[^\p{L}\p{N}]+/gu,' ').trim().toLowerCase();
+    return {latin,han};
+  }
+  function studentParts(s){const a=nameParts(s.name),b=nameParts(s.en);return {latin:a.latin||b.latin,han:a.han||b.han};}
+  /* Same person when every part both sides have agrees, and at least one part is compared. */
+  function samePerson(p,q){let compared=0;
+    if(p.latin&&q.latin){if(p.latin!==q.latin)return false;compared++;}
+    if(p.han&&q.han){if(p.han!==q.han)return false;compared++;}
+    return compared>0;}
+  /* Look for the student only among classes of the same level and year, so F4 and F5 namesakes never merge. */
+  function sameLevelStudents(data,c){
+    const lv=String(c.grade||'').trim().toLowerCase(),ids=new Set();
+    data.classes.filter(x=>!x.archived&&x.year===c.year&&String(x.grade||'').trim().toLowerCase()===lv).forEach(x=>x.students.forEach(id=>ids.add(id)));
+    return data.students.filter(s=>!s.archived&&ids.has(s.id));
+  }
+  function matchStudent(data,classId,text){
+    const c=classOf(data,classId),p=nameParts(text);
+    return sameLevelStudents(data,c).filter(s=>samePerson(p,studentParts(s)));
+  }
+  /* Fill in whichever half of the name the record was missing. */
+  function completeName(s,text){
+    const have=studentParts(s),add=nameParts(text),raw=String(text||'').trim();
+    if(!have.latin&&add.latin){const latin=raw.replace(HAN,'').replace(/\s+/g,' ').trim();if(!s.en)s.en=latin;else s.name=`${latin} ${s.name}`;}
+    if(!have.han&&add.han)s.name=`${s.name} ${add.han}`.trim();
+  }
+  /* Paste a list of names into a class: a student already taking another subject at this level is enrolled, not duplicated. */
   function enrollNames(data,classId,rawNames){
-    const c=classOf(data,classId),seen=new Set(),out={created:[],linked:[],already:[],ambiguous:[]};
+    const c=classOf(data,classId),out={created:[],linked:[],already:[],ambiguous:[]};
     const raw=rawNames.map(n=>String(n||'').trim()).filter(Boolean);
     if(!raw.length)throw Error('请贴上学生名字 / Paste student names');
     if(raw.some(n=>n.includes('\t')||n.length>60))throw Error('请只复制名字那一列，每个名字不超过 60 字 / Copy only the name column, up to 60 characters each');
-    const names=raw.map(n=>n.replace(/\s+/g,' '));
-    const live=data.students.filter(s=>!s.archived);
-    const plan=[];
-    for(const name of names){
-      const key=normName(name);if(seen.has(key))continue;seen.add(key);
-      const matches=live.filter(s=>studentKeys(s).includes(key));
-      if(matches.length>1){out.ambiguous.push(name);continue;}
-      if(matches.length===1){(c.students.includes(matches[0].id)?out.already:out.linked).push(matches[0]);continue;}
-      plan.push(name);
-    }
+    if(raw.some(n=>{const p=nameParts(n);return !p.latin&&!p.han;}))throw Error('有一行看起来不是名字 / One line does not look like a name');
+    const names=raw.map(n=>n.replace(/\s+/g,' ')),handled=[];
     let next=data.students.length+1;
-    for(const name of plan){let code;do{code=`S${String(next++).padStart(3,'0')}`;}while(data.students.some(s=>s.code===code));
-      const s={id:uid(),name,en:'',code,tag:'',archived:false};data.students.push(s);out.created.push(s);}
-    for(const s of [...out.linked,...out.created])if(!c.students.includes(s.id))c.students.push(s.id);
+    for(const name of names){
+      const p=nameParts(name);
+      if(handled.some(q=>samePerson(p,q)))continue;handled.push(p);
+      const matches=matchStudent(data,classId,name);
+      if(matches.length>1){out.ambiguous.push(name);continue;}
+      if(matches.length===1){const s=matches[0];completeName(s,name);(c.students.includes(s.id)?out.already:out.linked).push(s);if(!c.students.includes(s.id))c.students.push(s.id);continue;}
+      let code;do{code=`S${String(next++).padStart(3,'0')}`;}while(data.students.some(s=>s.code===code));
+      const s={id:uid(),name,en:'',code,tag:'',archived:false};data.students.push(s);c.students.push(s.id);out.created.push(s);
+    }
     return out;
   }
   /* Natural order for levels: F1 < F2 < … < F10, Std 1 < Std 2, then anything else alphabetically. */
@@ -246,7 +272,7 @@
     if(leaders)c.groups.forEach(g=>{g.leaderId=g.members[0]||null;});
     return c.groups;
   }
-  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints,enrollNames,levelOrder,saveClass};
+  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints,enrollNames,matchStudent,levelOrder,saveClass};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.StudyCore=api;
 })(globalThis);
