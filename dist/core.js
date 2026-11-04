@@ -159,11 +159,76 @@
     if(p.latin&&q.latin){if(p.latin!==q.latin)return false;compared++;}
     if(p.han&&q.han){if(p.han!==q.han)return false;compared++;}
     return compared>0;}
+  /* One way to write a level: "Form 3", "form3", "T3", "Tingkatan 3", "中三" → "F3". Anything else is kept as typed. */
+  function normLevel(text){
+    const s=String(text||'').normalize('NFKC').trim(),u=s.toUpperCase(),cn={'一':1,'二':2,'三':3,'四':4,'五':5};
+    let m=u.match(/^(?:F|FORM|T|TING|TINGKATAN)\s*\.?\s*([1-5])$/);if(m)return `F${m[1]}`;
+    m=s.match(/^中([一二三四五])$/);if(m)return `F${cn[m[1]]}`;
+    return s;
+  }
+  const levelKey=c=>normLevel(c.grade).toLowerCase();
+  /* Older classes may say "Form 3": rewrite them as "F3" and update a name that was built from the old level. */
+  function normalizeLevels(data){
+    let changed=0;
+    for(const c of data.classes){const old=String(c.grade||''),lv=normLevel(old);if(lv===old)continue;
+      if(c.name===`${old} ${c.subject}`.trim()){c.name=`${lv} ${c.subject}`.trim();c.en='';}
+      c.grade=lv;changed++;}
+    return changed;
+  }
   /* Look for the student only among classes of the same level and year, so F4 and F5 namesakes never merge. */
   function sameLevelStudents(data,c){
-    const lv=String(c.grade||'').trim().toLowerCase(),ids=new Set();
-    data.classes.filter(x=>!x.archived&&x.year===c.year&&String(x.grade||'').trim().toLowerCase()===lv).forEach(x=>x.students.forEach(id=>ids.add(id)));
+    const lv=levelKey(c),ids=new Set();
+    data.classes.filter(x=>!x.archived&&x.year===c.year&&levelKey(x)===lv).forEach(x=>x.students.forEach(id=>ids.add(id)));
     return data.students.filter(s=>!s.archived&&ids.has(s.id));
+  }
+  /* Students entered twice before names were matched: same level and year, names agree.
+     "sure" is false when the names only partly chain together, or two of them sit in the same class (likely real namesakes). */
+  function findDuplicates(data){
+    const levels=new Map(),out=[],seen=new Set();
+    for(const c of data.classes.filter(c=>!c.archived)){const k=`${levelKey(c)}|${c.year}`;if(!levels.has(k))levels.set(k,new Set());c.students.forEach(id=>levels.get(k).add(id));}
+    for(const ids of levels.values()){
+      const list=data.students.filter(s=>!s.archived&&ids.has(s.id)&&!seen.has(s.id)),parts=new Map(list.map(s=>[s.id,studentParts(s)]));
+      for(const first of list){if(seen.has(first.id))continue;
+        const cluster=[first];seen.add(first.id);
+        for(let i=0;i<cluster.length;i++)for(const s of list)if(!seen.has(s.id)&&samePerson(parts.get(cluster[i].id),parts.get(s.id))){cluster.push(s);seen.add(s.id);}
+        if(cluster.length<2)continue;
+        const allMatch=cluster.every((a,i)=>cluster.slice(i+1).every(b=>samePerson(parts.get(a.id),parts.get(b.id))));
+        const shareClass=data.classes.some(c=>!c.archived&&cluster.filter(s=>c.students.includes(s.id)).length>1);
+        cluster.sort((a,b)=>String(a.code||'').localeCompare(String(b.code||''),undefined,{numeric:true}));
+        out.push({students:cluster,sure:allMatch&&!shareClass});
+      }
+    }
+    return out;
+  }
+  /* Fold duplicate records into one student: classes, groups, results, goals, history and notes all move to keepId. */
+  function mergeStudents(data,keepId,dropIds){
+    const keep=data.students.find(s=>s.id===keepId&&!s.archived);
+    const drops=[...new Set(dropIds)].filter(id=>id!==keepId).map(id=>data.students.find(s=>s.id===id&&!s.archived));
+    if(!keep||!drops.length||drops.some(s=>!s))throw Error('找不到要合并的学生 / Students not found');
+    const gone=new Set(drops.map(s=>s.id)),swap=id=>gone.has(id)?keepId:id,uniq=ids=>[...new Set(ids.map(swap))];
+    for(const s of drops){completeName(keep,s.name);if(s.en)completeName(keep,s.en);if(!keep.tag&&s.tag)keep.tag=s.tag;}
+    for(const c of data.classes){
+      if(!c.students.some(id=>gone.has(id)))continue;
+      c.students=uniq(c.students);let placed=false;
+      for(const g of c.groups||[]){g.members=uniq(g.members);if(g.leaderId)g.leaderId=swap(g.leaderId);
+        if(g.members.includes(keepId)){if(placed){g.members=g.members.filter(id=>id!==keepId);if(g.leaderId===keepId)g.leaderId=null;}placed=true;}}
+    }
+    const blank=r=>!r||(r.status==='unrecorded'&&(r.score===null||r.score===undefined||r.score===''));
+    for(const a of data.activities){
+      if(!a.students.some(id=>gone.has(id)))continue;
+      for(const id of gone){const r=a.results[id];if(r&&blank(a.results[keepId]))a.results[keepId]=r;delete a.results[id];}
+      a.students=uniq(a.students);
+    }
+    for(const g of data.goals)g.studentId=swap(g.studentId);
+    for(const h of data.history||[])h.studentId=swap(h.studentId);
+    for(const [key,text] of Object.entries(data.comments||{})){
+      const [cid,sid,year]=key.split(':');if(!gone.has(sid))continue;
+      const target=`${cid}:${keepId}:${year}`;delete data.comments[key];
+      data.comments[target]=[data.comments[target],text].filter(Boolean).join('\n');
+    }
+    data.students=data.students.filter(s=>!gone.has(s.id));
+    data.mergeLog??=[];data.mergeLog.unshift({id:uid(),keep:{id:keep.id,code:keep.code},merged:drops.map(s=>({id:s.id,code:s.code,name:s.name,en:s.en||''})),at:new Date().toISOString()});
+    return keep;
   }
   function matchStudent(data,classId,text){
     const c=classOf(data,classId),p=nameParts(text);
@@ -201,7 +266,7 @@
     const [pa,na]=k(a),[pb,nb]=k(b);return pa===pb?na-nb:pa.localeCompare(pb);
   }
   function saveClass(data,input){
-    const grade=String(input.grade||'').trim(),subject=String(input.subject||'').trim(),year=Number(input.year);
+    const grade=normLevel(input.grade),subject=String(input.subject||'').trim(),year=Number(input.year);
     if(!grade||grade.length>30)throw Error('请填写年级，例如 F3 / Enter a level, e.g. F3');
     if(!subject||subject.length>40)throw Error('请填写科目 / Enter a subject');
     if(!Number.isInteger(year)||year<2000||year>2100)throw Error('年份不对 / Invalid year');
@@ -285,7 +350,7 @@
     if(leaders)c.groups.forEach(g=>{g.leaderId=g.members[0]||null;});
     return c.groups;
   }
-  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints,enrollNames,matchStudent,levelOrder,saveClass,classForNow};
+  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints,enrollNames,matchStudent,levelOrder,saveClass,classForNow,normLevel,normalizeLevels,findDuplicates,mergeStudents};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.StudyCore=api;
 })(globalThis);

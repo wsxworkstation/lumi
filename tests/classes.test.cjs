@@ -102,3 +102,57 @@ test('opens the class taught now: running or next today, otherwise none',()=>{
   assert.equal(C.classForNow([A,B,Y],at(1,10)),null,'nothing on Monday');
   assert.equal(C.classForNow([{...A,archived:true}],at(6,14)),null);
 });
+
+test('levels are written one way: Form 3, T3, Tingkatan 3, 中三 → F3; old classes are fixed on load',()=>{
+  for(const v of ['Form 3','form3','F 3','T3','Tingkatan 3','中三','f3'])assert.equal(C.normLevel(v),'F3',v);
+  assert.equal(C.normLevel('Std 4'),'Std 4');assert.equal(C.normLevel('F6'),'F6');
+  const d=C.seed();C.normalizeLevels(d);
+  const c=C.saveClass(d,{grade:'Form 4',subject:'MM',year:2027});
+  assert.equal(c.grade,'F4');assert.equal(c.name,'F4 MM');
+  d.classes.push({id:'old',code:'C2027-900',name:'Form 5 AM',en:'x',subject:'AM',grade:'Form 5',year:2027,students:[],archived:false},
+    {id:'own',code:'C2027-901',name:'AM 星期六',subject:'AM',grade:'tingkatan 5',year:2027,students:[],archived:false});
+  assert.equal(C.normalizeLevels(d),2);
+  assert.deepEqual(d.classes.slice(-2).map(c=>[c.grade,c.name]),[['F5','F5 AM'],['F5','AM 星期六']],'a custom name is left alone');
+  assert.equal(C.normalizeLevels(d),0);
+});
+
+test('"Form 5" and "F5" classes count as the same level when matching names',()=>{
+  const d=C.seed(),a=C.saveClass(d,{grade:'F5',subject:'MM',year:2027});
+  d.classes.push({id:'legacy',code:'C2027-950',name:'Form 5 SC',subject:'SC',grade:'Form 5',year:2027,students:[],archived:false});
+  const [s]=C.enrollNames(d,a.id,['陈颖萱']).created;
+  assert.deepEqual(C.enrollNames(d,'legacy',['CHIN WING SHUAN 陈颖萱']).linked.map(x=>x.id),[s.id]);
+});
+
+test('finds students entered twice and merges them, keeping every record',()=>{
+  const d=C.seed(),mm=C.saveClass(d,{grade:'F5',subject:'MM',year:2027}),sc=C.saveClass(d,{grade:'F5',subject:'SC',year:2027});
+  const before=C.findDuplicates(d).length;
+  const add=(c,name,en='')=>{const s={id:C.uid(),name,en,code:`S9${d.students.length}`,tag:'',archived:false};d.students.push(s);c.students.push(s.id);return s;};
+  const a=add(mm,'陈颖萱'),b=add(sc,'CHIN WING SHUAN 陈颖萱');add(sc,'ALAN 陈颖萱');
+  const dups=C.findDuplicates(d).slice(before);
+  assert.equal(dups.length,1);assert.equal(dups[0].students.length,3);assert.equal(dups[0].sure,false,'ALAN and CHIN are not the same person');
+  d.students.pop();sc.students.pop();
+  const [pair]=C.findDuplicates(d).slice(before);
+  assert.ok(pair.sure);assert.deepEqual(pair.students.map(s=>s.id).sort(),[a.id,b.id].sort());
+  const hw={id:'hw',classId:sc.id,kind:'homework',title:'x',date:'2027-03-01',max:1,students:[b.id],results:{[b.id]:{status:'submitted',score:null,note:''}},archived:false};
+  d.activities.push(hw);
+  d.goals.push({id:'gx',classId:sc.id,studentId:b.id,title:'t',kind:'school',target:80,status:'progress',archived:false});
+  sc.groups=[{id:'g',name:'A',members:[b.id],leaderId:b.id,log:[]}];
+  d.comments[`${sc.id}:${b.id}:2027`]='好';
+  C.mergeStudents(d,a.id,[b.id]);
+  assert.ok(!d.students.some(s=>s.id===b.id),'one record left');
+  assert.equal(a.name,'陈颖萱');assert.equal(a.en,'CHIN WING SHUAN','English name filled in');
+  assert.ok(mm.students.includes(a.id)&&sc.students.includes(a.id));
+  assert.deepEqual(hw.students,[a.id]);assert.equal(hw.results[a.id].status,'submitted');assert.ok(!(b.id in hw.results));
+  assert.equal(d.goals.find(g=>g.id==='gx').studentId,a.id);
+  assert.deepEqual(sc.groups[0].members,[a.id]);assert.equal(sc.groups[0].leaderId,a.id);
+  assert.equal(d.comments[`${sc.id}:${a.id}:2027`],'好');
+  assert.equal(C.findDuplicates(d).length,before);
+  assert.throws(()=>C.mergeStudents(d,a.id,[b.id]));
+});
+
+test('two same-name students in one class are flagged as unsure',()=>{
+  const d=C.seed(),c=C.saveClass(d,{grade:'F2',subject:'SC',year:2027});
+  d.students.push({id:'x1',name:'李明',en:'',code:'S801',archived:false},{id:'x2',name:'李明',en:'',code:'S802',archived:false});c.students.push('x1','x2');
+  const dup=C.findDuplicates(d).find(g=>g.students.some(s=>s.id==='x1'));
+  assert.equal(dup.sure,false);
+});

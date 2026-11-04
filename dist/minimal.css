@@ -271,3 +271,8 @@ dialog .form-field{line-height:1.65}dialog .form-field input,dialog .form-field 
 .topic-grid+input{margin-top:8px}
 @media (max-width:520px){.topic-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.topic-tile{transition:none}}
+/* Duplicate students */
+.dup-item{display:grid;gap:8px;justify-items:start;padding:12px 0;border-top:1px solid #e6eaf0}
+.dup-names{display:flex;flex-wrap:wrap;gap:8px 20px}
+.dup-names>div{display:grid;gap:2px}
+.dup-names small{font-size:12px;color:#748197}

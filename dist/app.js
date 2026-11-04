@@ -9,6 +9,7 @@
   data.classes.forEach((c,i)=>c.code??=`C${c.year||2027}-${String(i+1).padStart(3,'0')}`);
   data.activities.forEach((a,i)=>a.recordCode??=`REC-${String(i+1).padStart(4,'0')}`);
   data.goals.forEach((g,i)=>g.goalCode??=`GOAL-${String(i+1).padStart(3,'0')}`);
+  C.normalizeLevels(data);
   const state={month:'',focusStudentId:'',page:'overview',year:2027,classId:'c1',studentId:'s1',activityId:'',kind:'homework',lang:'zh',tab:'progress',filter:'all',examFilter:'all',search:'',importPlan:null,importFile:''};
   const VIEW_KEY='studylog-view-v1';
   let undoAction=null,restoredView=false;
@@ -89,6 +90,7 @@
   }
   function undoLast(){
     const action=undoAction;if(!action)return;
+    if(action.kind==='snapshot'){data=JSON.parse(action.json);undoAction=null;persist();render();toast(t('已撤销','Undone'));return;}
     if(action.kind==='points'){C.removePoints(data,action.classId,action.groupId,action.entryId);undoAction=null;persist();render();toast(t('已撤销','Undone'));return;}
     const a=data.activities.find(a=>a.id===action.activityId&&!a.archived);if(!a){undoAction=null;savedIndicator();return;}
     if(action.metadata)C.editActivity(data,a.id,action.metadata);
@@ -352,8 +354,8 @@
   }
   function studentList(){
     const list=roster().filter(s=>`${s.name} ${s.en} ${s.code}`.toLowerCase().includes(state.search.toLowerCase()));
-    const e=latest(),es=C.examStats(e);
-    return heading(t('每位学生，都值得被看见。','Every student, a story.'),t('查看个人记录、进步和下一步目标。','Explore their records, progress and next goals.'),button(t('添加学生','Add student'),'add-student','primary','','plus'))+classStrip()+
+    const e=latest(),es=C.examStats(e),dups=C.findDuplicates(data).length;
+    return heading(t('每位学生，都值得被看见。','Every student, a story.'),t('查看个人记录、进步和下一步目标。','Explore their records, progress and next goals.'),(dups?button(t(`${dups} 组可能重复`,`${dups} possible duplicates`),'find-dups','','',''):'')+button(t('添加学生','Add student'),'add-student','primary','','plus'))+classStrip()+
       `<div class="filters"><input class="search" id="student-search" placeholder="${t('搜索姓名或学生编号…','Search name or student code…')}" value="${esc(state.search)}" aria-label="${t('搜索学生','Search students')}"></div><section class="card"><div class="table-wrap"><table><thead><tr><th>${t('学生','Student')}</th><th>${t('标签','Tag')}</th><th>${t('功课完成率','Completion')}</th><th>${t('未交','Missing')}</th><th>${t('最近考试','Latest exam')}</th><th>${t('本场排名','Exam rank')}</th><th></th></tr></thead><tbody>${list.map((s,i)=>{const stats=stat(s.id),p=e?C.pct(e.results[s.id],e):null;return `<tr><td><div class="row">${avatar(s,i)}<button class="student-name" data-action="student" data-id="${s.id}">${studentNameLines(s)}<small>${esc(s.code)}</small></button></div></td><td>${s.tag?badge(s.tag==='focus'?t('需要关注','Needs attention'):s.tag==='new'?t('新生','New student'):s.tag,s.tag==='focus'?'red':''): '—'}</td><td>${percent(stats.rate)}</td><td>${stats.missing?badge(stats.missing,'red'):'—'}</td><td>${percent(p)}</td><td>${es.rank[s.id]?`${es.rank[s.id]} / ${es.count}`:'—'}</td><td>${button(t('查看档案','View profile'),'student','sm',`data-id="${s.id}"`)}</td></tr>`;}).join('')}</tbody></table></div>${!list.length?empty(t('没有匹配的学生','No matching students')):''}</section>`+footer();
   }
   function studentPage(){
@@ -403,7 +405,7 @@
     <div class="dashboard-grid"><section class="card"><div class="card-head"><h2>${t('统计与提醒','Statistics & reminders')}</h2></div><div class="setting-grid">
     <p class="help full">${t('功课统计跟随当前年份和月份，不需要调整参考日期。','Homework statistics follow the selected year and month.')}</p>
     ${[['pass','及格线 (%)','Passing score (%)',0,100],['low','低分提醒 (%)','Low-score alert (%)',0,100],['missing','连续未交次数','Consecutive missing assignments',1,20],['declines','连续下降次数','Consecutive score declines',1,10],['termEnd','第一学期结束月份','Last month of term 1',1,11]].map(([key,zh,en,min,max])=>`<label>${t(zh,en)}<input type="number" min="${min}" max="${max}" step="1" value="${data.settings[key]}" data-setting="${key}"></label>`).join('')}</div><div class="divider"></div><p class="help">${t('功课：补交计入完成率，不计入准时率。分母按截止日期和当次应交名单计算。考试：百分比等权平均，学校与补习分开；缺席和空白不计作 0 分；小考不计入学期平均。排名并列时采用 1、2、2、4。等级 A/B/C 的界线尚未确定。','Homework: made-up work counts as completed, not on-time. Denominator uses due dates and assigned students. Exams: equal-weight percentages, school and tuition separate. Absence and blanks are not zero. Quizzes are excluded from term averages. Ties use competition ranking: 1, 2, 2, 4. Grade boundaries are not configured.')}</p></section>
-    <div class="stack">${window.LumiTopics?`<section class="card"><div class="card-head"><h2>${t('章节库','Topic library')}</h2>${button(t('编辑','Edit'),'topic-library','sm','','edit')}</div><p class="help">${t('记功课时可直接选的章节。已放入 KSSM 数学、附加数学、科学 F1–F5，可自己修改。','Chapters you can pick when recording homework. KSSM Maths, Add Maths and Science F1–F5 are included, and you can edit them.')}</p></section>`:''}<section class="card"><div class="card-head"><h2>${t('记录种类','Record types')}</h2>${button(t('新增','Add'),'add-type','sm','','plus')}</div>${data.types.map(type=>`<div class="row between" style="margin:12px 0"><span class="small">${esc(type)}</span>${button(t('移除','Remove'),'remove-type','sm',`data-type="${esc(type)}"`)}</div>`).join('')}<p class="help">${t('种类名称可自定义，每次记录仍需选择功课或考试的计算方式。移除种类不会删除旧记录。','Types are labels; each record also selects a homework or exam calculation. Removing a type keeps historical records.')}</p></section>
+    <div class="stack"><section class="card"><div class="card-head"><h2>${t('重复的学生','Duplicate students')}</h2>${button(t('检查','Check'),'find-dups','sm','','users')}</div><p class="help">${t('同一个学生在不同科目被建立了两次时，可以合并成一个编号，记录都保留。','If a student was added twice for different subjects, merge them into one code. All records stay.')}</p></section>${window.LumiTopics?`<section class="card"><div class="card-head"><h2>${t('章节库','Topic library')}</h2>${button(t('编辑','Edit'),'topic-library','sm','','edit')}</div><p class="help">${t('记功课时可直接选的章节。已放入 KSSM 数学、附加数学、科学 F1–F5，可自己修改。','Chapters you can pick when recording homework. KSSM Maths, Add Maths and Science F1–F5 are included, and you can edit them.')}</p></section>`:''}<section class="card"><div class="card-head"><h2>${t('记录种类','Record types')}</h2>${button(t('新增','Add'),'add-type','sm','','plus')}</div>${data.types.map(type=>`<div class="row between" style="margin:12px 0"><span class="small">${esc(type)}</span>${button(t('移除','Remove'),'remove-type','sm',`data-type="${esc(type)}"`)}</div>`).join('')}<p class="help">${t('种类名称可自定义，每次记录仍需选择功课或考试的计算方式。移除种类不会删除旧记录。','Types are labels; each record also selects a homework or exam calculation. Removing a type keeps historical records.')}</p></section>
     ${window.LumiTheme?`<section class="card"><div class="card-head"><h2>${t('显示','Display')}</h2></div><div class="tab-group theme-modes">${[['light',t('浅色','Light')],['dark',t('深色','Dark')],['auto',t('跟随系统','Match device')]].map(([m,l])=>`<button type="button" class="${LumiTheme.mode===m?'active':''}" data-action="theme-mode" data-mode="${m}" aria-pressed="${LumiTheme.mode===m}">${l}</button>`).join('')}</div><p class="help" style="margin-top:10px">${t('只影响这台设备。跟随系统：手机或电脑开了深色模式，就自动变深色。','Applies to this device only. Match device follows your phone or computer setting.')}</p></section>`:''}${window.StudyCloud?`<section class="card"><div class="card-head"><h2>${t('云端同步','Cloud sync')}</h2></div><p class="help">${t('登录账号','Signed in as')}：<strong>${esc(StudyCloud.email)}</strong></p><p class="help">${t('每次修改会自动上传。云端每天自动保留一份旧版本，误删时可以恢复。','Every change uploads automatically. The cloud keeps one older version per day, so mistakes can be undone.')}</p><div class="row wrap" style="margin-top:12px">${button(t('恢复旧版本','Restore an older version'),'cloud-versions','','','restore')}${button(t('退出登录','Sign out'),'cloud-logout','','','back')}</div></section>`:''}<section class="card"><div class="card-head"><h2>${t('备份','Backup')}</h2></div><div class="row wrap">${button(t('下载 JSON 备份','Download JSON'),'backup','','','down')}${button(t('恢复 JSON 备份','Restore JSON'),'restore-backup','','','restore')}</div><input id="backup-file" type="file" accept=".json,application/json" hidden><p class="help" style="margin-top:12px">${t('JSON 保存全部记录；单次功课或考试可在录入页导出 CSV。恢复 JSON 后会同步到云端。','JSON contains all records. Export a record as CSV from Quick entry. A restored JSON syncs to the cloud.')}</p></section></div></div>`+footer();}
   function importsPage(){
     const p=state.importPlan,hasBackup=!!localStorage.getItem(IMPORT_BACKUP_KEY),c=p?.counts||{};
@@ -443,6 +445,21 @@
       const parts=[r.created.length&&t(`新增 ${r.created.length} 人`,`${r.created.length} new`),r.linked.length&&t(`${r.linked.length} 人已在别科，直接加入`,`${r.linked.length} from other subjects`),r.already.length&&t(`${r.already.length} 人本来就在这班`,`${r.already.length} already here`),r.ambiguous.length&&t(`同名的人请用「加学生」挑选：${r.ambiguous.join('、')}`,`Same name as several students, add individually: ${r.ambiguous.join(', ')}`)].filter(Boolean);
       setTimeout(()=>toast(parts.join(' · ')),0);
     });
+  }
+  /* Students entered twice (e.g. once per subject) before names were matched. */
+  function duplicatesForm(){
+    if(modal.open)modal.close();
+    const dups=C.findDuplicates(data),classNames=s=>data.classes.filter(c=>!c.archived&&c.students.includes(s.id)).map(c=>label(c)).join('、');
+    const rows=dups.map((d,i)=>`<div class="dup-item"><div class="dup-names">${d.students.map(s=>`<div><strong>${studentNameLines(s)}</strong><small>${esc(s.code)} · ${esc(classNames(s)||'—')}</small></div>`).join('')}</div>${d.sure?'':`<p class="help">${t('名字只有部分相同，或在同一班，请确认是同一个人。','Names only partly match, or they share a class. Make sure this is one person.')}</p>`}${button(t(`合并成 ${d.students[0].code}`,`Merge into ${d.students[0].code}`),'merge-dup',d.sure?'sm primary':'sm',`type="button" data-i="${i}"`)}</div>`).join('');
+    showModal(t('重复的学生','Duplicate students'),`<div class="full">${rows?`<p class="help">${t('同年级里名字对得上的学生。合并后只剩一个编号，各科的功课、成绩、目标都会保留。','Students at the same level whose names match. Merging keeps one code; all homework, scores and goals stay.')}</p>${rows}`:`<p class="help">${t('没有找到重复的学生。','No duplicate students found.')}</p>`}</div>`,()=>{});
+    modal.querySelector('button[type=submit]').hidden=true;
+  }
+  function mergeDuplicate(i){
+    const d=C.findDuplicates(data)[i];if(!d)return;
+    const json=JSON.stringify(data),[keep,...rest]=d.students;
+    C.mergeStudents(data,keep.id,rest.map(s=>s.id));
+    undoAction={kind:'snapshot',json};persist();render();duplicatesForm();
+    toast(t(`已合并成 ${keep.code}，可以按右上角撤销`,`Merged into ${keep.code}. Undo is at the top right.`));
   }
   function addStudent(edit=false){
     if(!ensureClass())return;
@@ -653,6 +670,8 @@
     else if(action==='level')chooseLevel(el.dataset.level);
     else if(action==='add-student')addStudent();
     else if(action==='bulk-students')bulkStudents();
+    else if(action==='find-dups')duplicatesForm();
+    else if(action==='merge-dup')mergeDuplicate(Number(el.dataset.i));
     else if(action==='edit-student')addStudent(true);
     else if(action==='student'){state.studentId=id;state.tab='progress';state.examFilter='all';go('student');}
     else if(action==='student-tab'){state.tab=el.dataset.tab;render();}
