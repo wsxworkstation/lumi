@@ -127,17 +127,38 @@
   function heading(title,sub,actions=''){return `<div class="page-heading"><div><h1>${title}</h1><p>${sub}</p></div><div class="row">${actions}</div></div>`;}
   /* ---------- Tuition classes: level tabs (F1…F5) then the subjects at that level ---------- */
   const levelList=()=>[...new Set(classes().map(c=>c.grade||''))].sort(C.levelOrder);
-  function activeLevel(){const levels=levelList();if(state.level==='all')return 'all';if(state.level&&levels.includes(state.level))return state.level;return cls()?.grade??'all';}
+  /* "今天" tab: classes taught today, in time order; everywhere else today's classes come first. */
+  const startMin=c=>{const m=/^(\d\d):(\d\d)$/.exec(c.time||'');return m?Number(m[1])*60+Number(m[2]):24*60;};
+  const isToday=c=>(c.days||[]).includes(new Date().getDay());
+  const todayClasses=()=>classes().filter(isToday).sort((a,b)=>startMin(a)-startMin(b));
+  const todayFirst=list=>[...list.filter(isToday).sort((a,b)=>startMin(a)-startMin(b)),...list.filter(c=>!isToday(c))];
+  function activeLevel(){const levels=levelList();if(state.level==='today'&&todayClasses().length)return 'today';if(state.level==='all')return 'all';if(state.level&&levels.includes(state.level))return state.level;return cls()?.grade??'all';}
   const shortName=c=>c.name===`${c.grade} ${c.subject}`&&state.lang==='zh'?c.subject:label(c);
+  const weekdayName=d=>state.lang==='zh'?`周${'日一二三四五六'[d]}`:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d];
+  const scheduleText=c=>[(c.days||[]).map(weekdayName).join(state.lang==='zh'?'、':', '),c.time||''].filter(Boolean).join(' · ');
   function classStrip(){
-    const levels=levelList(),lv=activeLevel(),shown=classes().filter(c=>lv==='all'||(c.grade||'')===lv);
-    const tabs=levels.length>1?`<div class="tab-group level-tabs">${[['all',t('全部','All')],...levels.map(l=>[l,l||t('其他','Other')])].map(([v,l])=>`<button type="button" class="${v===lv?'active':''}" data-action="level" data-level="${esc(v)}" aria-pressed="${v===lv}">${esc(l)}</button>`).join('')}</div>`:'';
-    return `${tabs}<div class="class-strip">${shown.map(c=>`<button class="class-pill ${c.id===state.classId?'active':''}" data-action="class" data-id="${c.id}">${icon('book')}${esc(lv==='all'?label(c):shortName(c))}<span class="pill-number">${c.students.filter(id=>!student(id)?.archived).length}</span></button>`).join('')}${button(t('新增班级','New class'),'add-class','sm','','plus')}</div>`;
+    const levels=levelList(),today=todayClasses(),lv=activeLevel();
+    const shown=lv==='today'?today:todayFirst(classes().filter(c=>lv==='all'||(c.grade||'')===lv));
+    const tabList=[...(today.length?[['today',t('今天','Today')]]:[]),['all',t('全部','All')],...levels.map(l=>[l,l||t('其他','Other')])];
+    const tabs=levels.length>1||today.length?`<div class="tab-group level-tabs">${tabList.map(([v,l])=>`<button type="button" class="${v===lv?'active':''}" data-action="level" data-level="${esc(v)}" aria-pressed="${v===lv}">${esc(l)}</button>`).join('')}</div>`:'';
+    const pillName=c=>lv==='today'||lv==='all'?label(c):shortName(c);
+    return `${tabs}<div class="class-strip">${shown.map(c=>`<button class="class-pill ${c.id===state.classId?'active':''}" data-action="class" data-id="${c.id}">${icon('book')}${esc(pillName(c))}${lv==='today'&&c.time?`<span class="pill-time">${esc(c.time)}</span>`:''}<span class="pill-number">${t(`${c.students.filter(id=>!student(id)?.archived).length} 人`,`${c.students.filter(id=>!student(id)?.archived).length}`)}</span></button>`).join('')}${button(t('新增班级','New class'),'add-class','sm','','plus')}</div>`;
   }
   function chooseLevel(v){
     state.level=v;
-    if(v!=='all'&&cls()?.grade!==v){const first=classes().find(c=>(c.grade||'')===v);if(first){selectClass(first.id);return;}}
+    if(v==='today'){const now=C.classForNow(classes());if(now&&now.id!==state.classId){selectClass(now.id);return;}}
+    else if(v!=='all'&&cls()?.grade!==v){const first=todayFirst(classes().filter(c=>(c.grade||'')===v))[0];if(first){selectClass(first.id);return;}}
     render();
+  }
+  /* On opening the app, jump to the class being taught now. A manual switch afterwards sticks until the next class's time slot. */
+  function openTodaysClass(){
+    const pick=C.classForNow(data.classes.filter(c=>!c.archived));if(!pick)return;
+    const key=`${new Date().toDateString()}|${pick.id}`;
+    let last='';try{last=localStorage.getItem('lumi-autopick')||'';}catch{}
+    if(last===key)return;
+    try{localStorage.setItem('lumi-autopick',key);}catch{}
+    if(state.classId!==pick.id){state.activityId='';state.focusStudentId='';state.search='';state.filter='all';if(!['overview','records','groups'].includes(state.page))state.page='overview';}
+    state.classId=pick.id;state.year=pick.year;state.level='today';
   }
   function classForm(id){
     const c=id?data.classes.find(x=>x.id===id):null,lv=activeLevel();
@@ -148,8 +169,10 @@
       <label class="form-field">${t('年级','Level')}<input name="grade" list="level-hints" required maxlength="30" placeholder="F3" value="${esc(c?.grade??(lv!=='all'?lv:''))}"><datalist id="level-hints">${levelHints.map(v=>`<option value="${esc(v)}">`).join('')}</datalist></label>
       <label class="form-field">${t('科目','Subject')}<input name="subject" list="subject-hints" required maxlength="40" placeholder="${t('数学','Mathematics')}" value="${esc(c?.subject||'')}"><datalist id="subject-hints">${subjectHints.map(v=>`<option value="${esc(v)}">`).join('')}</datalist></label>
       <label class="form-field full">${t('名称（可不填）','Name (optional)')}<input name="name" maxlength="60" placeholder="${t('不填就叫「年级 科目」，例如 F3 数学','Leave blank to use "Level Subject", e.g. F3 Maths')}" value="${esc(c&&c.name!==auto?c.name:'')}"><small>${t('同一科开两班时才需要，例如「F3 数学（星期六）」。','Only needed for two classes of the same subject, e.g. "F3 Maths (Sat)".')}</small></label>
+      <div class="form-field full">${t('上课日（可多选）','Class days (pick any)')}<div class="day-chips">${[1,2,3,4,5,6,0].map(d=>`<label><input type="checkbox" name="days" value="${d}" ${(c?.days||[]).includes(d)?'checked':''}><span>${state.lang==='zh'?'一二三四五六日'[(d+6)%7]:weekdayName(d)}</span></label>`).join('')}</div></div>
+      <label class="form-field">${t('上课时间（可不填）','Start time (optional)')}<input name="time" type="time" value="${esc(c?.time||'')}"><small>${t('同一天教几班时，用来判断现在该打开哪一班。','Used to pick the right class when you teach several in one day.')}</small></label>
       <label class="form-field">${t('年份','Year')}<input name="year" type="number" min="2000" max="2100" required value="${c?.year??state.year}"></label>`,f=>{
-      const saved=C.saveClass(data,{id:c?.id,grade:f.get('grade'),subject:f.get('subject'),name:f.get('name'),year:f.get('year')});
+      const saved=C.saveClass(data,{id:c?.id,grade:f.get('grade'),subject:f.get('subject'),name:f.get('name'),year:f.get('year'),days:f.getAll('days'),time:f.get('time')});
       state.year=saved.year;state.level=saved.grade;
       if(!c){state.classId=saved.id;state.page='overview';}
     });
@@ -366,7 +389,7 @@
   }
   function classesPage(){
     const levels=levelList();
-    const card=c=>`<section class="card class-card"><h2>${esc(label(c))}</h2><p>${esc(c.subject)} · ${c.students.filter(id=>!student(id)?.archived).length} ${t('位学生','students')}</p><div class="row wrap">${button(t('进入','Open'),'open-class','sm primary',`data-id="${c.id}"`,'arrow')}${button(t('编辑','Edit'),'edit-class','sm',`data-id="${c.id}"`,'edit')}${button(t('删除','Delete'),'archive-class','sm danger',`data-id="${c.id}"`)}</div></section>`;
+    const card=c=>`<section class="card class-card"><h2>${esc(label(c))}</h2><p>${esc(c.subject)} · ${c.students.filter(id=>!student(id)?.archived).length} ${t('位学生','students')}${scheduleText(c)?`<br>${esc(scheduleText(c))}`:''}</p><div class="row wrap">${button(t('进入','Open'),'open-class','sm primary',`data-id="${c.id}"`,'arrow')}${button(t('编辑','Edit'),'edit-class','sm',`data-id="${c.id}"`,'edit')}${button(t('删除','Delete'),'archive-class','sm danger',`data-id="${c.id}"`)}</div></section>`;
     return heading(t('我的班级','My classes'),t('按年级和科目整理。','Organised by level and subject.'),button(t('新增班级','New class'),'add-class','primary','','plus'))+
       (levels.length?levels.map(lv=>`<section class="level-section"><h2 class="level-title">${esc(lv||t('其他','Other'))}</h2><div class="cards-grid">${classes().filter(c=>(c.grade||'')===lv).map(card).join('')}</div></section>`).join(''):empty(t('这个年份还没有班级','No classes for this year')))+footer();
   }
@@ -763,6 +786,7 @@
   }
   window.addEventListener('storage',event=>{if(event.key===KEY)toast(t('另一个页面更改了数据，请刷新后继续。','Another tab changed data. Refresh before continuing.'));});
   if(window.StudyCloud)StudyCloud.onStatus=savedIndicator;
+  openTodaysClass();
   window.addEventListener('lumi-theme',()=>{const b=document.querySelector('.theme-toggle');if(b)render();});
   persist();render();
 })();

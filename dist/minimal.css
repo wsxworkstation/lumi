@@ -226,3 +226,12 @@ dialog .form-field{line-height:1.65}dialog .form-field input,dialog .form-field 
 .title-edit{margin-left:8px;vertical-align:middle;opacity:.55}
 .title-edit:hover{opacity:1}
 .title-edit .ico{width:18px;height:18px}
+
+/* Class schedule: weekday chips in the class form, time on today's pills */
+.day-chips{display:flex;flex-wrap:wrap;gap:6px}
+.day-chips label{position:relative;cursor:pointer}
+.day-chips input{position:absolute;opacity:0;width:0;height:0}
+.day-chips span{display:grid;place-items:center;min-width:40px;height:36px;padding:0 10px;border:1px solid #dce2eb;border-radius:8px;font-size:13px;color:#48566d;background:#fff}
+.day-chips input:checked+span{background:#3564db;border-color:#3564db;color:#fff}
+.day-chips input:focus-visible+span{outline:2px solid #3564db;outline-offset:2px}
+.pill-time{font-size:11px;color:#748197;font-variant-numeric:tabular-nums}

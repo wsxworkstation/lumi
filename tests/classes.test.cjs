@@ -79,3 +79,26 @@ test('class name is built from level and subject, can be customised and edited, 
 test('levels sort naturally',()=>{
   assert.deepEqual(['F10','F2','Std 3','F1','Std 1','预备班'].sort(C.levelOrder),['F1','F2','F10','Std 1','Std 3','预备班']);
 });
+
+test('class schedule: weekdays and optional start time are saved and validated',()=>{
+  const d=C.seed();
+  const c=C.saveClass(d,{grade:'F4',subject:'MM',year:2027,days:['6','3','3'],time:'14:00'});
+  assert.deepEqual(c.days,[3,6]);assert.equal(c.time,'14:00');
+  const sun=C.saveClass(d,{grade:'F5',subject:'AM',year:2027,days:[0,1]});
+  assert.deepEqual(sun.days,[1,0],'Monday first, Sunday last');assert.equal(sun.time,'');
+  assert.throws(()=>C.saveClass(d,{grade:'F4',subject:'MM',year:2027,time:'25:00'}));
+  C.saveClass(d,{id:c.id,grade:'F4',subject:'MM',year:2027,days:[],time:''});
+  assert.deepEqual(c.days,[]);
+});
+
+test('opens the class taught now: running or next today, otherwise none',()=>{
+  const at=(day,h,m=0)=>{const x=new Date(2027,2,7+day,h,m);return x;}; // 2027-03-07 is a Sunday
+  const A={id:'A',days:[6],time:'14:00'},B={id:'B',days:[6],time:'16:00'},X={id:'X',days:[6],time:''},Y={id:'Y',days:[3]};
+  assert.equal(C.classForNow([A,B],at(6,9)).id,'A','morning: first class of the day');
+  assert.equal(C.classForNow([A,B],at(6,15,30)).id,'A','still within two hours of the 2pm class');
+  assert.equal(C.classForNow([A,B],at(6,16,5)).id,'B','4pm class is now running');
+  assert.equal(C.classForNow([A,B],at(6,21)).id,'B','evening: the last class of the day');
+  assert.equal(C.classForNow([X,Y],at(6,10)).id,'X','no time set: today\'s class');
+  assert.equal(C.classForNow([A,B,Y],at(1,10)),null,'nothing on Monday');
+  assert.equal(C.classForNow([{...A,archived:true}],at(6,14)),null);
+});

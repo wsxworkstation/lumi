@@ -205,18 +205,31 @@
     if(!grade||grade.length>30)throw Error('请填写年级，例如 F3 / Enter a level, e.g. F3');
     if(!subject||subject.length>40)throw Error('请填写科目 / Enter a subject');
     if(!Number.isInteger(year)||year<2000||year>2100)throw Error('年份不对 / Invalid year');
+    const days=[...new Set((input.days||[]).map(Number))].filter(d=>Number.isInteger(d)&&d>=0&&d<=6).sort((a,b)=>((a+6)%7)-((b+6)%7));
+    const time=String(input.time||'').trim();
+    if(time&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(time))throw Error('时间不对 / Invalid time');
     const custom=String(input.name||'').trim().slice(0,60),auto=`${grade} ${subject}`;
     let c=input.id?data.classes.find(x=>x.id===input.id):null;
     if(input.id&&!c)throw Error('找不到班级 / Class not found');
     const name=custom||auto;
     if(!c){
       let n=data.classes.length+1,code;do{code=`C${year}-${String(n++).padStart(3,'0')}`;}while(data.classes.some(x=>x.code===code));
-      c={id:uid(),code,name,en:'',subject,grade,year,students:[],archived:false};data.classes.push(c);
+      c={id:uid(),code,name,en:'',subject,grade,year,days,time,students:[],archived:false};data.classes.push(c);
     }else{
       if(c.name!==name)c.en='';
-      Object.assign(c,{name,subject,grade,year});
+      Object.assign(c,{name,subject,grade,year,days,time});
     }
     return c;
+  }
+  /* Which class to open now: today's classes only; with times, the one running or starting next
+     (a class counts as running for 2 hours after its start), else the most recent one today. */
+  function classForNow(classes,now=new Date()){
+    const today=classes.filter(c=>!c.archived&&(c.days||[]).includes(now.getDay()));
+    if(!today.length)return null;
+    const mins=now.getHours()*60+now.getMinutes(),start=c=>{const m=/^(\d\d):(\d\d)$/.exec(c.time||'');return m?Number(m[1])*60+Number(m[2]):null;};
+    const timed=today.filter(c=>start(c)!==null).sort((a,b)=>start(a)-start(b));
+    if(!timed.length)return today[0];
+    return timed.find(c=>start(c)+120>mins)||timed[timed.length-1];
   }
   /* ---------- Class groups: each class keeps its own groups; a student belongs to at most one group per class. ---------- */
   function classOf(data,classId){const c=data.classes.find(c=>c.id===classId);if(!c)throw Error('找不到班级 / Class not found');return c;}
@@ -272,7 +285,7 @@
     if(leaders)c.groups.forEach(g=>{g.leaderId=g.members[0]||null;});
     return c.groups;
   }
-  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints,enrollNames,matchStudent,levelOrder,saveClass};
+  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints,enrollNames,matchStudent,levelOrder,saveClass,classForNow};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.StudyCore=api;
 })(globalThis);
