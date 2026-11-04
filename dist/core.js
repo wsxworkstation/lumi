@@ -144,6 +144,54 @@
     data.recordHistory??=[];data.recordHistory.unshift({id:uid(),activityId:id,before,after:{title,date,max,topic:a.topic,note:a.note},at:new Date().toISOString()});
     return before;
   }
+  /* ---------- Tuition classes = level + subject. One student can take several subjects. ---------- */
+  const normName=s=>String(s||'').normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();
+  function studentKeys(s){return [s.name,s.en&&`${s.en} ${s.name}`,s.en&&`${s.name} ${s.en}`].filter(Boolean).map(normName);}
+  /* Paste a list of names into a class: existing students (taking another subject) are enrolled, not duplicated. */
+  function enrollNames(data,classId,rawNames){
+    const c=classOf(data,classId),seen=new Set(),out={created:[],linked:[],already:[],ambiguous:[]};
+    const raw=rawNames.map(n=>String(n||'').trim()).filter(Boolean);
+    if(!raw.length)throw Error('请贴上学生名字 / Paste student names');
+    if(raw.some(n=>n.includes('\t')||n.length>60))throw Error('请只复制名字那一列，每个名字不超过 60 字 / Copy only the name column, up to 60 characters each');
+    const names=raw.map(n=>n.replace(/\s+/g,' '));
+    const live=data.students.filter(s=>!s.archived);
+    const plan=[];
+    for(const name of names){
+      const key=normName(name);if(seen.has(key))continue;seen.add(key);
+      const matches=live.filter(s=>studentKeys(s).includes(key));
+      if(matches.length>1){out.ambiguous.push(name);continue;}
+      if(matches.length===1){(c.students.includes(matches[0].id)?out.already:out.linked).push(matches[0]);continue;}
+      plan.push(name);
+    }
+    let next=data.students.length+1;
+    for(const name of plan){let code;do{code=`S${String(next++).padStart(3,'0')}`;}while(data.students.some(s=>s.code===code));
+      const s={id:uid(),name,en:'',code,tag:'',archived:false};data.students.push(s);out.created.push(s);}
+    for(const s of [...out.linked,...out.created])if(!c.students.includes(s.id))c.students.push(s.id);
+    return out;
+  }
+  /* Natural order for levels: F1 < F2 < … < F10, Std 1 < Std 2, then anything else alphabetically. */
+  function levelOrder(a,b){
+    const k=v=>{const m=String(v||'').match(/^(.*?)(\d+)\s*$/);return m?[m[1].trim().toLowerCase(),Number(m[2])]:[String(v||'').toLowerCase(),-1];};
+    const [pa,na]=k(a),[pb,nb]=k(b);return pa===pb?na-nb:pa.localeCompare(pb);
+  }
+  function saveClass(data,input){
+    const grade=String(input.grade||'').trim(),subject=String(input.subject||'').trim(),year=Number(input.year);
+    if(!grade||grade.length>30)throw Error('请填写年级，例如 F3 / Enter a level, e.g. F3');
+    if(!subject||subject.length>40)throw Error('请填写科目 / Enter a subject');
+    if(!Number.isInteger(year)||year<2000||year>2100)throw Error('年份不对 / Invalid year');
+    const custom=String(input.name||'').trim().slice(0,60),auto=`${grade} ${subject}`;
+    let c=input.id?data.classes.find(x=>x.id===input.id):null;
+    if(input.id&&!c)throw Error('找不到班级 / Class not found');
+    const name=custom||auto;
+    if(!c){
+      let n=data.classes.length+1,code;do{code=`C${year}-${String(n++).padStart(3,'0')}`;}while(data.classes.some(x=>x.code===code));
+      c={id:uid(),code,name,en:'',subject,grade,year,students:[],archived:false};data.classes.push(c);
+    }else{
+      if(c.name!==name)c.en='';
+      Object.assign(c,{name,subject,grade,year});
+    }
+    return c;
+  }
   /* ---------- Class groups: each class keeps its own groups; a student belongs to at most one group per class. ---------- */
   function classOf(data,classId){const c=data.classes.find(c=>c.id===classId);if(!c)throw Error('找不到班级 / Class not found');return c;}
   function activeIds(data,c){const live=new Set(data.students.filter(s=>!s.archived).map(s=>s.id));return c.students.filter(id=>live.has(id));}
@@ -198,7 +246,7 @@
     if(leaders)c.groups.forEach(g=>{g.leaderId=g.members[0]||null;});
     return c.groups;
   }
-  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints};
+  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints,enrollNames,levelOrder,saveClass};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.StudyCore=api;
 })(globalThis);

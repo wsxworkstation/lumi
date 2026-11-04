@@ -313,6 +313,7 @@ html[data-theme=dark] .score-btn:hover{background:color-mix(in srgb,var(--team,#
 html[data-theme=dark] .swatch span[aria-hidden]{box-shadow:0 0 0 1px #000000ff}
 html[data-theme=dark] .swatch input:checked+span{border-color:#383838}
 html[data-theme=dark] .swatch input:focus-visible+span{outline:2px solid #3564db}
+html[data-theme=dark] .level-title{color:#99a6b8}
 /* login.css */
 html[data-theme=dark] #cloud-overlay.login-scene{background:#131417;background-image:radial-gradient(ellipse at 15% 12%,#161821 0,transparent 52%),radial-gradient(ellipse at 95% 90%,#16181c 0,transparent 45%)}
 html[data-theme=dark] .login-scene>.cloud-card{border:1px solid #383838;box-shadow:0 28px 80px -30px #00000074,0 2px 8px #00000013}

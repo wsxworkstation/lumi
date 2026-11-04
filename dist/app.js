@@ -15,7 +15,7 @@
   try{
     const view=JSON.parse(localStorage.getItem(VIEW_KEY)||'null');
     if(view&&['overview','records','imports','students','student','classes','groups','goals','settings','trash'].includes(view.page)){
-      for(const key of ['classId','studentId','activityId','focusStudentId'])if(typeof view[key]==='string')state[key]=view[key];
+      for(const key of ['classId','studentId','activityId','focusStudentId','level'])if(typeof view[key]==='string')state[key]=view[key];
       state.page=view.page;state.year=Number.isInteger(view.year)?view.year:2027;
       state.kind=view.kind==='exam'?'exam':'homework';state.lang=view.lang==='en'?'en':'zh';
       state.month=/^(0[1-9]|1[0-2])$/.test(view.month)?view.month:'';
@@ -70,7 +70,7 @@
   const stat=sid=>C.homeworkStats(data,state.classId,state.year,sid,state.month||undefined,C.periodEnd(state.year,state.month));
   const empty=(msg,act='')=>`<div class="empty">${icon('leaf')}<p>${msg}</p>${act}</div>`;
   function saveView(){
-    try{localStorage.setItem(VIEW_KEY,JSON.stringify({page:state.page,year:state.year,classId:state.classId,studentId:state.studentId,activityId:state.activityId,kind:state.kind,lang:state.lang,month:state.month,focusStudentId:state.focusStudentId,scrollY:window.scrollY||0}));}catch{}
+    try{localStorage.setItem(VIEW_KEY,JSON.stringify({page:state.page,year:state.year,level:state.level,classId:state.classId,studentId:state.studentId,activityId:state.activityId,kind:state.kind,lang:state.lang,month:state.month,focusStudentId:state.focusStudentId,scrollY:window.scrollY||0}));}catch{}
   }
   const saveText=()=>window.StudyCloud?StudyCloud.label(state.lang):storageOK?t('已保存 · 此浏览器','Saved · this browser'):t('保存失败','Not saved');
   function savedIndicator(){
@@ -125,7 +125,35 @@
       <div class="content" id="content"></div></main>`;
   }
   function heading(title,sub,actions=''){return `<div class="page-heading"><div><h1>${title}</h1><p>${sub}</p></div><div class="row">${actions}</div></div>`;}
-  function classStrip(){return `<div class="class-strip">${classes().map(c=>`<button class="class-pill ${c.id===state.classId?'active':''}" data-action="class" data-id="${c.id}">${icon('book')}${esc(label(c))}<span class="pill-number">${c.students.filter(id=>!student(id)?.archived).length}</span></button>`).join('')}${button(t('新增班级','New class'),'add-class','sm','','plus')}</div>`;}
+  /* ---------- Tuition classes: level tabs (F1…F5) then the subjects at that level ---------- */
+  const levelList=()=>[...new Set(classes().map(c=>c.grade||''))].sort(C.levelOrder);
+  function activeLevel(){const levels=levelList();if(state.level==='all')return 'all';if(state.level&&levels.includes(state.level))return state.level;return cls()?.grade??'all';}
+  const shortName=c=>c.name===`${c.grade} ${c.subject}`&&state.lang==='zh'?c.subject:label(c);
+  function classStrip(){
+    const levels=levelList(),lv=activeLevel(),shown=classes().filter(c=>lv==='all'||(c.grade||'')===lv);
+    const tabs=levels.length>1?`<div class="tab-group level-tabs">${[['all',t('全部','All')],...levels.map(l=>[l,l||t('其他','Other')])].map(([v,l])=>`<button type="button" class="${v===lv?'active':''}" data-action="level" data-level="${esc(v)}" aria-pressed="${v===lv}">${esc(l)}</button>`).join('')}</div>`:'';
+    return `${tabs}<div class="class-strip">${shown.map(c=>`<button class="class-pill ${c.id===state.classId?'active':''}" data-action="class" data-id="${c.id}">${icon('book')}${esc(lv==='all'?label(c):shortName(c))}<span class="pill-number">${c.students.filter(id=>!student(id)?.archived).length}</span></button>`).join('')}${button(t('新增班级','New class'),'add-class','sm','','plus')}</div>`;
+  }
+  function chooseLevel(v){
+    state.level=v;
+    if(v!=='all'&&cls()?.grade!==v){const first=classes().find(c=>(c.grade||'')===v);if(first){selectClass(first.id);return;}}
+    render();
+  }
+  function classForm(id){
+    const c=id?data.classes.find(x=>x.id===id):null,lv=activeLevel();
+    const levelHints=[...new Set(['F1','F2','F3','F4','F5','Std 1','Std 2','Std 3','Std 4','Std 5','Std 6',...data.classes.map(x=>x.grade).filter(Boolean)])];
+    const subjectHints=[...new Set([...data.classes.map(x=>x.subject).filter(Boolean),'数学','科学','英文','华文','国文','历史','附加数学','物理','化学','生物','会计','经济'])];
+    const auto=c?`${c.grade} ${c.subject}`:'';
+    showModal(c?t('编辑班级','Edit class'):t('新增班级','New class'),`
+      <label class="form-field">${t('年级','Level')}<input name="grade" list="level-hints" required maxlength="30" placeholder="F3" value="${esc(c?.grade??(lv!=='all'?lv:''))}"><datalist id="level-hints">${levelHints.map(v=>`<option value="${esc(v)}">`).join('')}</datalist></label>
+      <label class="form-field">${t('科目','Subject')}<input name="subject" list="subject-hints" required maxlength="40" placeholder="${t('数学','Mathematics')}" value="${esc(c?.subject||'')}"><datalist id="subject-hints">${subjectHints.map(v=>`<option value="${esc(v)}">`).join('')}</datalist></label>
+      <label class="form-field full">${t('名称（可不填）','Name (optional)')}<input name="name" maxlength="60" placeholder="${t('不填就叫「年级 科目」，例如 F3 数学','Leave blank to use "Level Subject", e.g. F3 Maths')}" value="${esc(c&&c.name!==auto?c.name:'')}"><small>${t('同一科开两班时才需要，例如「F3 数学（星期六）」。','Only needed for two classes of the same subject, e.g. "F3 Maths (Sat)".')}</small></label>
+      <label class="form-field">${t('年份','Year')}<input name="year" type="number" min="2000" max="2100" required value="${c?.year??state.year}"></label>`,f=>{
+      const saved=C.saveClass(data,{id:c?.id,grade:f.get('grade'),subject:f.get('subject'),name:f.get('name'),year:f.get('year')});
+      state.year=saved.year;state.level=saved.grade;
+      if(!c){state.classId=saved.id;state.page='overview';}
+    });
+  }
   function periodPicker(){return `<select id="period-month" aria-label="${t('功课统计月份','Homework statistics month')}"><option value="">${t('功课统计：全年','Homework: full year')}</option>${Array.from({length:12},(_,i)=>String(i+1).padStart(2,'0')).map(m=>`<option value="${m}" ${state.month===m?'selected':''}>${t('功课统计：','Homework: ')}${m}${t(' 月','')}</option>`).join('')}</select>`;}
   function footer(){return `<footer class="footer"><span>微光 Lumi</span><span>${state.year} · ${state.month||t('全年','Full year')}</span></footer>`;}
   function metric(title,value,unit,foot,ico,color=''){return `<div class="metric"><div class="row between"><span class="metric-label">${title}</span><span class="metric-icon ${color}">${icon(ico)}</span></div><div class="metric-num">${value}<span>${unit}</span></div><p class="metric-foot">${foot}</p></div>`;}
@@ -172,7 +200,7 @@
   function overview(){
     const c=cls();
     if(!c)return heading(t('我的班级','My classes'),'')+classStrip()+empty(t('这个年份还没有班级','No classes in this year'));
-    return heading(esc(label(c)),'',button(t('新增记录','New record'),'new-record','primary','','plus')+button(t('加学生','Add students'),'add-student','','','users')+button(t('分组','Groups'),'groups','','','group'))+classStrip()+resumeRecord()+workspaceRoster()+
+    return heading(`${esc(label(c))}<button class="icon-btn title-edit" data-action="edit-class" data-id="${c.id}" aria-label="${t('编辑班级','Edit class')}" title="${t('编辑班级','Edit class')}">${icon('edit')}</button>`,'',button(t('新增记录','New record'),'new-record','primary','','plus')+button(t('加学生','Add students'),'add-student','','','users')+button(t('分组','Groups'),'groups','','','group'))+classStrip()+resumeRecord()+workspaceRoster()+
       `<details class="secondary-panel"><summary>${t('查看图表与统计','Show charts and statistics')}</summary><div class="stack"><section class="card"><div class="card-head"><h2>${t('考试趋势','Exam trend')}</h2><button class="icon-btn" data-action="download-chart" aria-label="${t('下载图表','Download chart')}">${icon('down')}</button></div>${examChart()}</section><section class="card"><h2>${t('每月功课完成率','Monthly homework completion')}</h2>${monthlyChart()}</section><section class="card"><div class="card-head"><h2>${t('功课提交记录','Homework submissions')}</h2></div>${heatmap()}</section></div></details>`;
   }
   /* ---------- Groups ---------- */
@@ -336,7 +364,12 @@
     const goals=data.goals.filter(g=>!g.archived&&g.classId===state.classId);
     return heading(t('每一个目标，都有下一步。','Every goal has a next step.'),t('和学生一起设定，由你手动更新进度。','Set it together. Update progress in your own time.'),button(t('新增目标','New goal'),'add-goal','primary','','plus'))+classStrip()+`<div class="cards-grid">${goals.map(g=>`<section class="card">${goalCard(g)}</section>`).join('')}</div>${!goals.length?empty(t('从一个小目标开始','Start with a small goal')):''}`+footer();
   }
-  function classesPage(){return heading(t('我的班级','My classes'),t('按科目和年级组织，让每个班的记录各归其位。','Organized by subject and level. Every class keeps its own history.'),button(t('新增班级','New class'),'add-class','primary','','plus'))+`<div class="cards-grid">${classes().map(c=>`<section class="card class-card"><div class="row between"><span class="class-icon">${icon('book')}</span>${badge(String(c.year))}</div><h2>${esc(label(c))}</h2><p>${esc(c.code)} · ${esc(c.grade)} · ${esc(c.subject)} · ${c.students.filter(id=>!student(id)?.archived).length} ${t('位学生','students')}</p><div class="row between">${button(t('进入班级','Open class'),'open-class','sm',`data-id="${c.id}"`,'arrow')}${button(t('删除班级','Delete class'),'archive-class','sm danger',`data-id="${c.id}"`)}</div></section>`).join('')}</div>${!classes().length?empty(t('这个年份还没有班级','No classes for this year')):''}`+footer();}
+  function classesPage(){
+    const levels=levelList();
+    const card=c=>`<section class="card class-card"><h2>${esc(label(c))}</h2><p>${esc(c.subject)} · ${c.students.filter(id=>!student(id)?.archived).length} ${t('位学生','students')}</p><div class="row wrap">${button(t('进入','Open'),'open-class','sm primary',`data-id="${c.id}"`,'arrow')}${button(t('编辑','Edit'),'edit-class','sm',`data-id="${c.id}"`,'edit')}${button(t('删除','Delete'),'archive-class','sm danger',`data-id="${c.id}"`)}</div></section>`;
+    return heading(t('我的班级','My classes'),t('按年级和科目整理。','Organised by level and subject.'),button(t('新增班级','New class'),'add-class','primary','','plus'))+
+      (levels.length?levels.map(lv=>`<section class="level-section"><h2 class="level-title">${esc(lv||t('其他','Other'))}</h2><div class="cards-grid">${classes().filter(c=>(c.grade||'')===lv).map(card).join('')}</div></section>`).join(''):empty(t('这个年份还没有班级','No classes for this year')))+footer();
+  }
   function settingsPage(){return heading(t('按你的习惯来。','Make it work your way.'),t('以下是示范规则，调整后立即用于统计。','These are demo rules. Changes apply immediately.'))+
     `${window.StudyCloud?'':`<div class="info-banner">${icon('info')}${t('示范版仅保存到此浏览器。尚未连接 Supabase、学生登录或自动备份，请只使用测试资料。','This demo saves in your browser only. Supabase, student sign-in and automatic backups are not connected. Use test data only.')}</div>`}
     <div class="dashboard-grid"><section class="card"><div class="card-head"><h2>${t('统计与提醒','Statistics & reminders')}</h2></div><div class="setting-grid">
@@ -375,20 +408,12 @@
     modal.showModal();
   }
   function ensureClass(){if(!cls()){toast(t('请先建立班级','Create a class first'));return false;}return true;}
-  function addClass(){showModal(t('建立一个新班级','Create a new class'),
-    field('code',t('班级编号','Class code'),'text',`C${state.year}-${String(data.classes.length+1).padStart(3,'0')}`,'required maxlength="50"')+field('name',t('班级名称','Class name'),'text','','required maxlength="60"')+field('en',t('英文名称（选填）','English name (optional)'),'text','','maxlength="60"')+
-    field('subject',t('科目','Subject'),'text','','required maxlength="40"')+field('grade',t('年级','Level'),'text','','required maxlength="30"')+field('year',t('年份','Year'),'number',state.year,'required min="2000" max="2100"'),
-    f=>{const code=f.get('code').trim();if(data.classes.some(c=>c.code.toLowerCase()===code.toLowerCase()))throw Error(t('班级编号已存在','Class code already exists'));const c={id:C.uid(),code,name:f.get('name').trim(),en:f.get('en').trim(),subject:f.get('subject').trim(),grade:f.get('grade').trim(),year:Number(f.get('year')),students:[],archived:false};if(!c.code||!c.name||!c.subject||!c.grade)throw Error(t('请填写编号、名称、科目和年级','Please enter code, name, subject and level'));data.classes.push(c);state.year=c.year;state.classId=c.id;state.page='overview';});}
   function bulkStudents(){
     if(!ensureClass())return;if(modal.open)modal.close();
-    showModal(t('大量导入学生','Bulk import students'),`<label class="form-field full">${t('从 Excel 复制全部名字，贴在下面就好，一行一个。','Copy all the names from Excel and paste them below, one per line.')}<textarea name="names" rows="9" placeholder="陈小明&#10;林悦晴&#10;黄子轩" required></textarea><small>${t('系统会自动加入这个班，并自动产生学生编号。名字重复的话会提醒你。','They are added to this class automatically, with codes generated for you. Duplicate names are flagged.')}</small></label>`,f=>{
-      const names=String(f.get('names')||'').split(/\r?\n/).map(n=>n.trim()).filter(Boolean);
-      if(!names.length)throw Error(t('请粘贴姓名','Paste student names'));
-      if(names.some(n=>n.includes('\t')||n.length>60))throw Error(t('请只复制姓名一列，每个姓名不超过60字','Copy only the name column, up to 60 characters per name'));
-      const seen=new Set();
-      for(const name of names){if(seen.has(name)||data.students.some(s=>!s.archived&&s.name===name))throw Error(t(`姓名重复：${name}。请先检查，或用添加单个学生来区分同名学生。`,`Duplicate name: ${name}. Review it or add individually to distinguish students.`));seen.add(name);}
-      let next=data.students.length+1;
-      for(const name of names){let code;do{code=`S${String(next++).padStart(3,'0')}`;}while(data.students.some(s=>s.code===code));const s={id:C.uid(),name,en:'',code,tag:'',archived:false};data.students.push(s);cls().students.push(s.id);}
+    showModal(t('大量导入学生','Bulk import students'),`<label class="form-field full">${t('从 Excel 复制全部名字，贴在下面就好，一行一个。','Copy all the names from Excel and paste them below, one per line.')}<textarea name="names" rows="9" placeholder="陈小明&#10;林悦晴&#10;黄子轩" required></textarea><small>${t('系统会自动加入这个班。已经在别科的学生会直接加进来，不会重复建立。','Students are added to this class. Anyone already taking another subject is linked, not duplicated.')}</small></label>`,f=>{
+      const r=C.enrollNames(data,state.classId,String(f.get('names')||'').split(/\r?\n/));
+      const parts=[r.created.length&&t(`新增 ${r.created.length} 人`,`${r.created.length} new`),r.linked.length&&t(`${r.linked.length} 人已在别科，直接加入`,`${r.linked.length} from other subjects`),r.already.length&&t(`${r.already.length} 人本来就在这班`,`${r.already.length} already here`),r.ambiguous.length&&t(`同名的人请用「加学生」挑选：${r.ambiguous.join('、')}`,`Same name as several students, add individually: ${r.ambiguous.join(', ')}`)].filter(Boolean);
+      setTimeout(()=>toast(parts.join(' · ')),0);
     });
   }
   function addStudent(edit=false){
@@ -538,7 +563,9 @@
     else if(action==='language'){state.lang=state.lang==='zh'?'en':'zh';render();}
     else if(action==='class')selectClass(id);
     else if(action==='open-class'){state.page='overview';selectClass(id);}
-    else if(action==='add-class')addClass();
+    else if(action==='add-class')classForm();
+    else if(action==='edit-class')classForm(el.dataset.id);
+    else if(action==='level')chooseLevel(el.dataset.level);
     else if(action==='add-student')addStudent();
     else if(action==='bulk-students')bulkStudents();
     else if(action==='edit-student')addStudent(true);

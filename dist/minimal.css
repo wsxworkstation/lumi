@@ -216,3 +216,13 @@ dialog .form-field{line-height:1.65}dialog .form-field input,dialog .form-field 
 .swatch input:checked+span{border-color:#fff;box-shadow:0 0 0 2px var(--team)}
 .swatch input:focus-visible+span{outline:2px solid #3564db;outline-offset:2px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Level tabs (F1…F5) above the subject pills; classes page grouped by level */
+.level-tabs{display:inline-flex;flex-wrap:wrap;margin-bottom:12px}
+.level-tabs button{min-width:44px;font-size:13px;padding:7px 14px}
+.level-section{margin-bottom:26px}
+.level-title{font-size:15px;color:#697586;margin:0 0 12px;font-weight:600}
+.class-card h2{margin:0 0 6px}
+.title-edit{margin-left:8px;vertical-align:middle;opacity:.55}
+.title-edit:hover{opacity:1}
+.title-edit .ico{width:18px;height:18px}

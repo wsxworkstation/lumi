@@ -146,3 +146,21 @@ test('groups page renders empty state, groups with leaders, and ungrouped studen
     assert.ok(!html.includes('undefined')&&!html.includes('NaN'));
   }
 });
+
+test('classes are filtered by level tabs, grouped by level, and editable',()=>{
+  const {api,elements,ctx}=boot();
+  const d=api.getData();
+  const m=ctx.StudyCore.saveClass(d,{grade:'F3',subject:'数学',year:2027}),s=ctx.StudyCore.saveClass(d,{grade:'F3',subject:'科学',year:2027}),e=ctx.StudyCore.saveClass(d,{grade:'F1',subject:'英文',year:2027});
+  for(const lang of ['zh','en']){
+    Object.assign(api.state,{lang,page:'overview',classId:m.id,level:'F3'});api.render();
+    const html=elements.get('#content').innerHTML;
+    assert.ok(html.includes('data-action="level"')&&html.includes('data-level="F1"')&&html.includes('data-level="F3"'),'level tabs');
+    assert.ok(html.includes(`data-id="${s.id}"`)&&!html.includes(`data-action="class" data-id="${e.id}"`),'only F3 subjects shown');
+    assert.ok(html.includes('data-action="edit-class"'),'pencil beside class name');
+    api.state.page='classes';api.render();
+    const page=elements.get('#content').innerHTML;
+    assert.ok(page.includes('level-title')&&page.includes('edit-class'));
+    assert.ok(!page.includes(m.code),'internal class code is not shown');
+    assert.ok(!page.includes('undefined')&&!page.includes('NaN'));
+  }
+});
