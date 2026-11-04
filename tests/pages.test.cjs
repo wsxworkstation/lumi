@@ -164,3 +164,18 @@ test('classes are filtered by level tabs, grouped by level, and editable',()=>{
     assert.ok(!page.includes('undefined')&&!page.includes('NaN'));
   }
 });
+
+test('new homework offers the class chapters; note starts hidden; home roster starts collapsed',()=>{
+  const {api,elements,ctx}=boot();
+  ctx.LumiTopics=require('../dist/topics.js');ctx.window.LumiTopics=ctx.LumiTopics;
+  const d=api.getData(),c=ctx.StudyCore.saveClass(d,{grade:'F3',subject:'MM',year:2027});
+  c.students.push(d.students[0].id);
+  Object.assign(api.state,{lang:'zh',page:'overview',classId:c.id});api.render();
+  const home=elements.get('#content').innerHTML;
+  assert.ok(home.includes('<details class="card workspace-roster" >')||home.includes('<details class="card workspace-roster">'),'collapsed');
+  assert.ok(!home.includes(d.students[0].code),'student code hidden when no name clash');
+  api.onClick({preventDefault(){},target:{closest:s=>s==='[data-action]'?{dataset:{action:'new-record'}}:null}});
+  const form=elements.get('#modal').innerHTML;
+  assert.ok(form.includes('name="topicPick"')&&form.includes('1. Indeks / Indices'),'F3 MM chapters');
+  assert.ok(form.includes('class="full note-toggle"')&&!form.includes('note-toggle" open'),'note hidden');
+});

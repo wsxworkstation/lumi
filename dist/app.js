@@ -298,9 +298,14 @@
     showModal(t(`${esc(label(s))} 加入哪一组？`,`Add ${esc(label(s))} to which group?`),`<div class="full gp-join">${groups.map(g=>`<button type="button" class="btn" data-action="group-pick" data-id="${g.id}" data-sid="${sid}">${esc(label(g))}<span class="small muted">${t(`${g.members.length} 人`,`${g.members.length}`)}</span></button>`).join('')}</div>`,()=>{});
     modal.querySelector('button[type=submit]').hidden=true;
   }
+  /* Home roster: collapsed until opened; stays open while you work. Codes show only when two names clash. */
   function workspaceRoster(){
-    const list=roster();
-    return `<section class="card workspace-roster" style="margin-bottom:22px"><div class="card-head"><h2>${t('学生名单','Class roster')} <span class="small muted">${list.length}</span></h2>${periodPicker()}</div>${!list.length?`<div class="empty"><p>${t('还没有学生。用「大量导入」一次加入全班。','No students yet. Use Bulk import to add the whole class.')}</p>${button(t('大量导入','Bulk import'),'bulk-students','primary')}</div>`:`<div class="table-wrap"><table><thead><tr><th>${t('学生','Student')}</th><th>${t('欠交功课','Missing homework')}</th><th>${t('未记录','Not recorded')}</th></tr></thead><tbody>${list.map(s=>{const h=stat(s.id);return `<tr><td><button class="student-name" data-action="student" data-id="${s.id}">${studentNameLines(s)}<small>${esc(s.code)}</small></button></td><td>${h.missing?`<button class="missing-link" data-action="student-missing" data-id="${s.id}">${badge(t(`${h.missing} 份`,`${h.missing} items`),'red')}</button>`:'—'}</td><td class="muted">${h.unrecorded||'—'}</td></tr>`;}).join('')}</tbody></table></div>`}</section>`;
+    const list=roster(),stats=new Map(list.map(s=>[s.id,stat(s.id)])),owing=list.filter(s=>stats.get(s.id).missing).length;
+    const seen=new Map();list.forEach(s=>{const k=label(s).trim().toLowerCase();seen.set(k,(seen.get(k)||0)+1);});
+    const clash=s=>seen.get(label(s).trim().toLowerCase())>1;
+    const open=!list.length||state.rosterOpen;
+    return `<details class="card workspace-roster" ${open?'open':''}><summary><h2>${t('学生名单','Class roster')} <span class="small muted">${t(`${list.length} 人`,`${list.length}`)}</span></h2>${owing?`<span class="roster-owing">${t(`${owing} 人欠交`,`${owing} owing`)}</span>`:''}<span class="roster-chevron" aria-hidden="true">${icon('down')}</span></summary>
+      <div class="roster-body"><div class="roster-tools">${periodPicker()}</div>${!list.length?`<div class="empty"><p>${t('还没有学生。用「大量导入」一次加入全班。','No students yet. Use Bulk import to add the whole class.')}</p>${button(t('大量导入','Bulk import'),'bulk-students','primary')}</div>`:`<div class="table-wrap"><table><thead><tr><th>${t('学生','Student')}</th><th>${t('欠交功课','Missing homework')}</th><th>${t('未记录','Not recorded')}</th></tr></thead><tbody>${list.map(s=>{const h=stats.get(s.id);return `<tr><td><button class="student-name" data-action="student" data-id="${s.id}">${studentNameLines(s)}${clash(s)?`<small>${esc(s.code)}</small>`:''}</button></td><td>${h.missing?`<button class="missing-link" data-action="student-missing" data-id="${s.id}">${badge(t(`${h.missing} 份`,`${h.missing} items`),'red')}</button>`:'—'}</td><td class="muted">${h.unrecorded||'—'}</td></tr>`;}).join('')}</tbody></table></div>`}</div></details>`;
   }
   function heatmap(){
     const hw=acts('homework').slice(-8);
@@ -398,7 +403,7 @@
     <div class="dashboard-grid"><section class="card"><div class="card-head"><h2>${t('统计与提醒','Statistics & reminders')}</h2></div><div class="setting-grid">
     <p class="help full">${t('功课统计跟随当前年份和月份，不需要调整参考日期。','Homework statistics follow the selected year and month.')}</p>
     ${[['pass','及格线 (%)','Passing score (%)',0,100],['low','低分提醒 (%)','Low-score alert (%)',0,100],['missing','连续未交次数','Consecutive missing assignments',1,20],['declines','连续下降次数','Consecutive score declines',1,10],['termEnd','第一学期结束月份','Last month of term 1',1,11]].map(([key,zh,en,min,max])=>`<label>${t(zh,en)}<input type="number" min="${min}" max="${max}" step="1" value="${data.settings[key]}" data-setting="${key}"></label>`).join('')}</div><div class="divider"></div><p class="help">${t('功课：补交计入完成率，不计入准时率。分母按截止日期和当次应交名单计算。考试：百分比等权平均，学校与补习分开；缺席和空白不计作 0 分；小考不计入学期平均。排名并列时采用 1、2、2、4。等级 A/B/C 的界线尚未确定。','Homework: made-up work counts as completed, not on-time. Denominator uses due dates and assigned students. Exams: equal-weight percentages, school and tuition separate. Absence and blanks are not zero. Quizzes are excluded from term averages. Ties use competition ranking: 1, 2, 2, 4. Grade boundaries are not configured.')}</p></section>
-    <div class="stack"><section class="card"><div class="card-head"><h2>${t('记录种类','Record types')}</h2>${button(t('新增','Add'),'add-type','sm','','plus')}</div>${data.types.map(type=>`<div class="row between" style="margin:12px 0"><span class="small">${esc(type)}</span>${button(t('移除','Remove'),'remove-type','sm',`data-type="${esc(type)}"`)}</div>`).join('')}<p class="help">${t('种类名称可自定义，每次记录仍需选择功课或考试的计算方式。移除种类不会删除旧记录。','Types are labels; each record also selects a homework or exam calculation. Removing a type keeps historical records.')}</p></section>
+    <div class="stack">${window.LumiTopics?`<section class="card"><div class="card-head"><h2>${t('章节库','Topic library')}</h2>${button(t('编辑','Edit'),'topic-library','sm','','edit')}</div><p class="help">${t('记功课时可直接选的章节。已放入 KSSM 数学、附加数学、科学 F1–F5，可自己修改。','Chapters you can pick when recording homework. KSSM Maths, Add Maths and Science F1–F5 are included, and you can edit them.')}</p></section>`:''}<section class="card"><div class="card-head"><h2>${t('记录种类','Record types')}</h2>${button(t('新增','Add'),'add-type','sm','','plus')}</div>${data.types.map(type=>`<div class="row between" style="margin:12px 0"><span class="small">${esc(type)}</span>${button(t('移除','Remove'),'remove-type','sm',`data-type="${esc(type)}"`)}</div>`).join('')}<p class="help">${t('种类名称可自定义，每次记录仍需选择功课或考试的计算方式。移除种类不会删除旧记录。','Types are labels; each record also selects a homework or exam calculation. Removing a type keeps historical records.')}</p></section>
     ${window.LumiTheme?`<section class="card"><div class="card-head"><h2>${t('显示','Display')}</h2></div><div class="tab-group theme-modes">${[['light',t('浅色','Light')],['dark',t('深色','Dark')],['auto',t('跟随系统','Match device')]].map(([m,l])=>`<button type="button" class="${LumiTheme.mode===m?'active':''}" data-action="theme-mode" data-mode="${m}" aria-pressed="${LumiTheme.mode===m}">${l}</button>`).join('')}</div><p class="help" style="margin-top:10px">${t('只影响这台设备。跟随系统：手机或电脑开了深色模式，就自动变深色。','Applies to this device only. Match device follows your phone or computer setting.')}</p></section>`:''}${window.StudyCloud?`<section class="card"><div class="card-head"><h2>${t('云端同步','Cloud sync')}</h2></div><p class="help">${t('登录账号','Signed in as')}：<strong>${esc(StudyCloud.email)}</strong></p><p class="help">${t('每次修改会自动上传。云端每天自动保留一份旧版本，误删时可以恢复。','Every change uploads automatically. The cloud keeps one older version per day, so mistakes can be undone.')}</p><div class="row wrap" style="margin-top:12px">${button(t('恢复旧版本','Restore an older version'),'cloud-versions','','','restore')}${button(t('退出登录','Sign out'),'cloud-logout','','','back')}</div></section>`:''}<section class="card"><div class="card-head"><h2>${t('备份','Backup')}</h2></div><div class="row wrap">${button(t('下载 JSON 备份','Download JSON'),'backup','','','down')}${button(t('恢复 JSON 备份','Restore JSON'),'restore-backup','','','restore')}</div><input id="backup-file" type="file" accept=".json,application/json" hidden><p class="help" style="margin-top:12px">${t('JSON 保存全部记录；单次功课或考试可在录入页导出 CSV。恢复 JSON 后会同步到云端。','JSON contains all records. Export a record as CSV from Quick entry. A restored JSON syncs to the cloud.')}</p></section></div></div>`+footer();}
   function importsPage(){
     const p=state.importPlan,hasBackup=!!localStorage.getItem(IMPORT_BACKUP_KEY),c=p?.counts||{};
@@ -463,6 +468,32 @@
         }
       });
   }
+  /* Topic: a dropdown of this class's KSSM chapters (from its level + subject), with "other" for anything else. */
+  function topicField(){
+    const T=window.LumiTopics,key=T?.keyFor(cls())||'',topics=T?T.list(data,key):[];
+    const other=`<input name="topic" maxlength="120" placeholder="${t('自己填章节','Type a topic')}" aria-label="${t('章节','Topic')}">`;
+    if(!topics.length)return `<label class="form-field">${t('章节（选填）','Topic (optional)')}${other}<small>${t('在「设置 → 章节库」加入这个科目的章节，以后就能直接选。','Add chapters for this subject in Settings → Topic library to pick them next time.')}</small></label>`;
+    return `<label class="form-field">${t('章节（选填）','Topic (optional)')}<select name="topicPick"><option value="">${t('不选','None')}</option>${topics.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}<option value="__other">${t('其他（自己填）','Other (type it)')}</option></select>${other}</label>`;
+  }
+  function topicLibraryForm(){
+    const T=window.LumiTopics;if(!T)return;
+    const c=cls(),start=T.keyFor(c)||'MM|F1';
+    const [s0,l0]=start.split('|');
+    showModal(t('章节库','Topic library'),`
+      <label class="form-field">${t('科目','Subject')}<select name="subj">${T.SUBJECTS.map(([k,n])=>`<option value="${k}" ${k===s0?'selected':''}>${k} · ${esc(n)}</option>`).join('')}</select></label>
+      <label class="form-field">${t('年级','Level')}<select name="lv">${T.LEVELS.map(l=>`<option ${l===l0?'selected':''}>${l}</option>`).join('')}</select></label>
+      <label class="form-field full">${t('章节（一行一个）','Chapters (one per line)')}<textarea name="lines" rows="12"></textarea><small id="topic-hint"></small></label>
+      <div class="full">${button(t('恢复课本默认','Reset to textbook list'),'topic-reset','sm','type="button"','restore')}</div>`,f=>{
+      const key=`${f.get('subj')}|${f.get('lv')}`;T.save(data,key,String(f.get('lines')||'').split(/\r?\n/));
+    });
+    const form=modal.querySelector('form'),fill=(useDefault=false)=>{
+      const key=`${form.subj.value}|${form.lv.value}`;form.lines.value=(useDefault?T.builtIn(key):T.list(data,key)).join('\n');
+      form.querySelector('#topic-hint').textContent=T.isUnverified(key)?t('F1 是新课本，请对照课本检查一下。','F1 uses the new textbook. Please check it against the book.'):!T.builtIn(key).length?t('这个科目和年级没有课本章节，可以自己填。','No textbook list for this subject and level. Type your own.'):t('按 KSSM 课本目录整理，可以自己改。','Based on the KSSM textbook contents. Edit as you like.');
+    };
+    form.subj.onchange=()=>fill();form.lv.onchange=()=>fill();
+    form.querySelector('[data-action=topic-reset]').onclick=e=>{e.preventDefault();e.stopPropagation();fill(true);};
+    fill();
+  }
   function addActivity(kind='homework'){
     if(!ensureClass())return;
     if(!roster().length){toast(t('先给班级添加学生','Add students to this class first'));return;}
@@ -471,10 +502,11 @@
       selectField('category',t('类别','Category'),[['homework',t('功课','Homework')],['tuition',t('补习考试','Tuition exam')],['school',t('学校考试','School exam')],['quiz',t('小考','Quiz')]],initial)+
       field('title',t('名称','Title'),'text','','required maxlength="100"')+
       field('date',t('日期','Date'),'date',recordDate(),`required min="${state.year}-01-01" max="${state.year}-12-31"`)+
-      `<div data-homework-fields>${field('topic',t('章节（选填）','Topic (optional)'),'text','','maxlength="60"')}</div><div data-exam-fields>${field('max',t('满分','Maximum score'),'number',50,'required min="1" max="10000"')}</div>`+
-      `<label class="form-field full">${t('备注（选填）','Notes (optional)')}<textarea name="note" rows="2" maxlength="500"></textarea></label>`,
+      `<div data-homework-fields>${topicField()}</div><div data-exam-fields>${field('max',t('满分','Maximum score'),'number',50,'required min="1" max="10000"')}</div>`+
+      `<details class="full note-toggle"><summary>${t('+ 备注','+ Note')}</summary><textarea name="note" rows="2" maxlength="500" aria-label="${t('备注','Note')}"></textarea></details>`,
       f=>{
         const category=f.get('category'),isHW=category==='homework';
+        const pick=f.get('topicPick');if(pick!==null)f.set('topic',pick==='__other'?String(f.get('topic')||'').trim():pick);
         if(!['homework','tuition','school','quiz'].includes(category))throw Error(t('请选择类别','Choose a category'));
         const title=f.get('title').trim(),max=isHW?1:Number(f.get('max'));
         if(!title)throw Error(t('请输入名称','Enter a title'));
@@ -486,15 +518,20 @@
         const a={id:C.uid(),recordCode,classId:state.classId,kind:category,type:({homework:'Homework',tuition:'Tuition Exam',school:'School Exam',quiz:'Quiz'})[category],title,date:f.get('date'),max,topic:isHW?(f.get('topic')||''):'',note:f.get('note'),students:ids,results,archived:false};
         data.activities.push(a);state.activityId=a.id;state.kind=isHW?'homework':'exam';state.page='records';state.filter='all';
       });
-    const category=modal.querySelector('[name=category]');
+    const category=modal.querySelector('[name=category]'),pick=modal.querySelector('[name=topicPick]'),other=modal.querySelector('[name=topic]'),title=modal.querySelector('[name=title]');
     const updateFields=()=>{
       const isHW=category.value==='homework';
       modal.querySelector('[data-homework-fields]').hidden=!isHW;
-      modal.querySelector('[name=topic]').disabled=!isHW;
+      if(pick)pick.disabled=!isHW;
+      other.disabled=!isHW||(pick&&pick.value!=='__other');other.hidden=!!pick&&pick.value!=='__other';
       modal.querySelector('[data-exam-fields]').hidden=isHW;
       modal.querySelector('[name=max]').disabled=isHW;
     };
-    category.onchange=updateFields;updateFields();
+    category.onchange=updateFields;
+    // Picking a topic fills in the record name when it is still empty, so most homework needs no typing.
+    if(pick)pick.onchange=()=>{updateFields();if(pick.value==='__other'){other.focus();return;}if(pick.value&&(!title.value.trim()||title.dataset.auto==='1')){title.value=pick.value.replace(/^\d+\.\s*/,'').split(' / ')[state.lang==='en'?1:0]||pick.value;title.dataset.auto='1';}};
+    title.addEventListener('input',()=>{title.dataset.auto='';});
+    updateFields();
   }
   function addGoal(){
     if(!ensureClass())return;if(!roster().length){toast(t('先添加学生','Add a student first'));return;}
@@ -667,6 +704,7 @@
     else if(action==='group-join')joinGroupForm(el.dataset.sid);
     else if(action==='group-pick'){const g=C.groupsOf(data,state.classId).find(x=>x.id===el.dataset.id);if(g){C.saveGroup(data,state.classId,{id:g.id,name:g.name,members:[...g.members,el.dataset.sid],leaderId:g.leaderId});persist();modal.close();render();toast(t('已加入','Added'));}}
     else if(action==='group-delete'){const g=C.groupsOf(data,state.classId).find(x=>x.id===el.dataset.id);if(g)confirmation(t(`删除「${esc(label(g))}」`,`Delete “${esc(label(g))}”`),t('组员不会被删除，只是变成未分组。','Members are not deleted; they become ungrouped.'),()=>C.deleteGroup(data,state.classId,g.id));}
+    else if(action==='topic-library')topicLibraryForm();
     else if(action==='theme'){LumiTheme.toggle();render();}
     else if(action==='theme-mode'){LumiTheme.set(el.dataset.mode);render();}
     else if(action==='cloud-versions')showVersions();
@@ -786,6 +824,8 @@
   }
   window.addEventListener('storage',event=>{if(event.key===KEY)toast(t('另一个页面更改了数据，请刷新后继续。','Another tab changed data. Refresh before continuing.'));});
   if(window.StudyCloud)StudyCloud.onStatus=savedIndicator;
+  // <details> toggle does not bubble; capture it so re-renders keep the roster as the teacher left it.
+  document.addEventListener?.('toggle',e=>{if(e.target?.classList?.contains('workspace-roster'))state.rosterOpen=e.target.open;},true);
   openTodaysClass();
   window.addEventListener('lumi-theme',()=>{const b=document.querySelector('.theme-toggle');if(b)render();});
   persist();render();

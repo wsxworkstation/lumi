@@ -318,6 +318,10 @@ html[data-theme=dark] .day-chips span{border:1px solid #303337;color:#a2b2cc;bac
 html[data-theme=dark] .day-chips input:checked+span{background:#3564db;border-color:#3564db;color:#fff}
 html[data-theme=dark] .day-chips input:focus-visible+span{outline:2px solid #3564db}
 html[data-theme=dark] .pill-time{color:#98a5bc}
+html[data-theme=dark] .roster-owing{color:#f17e78}
+html[data-theme=dark] .roster-chevron{color:#98a5bc}
+html[data-theme=dark] .note-toggle>summary{color:#7da4f7}
+html[data-theme=dark] .note-toggle[open]>summary{color:#99a6b8}
 /* login.css */
 html[data-theme=dark] #cloud-overlay.login-scene{background:#131417;background-image:radial-gradient(ellipse at 15% 12%,#161821 0,transparent 52%),radial-gradient(ellipse at 95% 90%,#16181c 0,transparent 45%)}
 html[data-theme=dark] .login-scene>.cloud-card{border:1px solid #383838;box-shadow:0 28px 80px -30px #00000074,0 2px 8px #00000013}

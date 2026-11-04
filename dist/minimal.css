@@ -235,3 +235,23 @@ dialog .form-field{line-height:1.65}dialog .form-field input,dialog .form-field 
 .day-chips input:checked+span{background:#3564db;border-color:#3564db;color:#fff}
 .day-chips input:focus-visible+span{outline:2px solid #3564db;outline-offset:2px}
 .pill-time{font-size:11px;color:#748197;font-variant-numeric:tabular-nums}
+
+/* Home roster collapsed by default; compact rows */
+.workspace-roster{margin-bottom:22px;padding:0}
+.workspace-roster>summary{display:flex;align-items:center;gap:10px;padding:16px 20px;cursor:pointer;list-style:none}
+.workspace-roster>summary::-webkit-details-marker{display:none}
+.workspace-roster>summary h2{margin:0;font-size:16px}
+.roster-owing{font-size:12px;color:#b94c49}
+.roster-chevron{margin-left:auto;color:#748197;display:grid;transition:transform .15s}
+.roster-chevron .ico{width:16px;height:16px}
+.workspace-roster[open] .roster-chevron{transform:rotate(180deg)}
+.roster-body{padding:0 20px 16px}
+.roster-tools{display:flex;justify-content:flex-end;margin-bottom:8px}
+.workspace-roster td{padding-top:8px;padding-bottom:8px}
+.workspace-roster .student-name{line-height:1.35}
+@media (prefers-reduced-motion:reduce){.roster-chevron{transition:none}}
+/* Record form: note hidden until "+ 备注" */
+.note-toggle>summary{cursor:pointer;list-style:none;font-size:13px;color:#3564db;padding:4px 0;width:max-content}
+.note-toggle>summary::-webkit-details-marker{display:none}
+.note-toggle[open]>summary{color:#697586;margin-bottom:6px}
+.note-toggle textarea{width:100%}
