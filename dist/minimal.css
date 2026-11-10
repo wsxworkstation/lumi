@@ -276,3 +276,7 @@ dialog .form-field{line-height:1.65}dialog .form-field input,dialog .form-field 
 .dup-names{display:flex;flex-wrap:wrap;gap:8px 20px}
 .dup-names>div{display:grid;gap:2px}
 .dup-names small{font-size:12px;color:#748197}
+/* Class start time: hour : minute + AM/PM */
+.time-pick{display:flex;align-items:center;gap:6px}
+.time-pick select{width:auto;min-width:64px}
+.time-pick b{font-weight:400;color:#748197}

@@ -162,6 +162,18 @@
     if(state.classId!==pick.id){state.activityId='';state.focusStudentId='';state.search='';state.filter='all';if(!['overview','records','groups'].includes(state.page))state.page='overview';}
     state.classId=pick.id;state.year=pick.year;state.level='today';
   }
+  /* Class start time: hour, minute (00/15/30/45) and AM/PM, stored as "HH:MM". An older odd minute stays selectable. */
+  function timePicker(value){
+    const m=/^(\d\d):(\d\d)$/.exec(value),h24=m?Number(m[1]):null,min=m?m[2]:'00',pm=h24===null||h24>=12,h12=h24===null?'':String(h24%12||12);
+    const mins=['00','15','30','45'].concat(['00','15','30','45'].includes(min)?[]:[min]).sort();
+    const opt=(v,text,on)=>`<option value="${v}" ${on?'selected':''}>${text}</option>`;
+    return `<span class="time-pick"><select name="timeH" aria-label="${t('时','Hour')}">${opt('','—',!h12)}${Array.from({length:12},(_,i)=>String(i+1)).map(h=>opt(h,h,h===h12)).join('')}</select><b>:</b><select name="timeM" aria-label="${t('分','Minute')}">${mins.map(x=>opt(x,x,x===min)).join('')}</select><select name="timeP" aria-label="${t('上午／下午','AM/PM')}">${opt('AM',t('上午','AM'),!pm)}${opt('PM',t('下午','PM'),pm)}</select></span>`;
+  }
+  function readTime(f){
+    const h=Number(f.get('timeH'));if(!h)return '';
+    const h24=h%12+(f.get('timeP')==='PM'?12:0);
+    return `${String(h24).padStart(2,'0')}:${f.get('timeM')||'00'}`;
+  }
   function classForm(id){
     const c=id?data.classes.find(x=>x.id===id):null,lv=activeLevel();
     const levelHints=[...new Set(['F1','F2','F3','F4','F5','Std 1','Std 2','Std 3','Std 4','Std 5','Std 6',...data.classes.map(x=>x.grade).filter(Boolean)])];
@@ -172,9 +184,9 @@
       <label class="form-field">${t('科目','Subject')}<input name="subject" list="subject-hints" required maxlength="40" placeholder="${t('数学','Mathematics')}" value="${esc(c?.subject||'')}"><datalist id="subject-hints">${subjectHints.map(v=>`<option value="${esc(v)}">`).join('')}</datalist></label>
       <label class="form-field full">${t('名称（可不填）','Name (optional)')}<input name="name" maxlength="60" placeholder="${t('不填就叫「年级 科目」，例如 F3 数学','Leave blank to use "Level Subject", e.g. F3 Maths')}" value="${esc(c&&c.name!==auto?c.name:'')}"><small>${t('同一科开两班时才需要，例如「F3 数学（星期六）」。','Only needed for two classes of the same subject, e.g. "F3 Maths (Sat)".')}</small></label>
       <div class="form-field full">${t('上课日（可多选）','Class days (pick any)')}<div class="day-chips">${[1,2,3,4,5,6,0].map(d=>`<label><input type="checkbox" name="days" value="${d}" ${(c?.days||[]).includes(d)?'checked':''}><span>${state.lang==='zh'?'一二三四五六日'[(d+6)%7]:weekdayName(d)}</span></label>`).join('')}</div></div>
-      <label class="form-field">${t('上课时间（可不填）','Start time (optional)')}<input name="time" type="time" value="${esc(c?.time||'')}"><small>${t('同一天教几班时，用来判断现在该打开哪一班。','Used to pick the right class when you teach several in one day.')}</small></label>
+      <label class="form-field">${t('上课时间（可不填）','Start time (optional)')}${timePicker(c?.time||'')}<small>${t('同一天教几班时，用来判断现在该打开哪一班。','Used to pick the right class when you teach several in one day.')}</small></label>
       <label class="form-field">${t('年份','Year')}<input name="year" type="number" min="2000" max="2100" required value="${c?.year??state.year}"></label>`,f=>{
-      const saved=C.saveClass(data,{id:c?.id,grade:f.get('grade'),subject:f.get('subject'),name:f.get('name'),year:f.get('year'),days:f.getAll('days'),time:f.get('time')});
+      const saved=C.saveClass(data,{id:c?.id,grade:f.get('grade'),subject:f.get('subject'),name:f.get('name'),year:f.get('year'),days:f.getAll('days'),time:readTime(f)});
       state.year=saved.year;state.level=saved.grade;
       if(!c){state.classId=saved.id;state.page='overview';}
     });
