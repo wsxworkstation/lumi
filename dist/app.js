@@ -348,7 +348,27 @@
     const done=n.submitted+n.late+n.makeup,owe=n.missing+n.incomplete;
     const copy=(group,cls,inner)=>`<button type="button" class="hw-sum ${cls}" data-action="copy-names" data-group="${group}" title="${t('复制名单','Copy names')}">${inner}</button>`;
     const detail=[n.missing&&copy('missing','part',t(`未交 ${n.missing}`,`${n.missing} missing`)),n.incomplete&&copy('incomplete','part',t(`没完成 ${n.incomplete}`,`${n.incomplete} incomplete`))].filter(Boolean).join('');
-    return `<div class="hw-summary" id="hw-summary">${copy('done','ok',`<b>${done}</b>${t('人交了','handed in')}${n.late?`<small>${t(`含迟交 ${n.late}`,`incl. ${n.late} late`)}</small>`:''}`)}<span class="owe-wrap">${copy('owe','owe',`<b>${owe}</b>${t('人欠','owe')}`)}${detail}</span>${n.unrecorded?copy('unrecorded','none',`<b>${n.unrecorded}</b>${t('未记录','not recorded')}`):''}<small class="hw-sum-hint">${t('点一下复制名单','Tap to copy names')}</small></div>`;
+    return `<div class="hw-summary" id="hw-summary">${copy('done','ok',`<b>${done}</b>${t('人交了','handed in')}${n.late?`<small>${t(`含迟交 ${n.late}`,`incl. ${n.late} late`)}</small>`:''}`)}<span class="owe-wrap">${copy('owe','owe',`<b>${owe}</b>${t('人欠','owe')}`)}${detail}</span>${n.unrecorded?copy('unrecorded','none',`<b>${n.unrecorded}</b>${t('未记录','not recorded')}`):''}${owe?`<button type="button" class="btn sm hw-parent" data-action="parent-note">${t('给家长的提醒','Note to parents')}</button>`:''}<small class="hw-sum-hint">${t('点一下复制名单','Tap to copy names')}</small></div>`;
+  }
+  /* A gentle reminder for the parents' group: which subject's homework, and who still owes it. Teacher edits, then copies. */
+  const SUBJECT_NAMES={MM:['数学','Mathematics'],AM:['附加数学','Additional Mathematics'],SC:['科学','Science']};
+  function parentMessage(a){
+    const c=data.classes.find(x=>x.id===a.classId),code=window.LumiTopics?.subjectCode(`${c?.subject||''} ${c?.name||''}`),subj=SUBJECT_NAMES[code]?t(...SUBJECT_NAMES[code]):(c?.subject||'');
+    const who=st=>a.students.map(student).filter(Boolean).filter(x=>a.results[x.id]?.status===st).map((x,i)=>`${i+1}. ${[x.en,x.name].filter(Boolean).join(' ')}`);
+    const missing=who('missing'),unfinished=who('incomplete'),[,m,d]=a.date.split('-').map(Number);
+    const what=`${c?.grade||''} ${subj}「${label(a)}」`.trim();
+    return state.lang==='en'
+      ?[`Dear parents,`,``,`A gentle reminder: could you please remind your child about the ${what} homework (due ${d}/${m})?`,`Please hand it in at the next lesson. Thank you so much for your support! 🙏`,
+        ...(missing.length?[``,`Not handed in yet:`,...missing]:[]),...(unfinished.length?[``,`Not finished yet, please complete it before handing in:`,...unfinished]:[])].join('\n')
+      :[`各位家长好 🌷`,``,`想麻烦家长帮忙提醒孩子：${what} 的练习（${m} 月 ${d} 日要交）还没有交齐。`,`请孩子下一堂课带来交给老师就可以了，谢谢家长的配合与支持！🙏`,
+        ...(missing.length?[``,`还没交的同学：`,...missing]:[]),...(unfinished.length?[``,`还没写完的同学（请完成后再交）：`,...unfinished]:[])].join('\n');
+  }
+  function parentNote(){
+    const a=selectedActivity();if(!a)return;
+    showModal(t('给家长的提醒','Note to parents'),`<label class="form-field full">${t('可以先改一改，再复制。','Edit if you like, then copy.')}<textarea name="msg" rows="14">${esc(parentMessage(a))}</textarea></label>`,()=>{});
+    const form=modal.querySelector('form');modal.querySelector('button[type=submit]').textContent=t('复制','Copy');
+    form.onsubmit=e=>{e.preventDefault();const text=form.msg.value,ok=()=>{modal.close();toast(t('已复制，可以贴到家长群了','Copied. Paste it into the parents chat.'));};
+      if(navigator.clipboard?.writeText)navigator.clipboard.writeText(text).then(ok,()=>{form.msg.focus();form.msg.select();});else{form.msg.focus();form.msg.select();}};
   }
   /* Names only, one per line, ready to paste into WhatsApp or Excel. */
   const HW_GROUPS={done:['submitted','late','makeup'],owe:['missing','incomplete'],missing:['missing'],incomplete:['incomplete'],unrecorded:['unrecorded']};
@@ -703,6 +723,7 @@
     else if(action==='bulk-students')bulkStudents();
     else if(action==='find-dups')duplicatesForm();
     else if(action==='copy-names')copyNames(el.dataset.group);
+    else if(action==='parent-note')parentNote();
     else if(action==='merge-dup')mergeDuplicate(Number(el.dataset.i));
     else if(action==='edit-student')addStudent(true);
     else if(action==='student'){state.studentId=id;state.tab='progress';state.examFilter='all';go('student');}

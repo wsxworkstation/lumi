@@ -19,7 +19,7 @@ function boot(saved,view,cloud){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist/core.js'),'utf8'),ctx);
   const source=fs.readFileSync(path.join(__dirname,'../dist/app.js'),'utf8').replace(
     '  persist();render();\n})();',
-    '  globalThis.testApp={state,render,selectClass,onClick,validateBackup,recordDate,studentNameLines,applyResults,undoLast,stat,getData:()=>data};persist();render();\n})();'
+    '  globalThis.testApp={state,render,selectClass,onClick,validateBackup,recordDate,studentNameLines,applyResults,undoLast,stat,parentMessage,getData:()=>data};persist();render();\n})();'
   );
   vm.runInContext(source,ctx);
   return {ctx,elements,stored,api:ctx.testApp};
@@ -202,4 +202,16 @@ test('summary numbers copy names only, one per line',async()=>{
   const click=group=>api.onClick({preventDefault(){},target:{closest:q=>q==='[data-action]'?{dataset:{action:'copy-names',group}}:null}});
   click('owe');await new Promise(r=>setTimeout(r,0));assert.equal(copied,[full(x),full(y)].join(String.fromCharCode(10)));
   click('incomplete');await new Promise(r=>setTimeout(r,0));assert.equal(copied,full(y));
+});
+test('parent reminder names the level, subject and homework, and lists who owes it',()=>{
+  const {api,elements}=boot(),a=api.getData().activities.find(a=>a.kind==='homework');
+  a.students.forEach(id=>{a.results[id]={status:'submitted',score:null,note:''};});
+  const [x,y]=a.students;a.results[x].status='missing';a.results[y].status='incomplete';
+  Object.assign(api.state,{page:'records',classId:a.classId,activityId:a.id,kind:'homework',filter:'all',lang:'zh'});api.render();
+  assert.ok(elements.get('#content').innerHTML.includes('data-action="parent-note"'));
+  const msg=api.parentMessage(a),s=api.getData().students,nm=id=>{const st=s.find(v=>v.id===id);return [st.en,st.name].filter(Boolean).join(' ');};
+  assert.ok(msg.startsWith('各位家长好'));assert.ok(msg.includes(a.title));
+  assert.ok(msg.includes('还没交的同学：'+String.fromCharCode(10)+'1. '+nm(x)));
+  assert.ok(msg.includes('还没写完的同学（请完成后再交）：'+String.fromCharCode(10)+'1. '+nm(y)));
+  api.state.lang='en';assert.ok(api.parentMessage(a).startsWith('Dear parents'));
 });
