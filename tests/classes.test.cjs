@@ -156,3 +156,14 @@ test('two same-name students in one class are flagged as unsure',()=>{
   const dup=C.findDuplicates(d).find(g=>g.students.some(s=>s.id==='x1'));
   assert.equal(dup.sure,false);
 });
+
+test('"没完成" (incomplete) homework is owed, not done, and is not a missing streak breaker',()=>{
+  const d=C.seed(),c=C.saveClass(d,{grade:'F1',subject:'SC',year:2027});
+  const [a,b]=C.enrollNames(d,c.id,['甲','乙']).created;
+  d.activities.push({id:'h1',classId:c.id,kind:'homework',title:'x',date:'2027-02-01',max:1,students:[a.id,b.id],results:{},archived:false});
+  C.updateResult(d,'h1',a.id,{status:'incomplete'});C.updateResult(d,'h1',b.id,{status:'submitted'});
+  assert.equal(C.homeworkStats(d,c.id,2027,a.id,undefined,'2027-12-31').missing,1);
+  assert.equal(C.homeworkStats(d,c.id,2027,a.id,undefined,'2027-12-31').done,0);
+  assert.equal(C.homeworkStats(d,c.id,2027,b.id,undefined,'2027-12-31').done,1);
+  assert.ok(C.owed('incomplete')&&C.owed('missing')&&!C.owed('late'));
+});

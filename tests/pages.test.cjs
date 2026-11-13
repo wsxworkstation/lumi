@@ -181,3 +181,14 @@ test('new homework offers the class chapters; note starts hidden; home roster st
   assert.ok(!form.includes('<b>Indeks / Indices'),'no slash in the tile');
   assert.ok(form.includes('class="full note-toggle"')&&!form.includes('note-toggle" open'),'note hidden');
 });
+test('homework page shows a summary and a 没完成 button; 补交 appears only on old records that have it',()=>{
+  const {api,elements}=boot(),a=api.getData().activities.find(a=>a.kind==='homework');
+  a.students.forEach(id=>{a.results[id]={status:'unrecorded',score:null,note:''};});
+  a.results[a.students[0]].status='submitted';a.results[a.students[1]].status='incomplete';a.results[a.students[2]].status='missing';a.results[a.students[3]].status='makeup';
+  Object.assign(api.state,{page:'records',classId:a.classId,activityId:a.id,kind:'homework',filter:'all',lang:'zh'});api.render();
+  const html=elements.get('#content').innerHTML,sum=html.slice(html.indexOf('hw-summary'),html.indexOf('table-wrap record-table-wrap'));
+  assert.match(sum,/<b>2<\/b>人交了/);assert.match(sum,/<b>2<\/b>人欠/);assert.ok(sum.includes('未交 1 · 没完成 1'));
+  assert.ok(sum.includes(`<b>${a.students.length-4}</b>未记录`));
+  assert.equal((html.match(/data-status="incomplete"/g)||[]).length,a.students.length);
+  assert.equal((html.match(/data-status="makeup"/g)||[]).length,1,'补交 only where already recorded');
+});

@@ -5,7 +5,7 @@
     Students:['student_code','chinese_name'],Classes:['class_code','class_name','subject','grade','year'],Enrollments:['class_code','student_code'],Records:['record_code','class_code','record_kind','title','date','maximum_score'],Results:['record_code','student_code','status'],Goals:['goal_code','class_code','student_code','goal_title','exam_source','target_percentage']
   };
   const kindMap={'homework':'homework','功课':'homework','tuition exam':'tuition','补习考试':'tuition','school exam':'school','学校考试':'school','quiz':'quiz','小考':'quiz'};
-  const statusMap={'submitted':'submitted','已交':'submitted','missing':'missing','未交':'missing','late':'late','迟交':'late','makeup':'makeup','补交':'makeup','unrecorded':'unrecorded','未记录':'unrecorded','recorded':'recorded','已记录':'recorded','absent':'absent','缺席':'absent'};
+  const statusMap={'submitted':'submitted','已交':'submitted','missing':'missing','未交':'missing','late':'late','迟交':'late','makeup':'makeup','补交':'makeup','incomplete':'incomplete','没完成':'incomplete','unrecorded':'unrecorded','未记录':'unrecorded','recorded':'recorded','已记录':'recorded','absent':'absent','缺席':'absent'};
   const goalMap={'in progress':'progress','进行中':'progress','achieved':'achieved','已达成':'achieved','paused':'paused','暂停':'paused'};
   const id=prefix=>`${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`;
   const clean=v=>String(v??'').trim();
@@ -47,7 +47,7 @@
     function addResult(a,s,row,raw,sheet){
       const key=`${a.id}:${s.id}`;if(seen.has(key)){err(sheet,row,'相同学生与记录重复 / duplicate student and record');return;}seen.add(key);
       const st=parseStatus(raw.status);if(!st){err(sheet,row,`无效状态 ${clean(raw.status)}`);return;}
-      const allowed=a.kind==='homework'?['submitted','missing','late','makeup','unrecorded']:['recorded','absent','unrecorded'];
+      const allowed=a.kind==='homework'?['submitted','missing','late','incomplete','makeup','unrecorded']:['recorded','absent','unrecorded'];
       if(!allowed.includes(st)){err(sheet,row,'状态与记录类型不相符 / status does not match record kind');return;}
       const score=number(raw.score,0,a.max);
       if(!blank(raw.score)&&score===null){err(sheet,row,`分数必须在 0–${a.max} 之间`);return;}

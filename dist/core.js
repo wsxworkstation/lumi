@@ -2,6 +2,8 @@
   'use strict';
   const uid = () => globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const complete = s => ['submitted','late','makeup'].includes(s);
+  /* Homework still owed: not handed in, or handed in unfinished ("没完成"). */
+  const owed = s => s==='missing' || s==='incomplete';
   const pct = (r,a) => r && r.status !== 'absent' && r.score !== null && r.score !== '' && Number.isFinite(Number(r.score)) && a.max > 0 ? Number(r.score) / a.max * 100 : null;
   const average = nums => { const n = nums.filter(v => v !== null && Number.isFinite(v)); return n.length ? n.reduce((s,v)=>s+v,0)/n.length : null; };
   function validScore(value,max) {
@@ -18,7 +20,7 @@
         const r=a.results[sid];
         if (complete(r?.status)) done++;
         if (r?.status==='submitted') ontime++;
-        if (r?.status==='missing') missing++;
+        if (owed(r?.status)) missing++;
         if (!r || r.status==='unrecorded') unrecorded++;
       }
     }
@@ -350,7 +352,7 @@
     if(leaders)c.groups.forEach(g=>{g.leaderId=g.members[0]||null;});
     return c.groups;
   }
-  const api={uid,complete,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints,enrollNames,matchStudent,levelOrder,saveClass,classForNow,normLevel,normalizeLevels,findDuplicates,mergeStudents};
+  const api={uid,complete,owed,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints,enrollNames,matchStudent,levelOrder,saveClass,classForNow,normLevel,normalizeLevels,findDuplicates,mergeStudents};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.StudyCore=api;
 })(globalThis);

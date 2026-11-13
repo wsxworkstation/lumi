@@ -273,7 +273,7 @@ html[data-theme=dark] .hw-state{border-color:#2d2f33;background:#222222;color:#9
 html[data-theme=dark] .hw-state:hover{background:#131416;border-color:#383f4f}
 html[data-theme=dark] .hw-state.submitted[aria-pressed=true]{background:#131715;color:#8bb7a3;border-color:#2f3a33}
 html[data-theme=dark] .hw-state.missing[aria-pressed=true],html[data-theme=dark] .exam-buttons .hw-state.absent[aria-pressed=true]{background:#191313;color:#f47f88;border-color:#51373b}
-html[data-theme=dark] .hw-state.late[aria-pressed=true],html[data-theme=dark] .hw-state.makeup[aria-pressed=true]{background:#16140f;color:#c6a160;border-color:#3d3623}
+html[data-theme=dark] .hw-state.late[aria-pressed=true],html[data-theme=dark] .hw-state.makeup[aria-pressed=true],html[data-theme=dark] .hw-state.incomplete[aria-pressed=true]{background:#16140f;color:#c6a160;border-color:#3d3623}
 html[data-theme=dark] .exam-indicator{color:#97a6bf}
 html[data-theme=dark] .exam-indicator.recorded{color:#85b39e}
 html[data-theme=dark] .hw-reset{color:#9aa5b9}
@@ -333,6 +333,11 @@ html[data-theme=dark] .topic-tile:has(input:focus-visible){outline:2px solid #35
 html[data-theme=dark] .dup-item{border-top:1px solid #2d2f32}
 html[data-theme=dark] .dup-names small{color:#98a5bc}
 html[data-theme=dark] .time-pick b{color:#98a5bc}
+html[data-theme=dark] .hw-summary{border:1px solid #2d2f32;background:#121213;color:#a1adc1}
+html[data-theme=dark] .hw-summary .ok b{color:#8bb7a3}
+html[data-theme=dark] .hw-summary .owe b{color:#f47f88}
+html[data-theme=dark] .hw-summary .none b{color:#9ba5b7}
+html[data-theme=dark] .hw-summary small{color:#9ba5b7}
 /* login.css */
 html[data-theme=dark] #cloud-overlay.login-scene{background:#131417;background-image:radial-gradient(ellipse at 15% 12%,#161821 0,transparent 52%),radial-gradient(ellipse at 95% 90%,#16181c 0,transparent 45%)}
 html[data-theme=dark] .login-scene>.cloud-card{border:1px solid #383838;box-shadow:0 28px 80px -30px #00000074,0 2px 8px #00000013}

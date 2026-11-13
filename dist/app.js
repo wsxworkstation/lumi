@@ -29,7 +29,7 @@
   const label=o=>!o?'—':state.lang==='en'?(o.en||o.name||o.title):(o.name||o.title);
   const num=n=>n===null||n===undefined?'—':Math.round(n);
   const percent=n=>n===null||n===undefined?'—':`${Math.round(n)}%`;
-  const statuses={submitted:['已交','Submitted'],missing:['未交','Missing'],late:['迟交','Late'],makeup:['补交','Made up'],unrecorded:['未记录','Not recorded'],absent:['缺席','Absent'],recorded:['已记录','Recorded']};
+  const statuses={submitted:['已交','Submitted'],missing:['未交','Missing'],late:['迟交','Late'],makeup:['补交','Made up'],incomplete:['没完成','Incomplete'],unrecorded:['未记录','Not recorded'],absent:['缺席','Absent'],recorded:['已记录','Recorded']};
   const statusText=s=>t(...(statuses[s]||statuses.unrecorded));
   const goalText=s=>s==='achieved'?t('已达成','Achieved'):s==='paused'?t('暂停','Paused'):t('进行中','In progress');
   const typeName=k=>({homework:t('功课','Homework'),tuition:t('补习考试','Tuition exam'),school:t('学校考试','School exam'),quiz:t('小考','Quiz')})[k]||k;
@@ -222,7 +222,7 @@
   }
   function consecutiveMissing(sid){
     let n=0;
-    for(const a of [...acts('homework')].filter(a=>a.students.includes(sid)&&a.date<=C.periodEnd(state.year,state.month)).reverse()){if(a.results[sid]?.status==='missing')n++;else break;}
+    for(const a of [...acts('homework')].filter(a=>a.students.includes(sid)&&a.date<=C.periodEnd(state.year,state.month)).reverse()){if(C.owed(a.results[sid]?.status))n++;else break;}
     return n;
   }
   function scoreAlerts(){
@@ -334,15 +334,23 @@
     const a=selectedActivity();if(a)state.activityId=a.id;
     const list=acts().filter(a=>state.kind==='homework'?a.kind==='homework':a.kind!=='homework').reverse();
     return heading(t('功课与成绩','Homework & scores'),t('全班一起录入，修改后自动保存到当前浏览器。','Enter a whole class at once. Changes save in this browser.'),button(t('新增记录','New record'),'new-record','primary','','plus'))+classStrip()+
-      `<div class="filters"><div class="tab-group"><button class="${state.kind==='homework'?'active':''}" data-action="record-kind" data-kind="homework">${t('功课记录','Homework')}</button><button class="${state.kind!=='homework'?'active':''}" data-action="record-kind" data-kind="exam">${t('考试成绩','Exams')}</button></div><select id="activity-select" aria-label="${t('选择记录','Select record')}">${list.map(r=>`<option value="${r.id}" ${a?.id===r.id?'selected':''}>${esc(label(r))} · ${r.date}</option>`).join('')}</select><select id="record-filter" aria-label="${t('筛选状态','Filter status')}">${[['all',t('全部学生','All students')],['missing',t('只看未交','Missing only')],['unrecorded',t('只看未记录','Unrecorded only')]].map(([v,l])=>`<option value="${v}" ${state.filter===v?'selected':''}>${l}</option>`).join('')}</select></div>`+
+      `<div class="filters"><div class="tab-group"><button class="${state.kind==='homework'?'active':''}" data-action="record-kind" data-kind="homework">${t('功课记录','Homework')}</button><button class="${state.kind!=='homework'?'active':''}" data-action="record-kind" data-kind="exam">${t('考试成绩','Exams')}</button></div><select id="activity-select" aria-label="${t('选择记录','Select record')}">${list.map(r=>`<option value="${r.id}" ${a?.id===r.id?'selected':''}>${esc(label(r))} · ${r.date}</option>`).join('')}</select><select id="record-filter" aria-label="${t('筛选状态','Filter status')}">${[['all',t('全部学生','All students')],['missing',t('只看欠交','Owed only')],['unrecorded',t('只看未记录','Unrecorded only')]].map(([v,l])=>`<option value="${v}" ${state.filter===v?'selected':''}>${l}</option>`).join('')}</select></div>`+
       (!a?empty(t('这个班级还没有记录，新增一份试试看。','No records in this class. Add one to get started.')):`
       <section class="card"><div class="activity-header"><div class="row between"><div><h2>${esc(label(a))}</h2><p class="help">${typeName(a.kind)} · ${t(a.kind==='homework'?'截止日期':'考试日期',a.kind==='homework'?'Due date':'Exam date')} ${a.date}${a.kind==='homework'?'':` · ${t('满分','Out of')} ${a.max}`}${a.topic?` · ${esc(topicShort(a.topic))}`:''}</p>${a.note?`<p class="help">${esc(a.note)}</p>`:''}</div><div class="row">${button(t('编辑','Edit'),'edit-activity','sm',`data-id="${a.id}"`,'edit')}${a.kind==='homework'?button(t('剩余未记录 → 已交','Mark remaining submitted'),'bulk-submit','soft sm'):button(t('贴成绩','Paste scores'),'paste-scores','sm','','upload')}${button(t('导出 CSV','Export CSV'),'export-csv','sm','','down')}${button(t('回收','Archive'),'archive-activity','sm danger',`data-id="${a.id}"`,'trash')}</div></div></div>
-      <div class="info-banner">${icon('info')}${t(a.kind==='homework'?'选择提交状态，需要时填写备注。':'空白不是零分；缺席单独记录。不同满分自动换算为百分比。',a.kind==='homework'?'Select a submission status and optionally add a note.':'Blank is not zero. Absences are separate. Scores are converted to percentages.')}</div>
-      <div class="table-wrap record-table-wrap"><table class="record-table"><thead><tr><th>#</th><th>${t('学生','Student')}</th><th>${t('状态','Status')}</th>${a.kind==='homework'?'':`<th>${t('得分','Score')} / ${a.max}</th><th>%</th>`}<th>${t('备注','Notes')}</th><th></th></tr></thead><tbody>${a.students.filter(id=>student(id)).filter(id=>state.filter==='all'||(a.results[id]?.status||'unrecorded')===state.filter).map((id,i)=>recordRow(a,id,i)).join('')}</tbody></table></div>
+      ${a.kind==='homework'?hwSummary(a):`<div class="info-banner">${icon('info')}${t(a.kind==='homework'?'选择提交状态，需要时填写备注。':'空白不是零分；缺席单独记录。不同满分自动换算为百分比。',a.kind==='homework'?'Select a submission status and optionally add a note.':'Blank is not zero. Absences are separate. Scores are converted to percentages.')}</div>`}
+      <div class="table-wrap record-table-wrap"><table class="record-table"><thead><tr><th>#</th><th>${t('学生','Student')}</th><th>${t('状态','Status')}</th>${a.kind==='homework'?'':`<th>${t('得分','Score')} / ${a.max}</th><th>%</th>`}<th>${t('备注','Notes')}</th><th></th></tr></thead><tbody>${a.students.filter(id=>student(id)).filter(id=>state.filter==='all'||(state.filter==='missing'?C.owed(a.results[id]?.status):(a.results[id]?.status||'unrecorded')===state.filter)).map((id,i)=>recordRow(a,id,i)).join('')}</tbody></table></div>
       <p class="chart-caption">${t('修改自动保存。可复制「姓名＋分数」两列，系统按姓名配对。','Changes save automatically. Paste name and score columns to match students.')}</p></section>`)+footer();
   }
+  /* One line above the homework list: how many handed in, how many still owe it. */
+  function hwSummary(a){
+    const n={submitted:0,late:0,makeup:0,missing:0,incomplete:0,unrecorded:0};
+    a.students.filter(id=>student(id)).forEach(id=>{const s=a.results[id]?.status||'unrecorded';n[s in n?s:'unrecorded']++;});
+    const done=n.submitted+n.late+n.makeup,owe=n.missing+n.incomplete;
+    const detail=[n.missing&&t(`未交 ${n.missing}`,`${n.missing} missing`),n.incomplete&&t(`没完成 ${n.incomplete}`,`${n.incomplete} incomplete`)].filter(Boolean).join(' · ');
+    return `<div class="hw-summary" id="hw-summary"><span class="ok"><b>${done}</b>${t('人交了','handed in')}${n.late?`<small>${t(`含迟交 ${n.late}`,`incl. ${n.late} late`)}</small>`:''}</span><span class="owe"><b>${owe}</b>${t('人欠','owe')}${detail?`<small>${detail}</small>`:''}</span>${n.unrecorded?`<span class="none"><b>${n.unrecorded}</b>${t('未记录','not recorded')}</span>`:''}</div>`;
+  }
   function homeworkButtons(id,status,name){
-    return `<div class="homework-buttons" role="group" aria-label="${esc(name)} ${t('功课状态','Homework status')}">${['submitted','missing','late','makeup'].map(v=>`<button type="button" class="hw-state ${v}" data-action="homework-status" data-id="${id}" data-status="${v}" aria-pressed="${status===v}">${statusText(v)}</button>`).join('')}<button type="button" class="hw-reset" data-action="homework-status" data-id="${id}" data-status="unrecorded" aria-label="${esc(name)} ${t('清除状态，恢复未记录','Reset to unrecorded')}" title="${t('恢复未记录','Reset to unrecorded')}">↺</button></div>`;
+    return `<div class="homework-buttons" role="group" aria-label="${esc(name)} ${t('功课状态','Homework status')}">${['submitted','missing','late','incomplete',...(status==='makeup'?['makeup']:[])].map(v=>`<button type="button" class="hw-state ${v}" data-action="homework-status" data-id="${id}" data-status="${v}" aria-pressed="${status===v}">${statusText(v)}</button>`).join('')}<button type="button" class="hw-reset" data-action="homework-status" data-id="${id}" data-status="unrecorded" aria-label="${esc(name)} ${t('清除状态，恢复未记录','Reset to unrecorded')}" title="${t('恢复未记录','Reset to unrecorded')}">↺</button></div>`;
   }
   function examButtons(id,status,name,score){
     return `<div class="exam-buttons" role="group" aria-label="${esc(name)} ${t('考试状态','Exam status')}"><span class="exam-indicator ${status==='recorded'?'recorded':''}" role="status">${status==='recorded'?'✓ ':''}${statusText(status)}</span><button type="button" class="hw-state absent" data-action="exam-status" data-id="${id}" data-status="${status==='absent'?'unrecorded':'absent'}" aria-pressed="${status==='absent'}">${t('缺席','Absent')}</button></div>`;
@@ -360,7 +368,7 @@
     return `${year}-${String(month).padStart(2,'0')}-${String(capped).padStart(2,'0')}`;
   }
   function recordRow(a,id,i){
-    const s=student(id),r=a.results[id]||{status:'unrecorded',score:null,note:''},opts=a.kind==='homework'?['unrecorded','submitted','missing','late','makeup']:['unrecorded','recorded','absent'];
+    const s=student(id),r=a.results[id]||{status:'unrecorded',score:null,note:''},opts=a.kind==='homework'?['unrecorded','submitted','missing','late','incomplete','makeup']:['unrecorded','recorded','absent'];
     return `<tr data-student-row="${id}"><td class="tiny muted" data-label="#">${String(i+1).padStart(2,'0')}</td><td data-label="${t('学生','Student')}"><div class="row">${avatar(s,i)}<button class="student-name" data-action="student" data-id="${id}">${studentNameLines(s)}<small>${esc(s.code)}${s.archived?` · ${t('已归档','Archived')}`:''}</small></button></div></td>
       <td data-label="${t('状态','Status')}">${a.kind==='homework'?homeworkButtons(id,r.status,label(s)):examButtons(id,r.status,label(s),r.score)}</td>${a.kind==='homework'?'':`<td data-label="${t('得分','Score')} / ${a.max}"><input class="score" inputmode="decimal" type="number" min="0" max="${a.max}" step="any" value="${r.score??''}" data-result="score" data-sid="${id}" aria-label="${esc(label(s))} ${t('分数','score')}"></td><td class="small muted" data-label="%" data-pct="${id}">${percent(C.pct(r,a))}</td>`}<td data-label="${t('备注','Note')}"><details class="row-note"><summary>${r.note?t('查看备注','View note'):t('+备注','+Note')}</summary><input class="note-input" value="${esc(r.note)}" placeholder="${t('添加备注…','Add a note…')}" data-result="note" data-sid="${id}" aria-label="${esc(label(s))} ${t('备注','notes')}"></details></td><td><button class="icon-btn" data-action="history" data-id="${id}" aria-label="${t('查看修改历史','View history')}">${icon('clock')}</button></td></tr>`;
   }
@@ -610,9 +618,9 @@
   }
   function showMissing(sid){
     const s=student(sid);if(!s)return;
-    const list=acts('homework').filter(a=>a.students.includes(sid)&&a.results[sid]?.status==='missing'&&(!state.month||a.date.slice(5,7)===state.month));
+    const list=acts('homework').filter(a=>a.students.includes(sid)&&C.owed(a.results[sid]?.status)&&(!state.month||a.date.slice(5,7)===state.month));
     if(modal.open)modal.close();
-    modal.innerHTML=`<div class="modal-title"><h2>${esc(label(s))} · ${t('未交功课','Missing homework')}</h2><button class="icon-btn" data-action="close-modal" aria-label="${t('关闭','Close')}">${icon('close')}</button></div>${list.length?list.map(a=>`<div class="missing-row"><div><strong>${esc(label(a))}</strong><p class="help">${a.date}</p></div>${button(t('补交','Made up'),'makeup-one','sm',`data-id="${sid}" data-activity="${a.id}"`)}</div>`).join(''):`<p class="help">${t('没有未交功课','No missing homework')}</p>`}${undoAction?button(t('撤销刚才操作','Undo last change'),'undo-last','sm'):''}`;
+    modal.innerHTML=`<div class="modal-title"><h2>${esc(label(s))} · ${t('欠的功课','Homework owed')}</h2><button class="icon-btn" data-action="close-modal" aria-label="${t('关闭','Close')}">${icon('close')}</button></div>${list.length?list.map(a=>`<div class="missing-row"><div><strong>${esc(label(a))}</strong><p class="help">${a.date} · ${statusText(a.results[sid].status)}</p></div>${button(t('已交','Submitted'),'makeup-one','sm',`data-id="${sid}" data-activity="${a.id}"`)}</div>`).join(''):`<p class="help">${t('没有欠的功课','Nothing owed')}</p>`}${undoAction?button(t('撤销刚才操作','Undo last change'),'undo-last','sm'):''}`;
     modal.showModal();
     // Keep the count behind this dialog current.
     if(state.page==='overview')document.querySelector('#content').innerHTML=overview();
@@ -694,7 +702,7 @@
     else if(action==='student-missing')showMissing(id);
     else if(action==='makeup-one'){
       const a=data.activities.find(a=>a.id===el.dataset.activity&&!a.archived&&a.classId===state.classId&&a.kind==='homework');
-      if(a?.students.includes(id)&&a.results[id]?.status==='missing'){applyResults(a,[{sid:id,patch:{status:'makeup'}}]);showMissing(id);}
+      if(a?.students.includes(id)&&C.owed(a.results[id]?.status)){applyResults(a,[{sid:id,patch:{status:'submitted'}}]);showMissing(id);}
     }
     else if(action==='new-record')addActivity(state.page==='records'?state.kind:'homework');
     else if(action==='exam-status'){
@@ -712,11 +720,11 @@
     else if(action==='homework-status'){
       const a=selectedActivity();if(!a||a.kind!=='homework'||!a.students.includes(id))return;
       let status=el.dataset.status;
-      if(!['submitted','missing','late','makeup','unrecorded'].includes(status))return;
+      if(!['submitted','missing','late','incomplete','makeup','unrecorded'].includes(status))return;
       if(a.results[id]?.status===status)return;
       try{applyResults(a,[{sid:id,patch:{status}}]);
         if(state.filter!=='all')render();
-        else {const group=el.closest('.homework-buttons');group.querySelectorAll('.hw-state').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.status===status)));}
+        else {const group=el.closest('.homework-buttons');group.querySelectorAll('.hw-state').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.status===status)));const sum=document.querySelector('#hw-summary');if(sum)sum.outerHTML=hwSummary(a);}
       }catch(e){toast(e.message);}
     }
     else if(action==='new-exam')addActivity('exam');
@@ -725,7 +733,7 @@
     else if(action==='open-activity'){const a=data.activities.find(a=>a.id===id);state.kind=a.kind==='homework'?'homework':'exam';state.activityId=id;go('records');}
     else if(action==='missing'){
       state.kind='homework';state.page='records';state.filter='missing';
-      state.activityId=[...acts('homework')].reverse().find(a=>a.students.some(id=>a.results[id]?.status==='missing'))?.id||'';render();
+      state.activityId=[...acts('homework')].reverse().find(a=>a.students.some(id=>C.owed(a.results[id]?.status)))?.id||'';render();
     }
     else if(action==='close-modal')modal.close();
     else if(action==='history')showHistory(id);
