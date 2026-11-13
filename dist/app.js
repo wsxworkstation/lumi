@@ -346,8 +346,19 @@
     const n={submitted:0,late:0,makeup:0,missing:0,incomplete:0,unrecorded:0};
     a.students.filter(id=>student(id)).forEach(id=>{const s=a.results[id]?.status||'unrecorded';n[s in n?s:'unrecorded']++;});
     const done=n.submitted+n.late+n.makeup,owe=n.missing+n.incomplete;
-    const detail=[n.missing&&t(`未交 ${n.missing}`,`${n.missing} missing`),n.incomplete&&t(`没完成 ${n.incomplete}`,`${n.incomplete} incomplete`)].filter(Boolean).join(' · ');
-    return `<div class="hw-summary" id="hw-summary"><span class="ok"><b>${done}</b>${t('人交了','handed in')}${n.late?`<small>${t(`含迟交 ${n.late}`,`incl. ${n.late} late`)}</small>`:''}</span><span class="owe"><b>${owe}</b>${t('人欠','owe')}${detail?`<small>${detail}</small>`:''}</span>${n.unrecorded?`<span class="none"><b>${n.unrecorded}</b>${t('未记录','not recorded')}</span>`:''}</div>`;
+    const copy=(group,cls,inner)=>`<button type="button" class="hw-sum ${cls}" data-action="copy-names" data-group="${group}" title="${t('复制名单','Copy names')}">${inner}</button>`;
+    const detail=[n.missing&&copy('missing','part',t(`未交 ${n.missing}`,`${n.missing} missing`)),n.incomplete&&copy('incomplete','part',t(`没完成 ${n.incomplete}`,`${n.incomplete} incomplete`))].filter(Boolean).join('');
+    return `<div class="hw-summary" id="hw-summary">${copy('done','ok',`<b>${done}</b>${t('人交了','handed in')}${n.late?`<small>${t(`含迟交 ${n.late}`,`incl. ${n.late} late`)}</small>`:''}`)}<span class="owe-wrap">${copy('owe','owe',`<b>${owe}</b>${t('人欠','owe')}`)}${detail}</span>${n.unrecorded?copy('unrecorded','none',`<b>${n.unrecorded}</b>${t('未记录','not recorded')}`):''}<small class="hw-sum-hint">${t('点一下复制名单','Tap to copy names')}</small></div>`;
+  }
+  /* Names only, one per line, ready to paste into WhatsApp or Excel. */
+  const HW_GROUPS={done:['submitted','late','makeup'],owe:['missing','incomplete'],missing:['missing'],incomplete:['incomplete'],unrecorded:['unrecorded']};
+  function copyNames(group){
+    const a=selectedActivity(),want=HW_GROUPS[group];if(!a||!want)return;
+    const names=a.students.map(student).filter(Boolean).filter(s=>want.includes(a.results[s.id]?.status||'unrecorded')).map(s=>[s.en,s.name].filter(Boolean).join(' '));
+    if(!names.length){toast(t('没有名字','No names'));return;}
+    const text=names.join('\n'),done=()=>toast(t(`已复制 ${names.length} 个名字`,`Copied ${names.length} names`));
+    const fallback=()=>{showModal(t('名单','Names'),`<textarea class="full" rows="${Math.min(12,names.length+1)}" readonly>${esc(text)}</textarea>`,()=>{});modal.querySelector('button[type=submit]').hidden=true;const box=modal.querySelector('textarea');box?.focus();box?.select();};
+    if(navigator.clipboard?.writeText)navigator.clipboard.writeText(text).then(done,fallback);else fallback();
   }
   function homeworkButtons(id,status,name){
     return `<div class="homework-buttons" role="group" aria-label="${esc(name)} ${t('功课状态','Homework status')}">${['submitted','missing','late','incomplete',...(status==='makeup'?['makeup']:[])].map(v=>`<button type="button" class="hw-state ${v}" data-action="homework-status" data-id="${id}" data-status="${v}" aria-pressed="${status===v}">${statusText(v)}</button>`).join('')}<button type="button" class="hw-reset" data-action="homework-status" data-id="${id}" data-status="unrecorded" aria-label="${esc(name)} ${t('清除状态，恢复未记录','Reset to unrecorded')}" title="${t('恢复未记录','Reset to unrecorded')}">↺</button></div>`;
@@ -691,6 +702,7 @@
     else if(action==='add-student')addStudent();
     else if(action==='bulk-students')bulkStudents();
     else if(action==='find-dups')duplicatesForm();
+    else if(action==='copy-names')copyNames(el.dataset.group);
     else if(action==='merge-dup')mergeDuplicate(Number(el.dataset.i));
     else if(action==='edit-student')addStudent(true);
     else if(action==='student'){state.studentId=id;state.tab='progress';state.examFilter='all';go('student');}

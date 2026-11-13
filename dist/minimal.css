@@ -288,3 +288,11 @@ dialog .form-field{line-height:1.65}dialog .form-field input,dialog .form-field 
 .hw-summary .owe b{color:#ad3f4c}
 .hw-summary .none b{color:#8a94a6}
 .hw-summary small{font-size:12px;color:#8a94a6}
+.hw-sum{display:inline-flex;align-items:baseline;gap:6px;padding:4px 8px;margin:-4px -8px;border:0;border-radius:8px;background:none;color:inherit;font:inherit;cursor:pointer}
+.hw-sum:hover{background:#eef2f8}
+.hw-sum:active{transform:scale(.97)}
+.hw-sum.ok b{color:#426c5a}.hw-sum.owe b{color:#ad3f4c}.hw-sum.none b{color:#8a94a6}
+.hw-sum.part{font-size:12px;color:#8a94a6;margin:-4px 0}
+.owe-wrap{display:inline-flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap}
+.hw-sum-hint{margin-left:auto;font-size:12px;color:#a0a8b6}
+@media(max-width:640px){.hw-sum-hint{margin-left:0;width:100%}}

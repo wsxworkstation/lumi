@@ -338,6 +338,12 @@ html[data-theme=dark] .hw-summary .ok b{color:#8bb7a3}
 html[data-theme=dark] .hw-summary .owe b{color:#f47f88}
 html[data-theme=dark] .hw-summary .none b{color:#9ba5b7}
 html[data-theme=dark] .hw-summary small{color:#9ba5b7}
+html[data-theme=dark] .hw-sum:hover{background:#141619}
+html[data-theme=dark] .hw-sum.ok b{color:#8bb7a3}
+html[data-theme=dark] .hw-sum.owe b{color:#f47f88}
+html[data-theme=dark] .hw-sum.none b{color:#9ba5b7}
+html[data-theme=dark] .hw-sum.part{color:#9ba5b7}
+html[data-theme=dark] .hw-sum-hint{color:#9da5b3}
 /* login.css */
 html[data-theme=dark] #cloud-overlay.login-scene{background:#131417;background-image:radial-gradient(ellipse at 15% 12%,#161821 0,transparent 52%),radial-gradient(ellipse at 95% 90%,#16181c 0,transparent 45%)}
 html[data-theme=dark] .login-scene>.cloud-card{border:1px solid #383838;box-shadow:0 28px 80px -30px #00000074,0 2px 8px #00000013}

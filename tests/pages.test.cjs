@@ -187,8 +187,19 @@ test('homework page shows a summary and a 没完成 button; 补交 appears only 
   a.results[a.students[0]].status='submitted';a.results[a.students[1]].status='incomplete';a.results[a.students[2]].status='missing';a.results[a.students[3]].status='makeup';
   Object.assign(api.state,{page:'records',classId:a.classId,activityId:a.id,kind:'homework',filter:'all',lang:'zh'});api.render();
   const html=elements.get('#content').innerHTML,sum=html.slice(html.indexOf('hw-summary'),html.indexOf('table-wrap record-table-wrap'));
-  assert.match(sum,/<b>2<\/b>人交了/);assert.match(sum,/<b>2<\/b>人欠/);assert.ok(sum.includes('未交 1 · 没完成 1'));
+  assert.match(sum,/<b>2<\/b>人交了/);assert.match(sum,/<b>2<\/b>人欠/);assert.ok(sum.includes('未交 1</button>')&&sum.includes('没完成 1</button>'));
   assert.ok(sum.includes(`<b>${a.students.length-4}</b>未记录`));
   assert.equal((html.match(/data-status="incomplete"/g)||[]).length,a.students.length);
   assert.equal((html.match(/data-status="makeup"/g)||[]).length,1,'补交 only where already recorded');
+});
+test('summary numbers copy names only, one per line',async()=>{
+  const {api,ctx}=boot(),a=api.getData().activities.find(a=>a.kind==='homework');let copied=null;
+  ctx.navigator={clipboard:{writeText:v=>{copied=v;return Promise.resolve();}}};
+  a.students.forEach(id=>{a.results[id]={status:'submitted',score:null,note:''};});
+  const [x,y]=a.students;a.results[x].status='missing';a.results[y].status='incomplete';
+  Object.assign(api.state,{page:'records',classId:a.classId,activityId:a.id,kind:'homework',filter:'all'});api.render();
+  const s=api.getData().students,full=id=>{const st=s.find(v=>v.id===id);return [st.en,st.name].filter(Boolean).join(' ');};
+  const click=group=>api.onClick({preventDefault(){},target:{closest:q=>q==='[data-action]'?{dataset:{action:'copy-names',group}}:null}});
+  click('owe');await new Promise(r=>setTimeout(r,0));assert.equal(copied,[full(x),full(y)].join(String.fromCharCode(10)));
+  click('incomplete');await new Promise(r=>setTimeout(r,0));assert.equal(copied,full(y));
 });
