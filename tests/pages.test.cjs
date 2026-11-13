@@ -215,3 +215,11 @@ test('parent reminder names the level, subject and homework, and lists who owes 
   assert.ok(msg.includes('还没写完的同学（请完成后再交）：'+String.fromCharCode(10)+'1. '+nm(y)));
   api.state.lang='en';assert.ok(api.parentMessage(a).startsWith('Dear parents'));
 });
+test('homework header and parent note show the due date only when it is set',()=>{
+  const {api,elements}=boot(),a=api.getData().activities.find(a=>a.kind==='homework');
+  Object.assign(api.state,{page:'records',classId:a.classId,activityId:a.id,kind:'homework',filter:'all',lang:'zh'});
+  a.results[a.students[0]].status='missing';api.render();
+  assert.ok(!elements.get('#content').innerHTML.includes('截止'));assert.ok(!api.parentMessage(a).includes('要交）'));
+  a.due=a.date.slice(0,8)+'25';api.render();
+  assert.ok(elements.get('#content').innerHTML.includes(`截止 ${a.due}`));assert.ok(api.parentMessage(a).includes('（'+Number(a.due.slice(5,7))+' 月 25 日要交）'));
+});

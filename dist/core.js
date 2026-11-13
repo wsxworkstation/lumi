@@ -133,6 +133,8 @@
     if(!plan.length)throw Error('没有学生成绩 / No student scores');
     return plan;
   }
+  /* Homework due date: optional, a real date, not before the day it was given. */
+  function validDue(date,due){const p=new Date(due+'T12:00:00Z');return /^\d{4}-\d{2}-\d{2}$/.test(due)&&Number.isFinite(p.getTime())&&p.toISOString().slice(0,10)===due&&due>=date;}
   function editActivity(data,id,patch){
     const a=data.activities.find(a=>a.id===id&&!a.archived);
     if(!a)throw Error('记录不存在 / Record not found');
@@ -140,9 +142,12 @@
     const date=String(patch.date||''),parsed=new Date(date+'T12:00:00Z');
     if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==date||!date.startsWith(a.date.slice(0,4)))throw Error('请填写名称及该年份的有效日期 / Invalid title or date');
     if(!Number.isFinite(max)||max<1||max>10000||Object.values(a.results).some(r=>r.score!=null&&r.score>max))throw Error('满分不能低于已有得分 / Maximum is below an existing score');
-    const before={title:a.title,en:a.en||'',date:a.date,max:a.max,topic:a.topic||'',note:a.note||''};
+    const due='due' in patch?String(patch.due||''):(a.due||'');
+    if(due&&!validDue(date,due))throw Error('截止日期不能早于日期 / Due date cannot be before the date');
+    const before={title:a.title,en:a.en||'',date:a.date,due:a.due||'',max:a.max,topic:a.topic||'',note:a.note||''};
     const en=typeof patch.en==='string'?patch.en:(title!==a.title?'':a.en||'');
     Object.assign(a,{title,en,date,max,topic:String(patch.topic||''),note:String(patch.note||'')});
+    if(due)a.due=due;else delete a.due;
     data.recordHistory??=[];data.recordHistory.unshift({id:uid(),activityId:id,before,after:{title,date,max,topic:a.topic,note:a.note},at:new Date().toISOString()});
     return before;
   }
@@ -352,7 +357,7 @@
     if(leaders)c.groups.forEach(g=>{g.leaderId=g.members[0]||null;});
     return c.groups;
   }
-  const api={uid,complete,owed,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints,enrollNames,matchStudent,levelOrder,saveClass,classForNow,normLevel,normalizeLevels,findDuplicates,mergeStudents};
+  const api={uid,complete,owed,validDue,pct,average,validScore,homeworkStats,examStats,examAlerts,updateResult,seed,periodEnd,scorePastePlan,editActivity,groupsOf,saveGroup,deleteGroup,autoGroups,TEAM_COLORS,addPoints,removePoints,resetPoints,enrollNames,matchStudent,levelOrder,saveClass,classForNow,normLevel,normalizeLevels,findDuplicates,mergeStudents};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.StudyCore=api;
 })(globalThis);

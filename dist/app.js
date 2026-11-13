@@ -336,7 +336,7 @@
     return heading(t('功课与成绩','Homework & scores'),t('全班一起录入，修改后自动保存到当前浏览器。','Enter a whole class at once. Changes save in this browser.'),button(t('新增记录','New record'),'new-record','primary','','plus'))+classStrip()+
       `<div class="filters"><div class="tab-group"><button class="${state.kind==='homework'?'active':''}" data-action="record-kind" data-kind="homework">${t('功课记录','Homework')}</button><button class="${state.kind!=='homework'?'active':''}" data-action="record-kind" data-kind="exam">${t('考试成绩','Exams')}</button></div><select id="activity-select" aria-label="${t('选择记录','Select record')}">${list.map(r=>`<option value="${r.id}" ${a?.id===r.id?'selected':''}>${esc(label(r))} · ${r.date}</option>`).join('')}</select><select id="record-filter" aria-label="${t('筛选状态','Filter status')}">${[['all',t('全部学生','All students')],['missing',t('只看欠交','Owed only')],['unrecorded',t('只看未记录','Unrecorded only')]].map(([v,l])=>`<option value="${v}" ${state.filter===v?'selected':''}>${l}</option>`).join('')}</select></div>`+
       (!a?empty(t('这个班级还没有记录，新增一份试试看。','No records in this class. Add one to get started.')):`
-      <section class="card"><div class="activity-header"><div class="row between"><div><h2>${esc(label(a))}</h2><p class="help">${typeName(a.kind)} · ${t(a.kind==='homework'?'截止日期':'考试日期',a.kind==='homework'?'Due date':'Exam date')} ${a.date}${a.kind==='homework'?'':` · ${t('满分','Out of')} ${a.max}`}${a.topic?` · ${esc(topicShort(a.topic))}`:''}</p>${a.note?`<p class="help">${esc(a.note)}</p>`:''}</div><div class="row">${button(t('编辑','Edit'),'edit-activity','sm',`data-id="${a.id}"`,'edit')}${a.kind==='homework'?button(t('剩余未记录 → 已交','Mark remaining submitted'),'bulk-submit','soft sm'):button(t('贴成绩','Paste scores'),'paste-scores','sm','','upload')}${button(t('导出 CSV','Export CSV'),'export-csv','sm','','down')}${button(t('回收','Archive'),'archive-activity','sm danger',`data-id="${a.id}"`,'trash')}</div></div></div>
+      <section class="card"><div class="activity-header"><div class="row between"><div><h2>${esc(label(a))}</h2><p class="help">${typeName(a.kind)} · ${t(a.kind==='homework'?'日期':'考试日期',a.kind==='homework'?'Date':'Exam date')} ${a.date}${a.kind==='homework'&&a.due?` · <b>${t('截止','Due')} ${a.due}</b>`:''}${a.kind==='homework'?'':` · ${t('满分','Out of')} ${a.max}`}${a.topic?` · ${esc(topicShort(a.topic))}`:''}</p>${a.note?`<p class="help">${esc(a.note)}</p>`:''}</div><div class="row">${button(t('编辑','Edit'),'edit-activity','sm',`data-id="${a.id}"`,'edit')}${a.kind==='homework'?button(t('剩余未记录 → 已交','Mark remaining submitted'),'bulk-submit','soft sm'):button(t('贴成绩','Paste scores'),'paste-scores','sm','','upload')}${button(t('导出 CSV','Export CSV'),'export-csv','sm','','down')}${button(t('回收','Archive'),'archive-activity','sm danger',`data-id="${a.id}"`,'trash')}</div></div></div>
       ${a.kind==='homework'?hwSummary(a):`<div class="info-banner">${icon('info')}${t(a.kind==='homework'?'选择提交状态，需要时填写备注。':'空白不是零分；缺席单独记录。不同满分自动换算为百分比。',a.kind==='homework'?'Select a submission status and optionally add a note.':'Blank is not zero. Absences are separate. Scores are converted to percentages.')}</div>`}
       <div class="table-wrap record-table-wrap"><table class="record-table"><thead><tr><th>#</th><th>${t('学生','Student')}</th><th>${t('状态','Status')}</th>${a.kind==='homework'?'':`<th>${t('得分','Score')} / ${a.max}</th><th>%</th>`}<th>${t('备注','Notes')}</th><th></th></tr></thead><tbody>${a.students.filter(id=>student(id)).filter(id=>state.filter==='all'||(state.filter==='missing'?C.owed(a.results[id]?.status):(a.results[id]?.status||'unrecorded')===state.filter)).map((id,i)=>recordRow(a,id,i)).join('')}</tbody></table></div>
       <p class="chart-caption">${t('修改自动保存。可复制「姓名＋分数」两列，系统按姓名配对。','Changes save automatically. Paste name and score columns to match students.')}</p></section>`)+footer();
@@ -355,12 +355,12 @@
   function parentMessage(a){
     const c=data.classes.find(x=>x.id===a.classId),code=window.LumiTopics?.subjectCode(`${c?.subject||''} ${c?.name||''}`),subj=SUBJECT_NAMES[code]?t(...SUBJECT_NAMES[code]):(c?.subject||'');
     const who=st=>a.students.map(student).filter(Boolean).filter(x=>a.results[x.id]?.status===st).map((x,i)=>`${i+1}. ${[x.en,x.name].filter(Boolean).join(' ')}`);
-    const missing=who('missing'),unfinished=who('incomplete'),[,m,d]=a.date.split('-').map(Number);
+    const missing=who('missing'),unfinished=who('incomplete'),[,m,d]=(a.due||'').split('-').map(Number);
     const what=`${c?.grade||''} ${subj}「${label(a)}」`.trim();
     return state.lang==='en'
-      ?[`Dear parents,`,``,`A gentle reminder: could you please remind your child about the ${what} homework (due ${d}/${m})?`,`Please hand it in at the next lesson. Thank you so much for your support! 🙏`,
+      ?[`Dear parents,`,``,`A gentle reminder: could you please remind your child about the ${what} homework${a.due?` (due ${d}/${m})`:''}?`,`Please hand it in at the next lesson. Thank you so much for your support! 🙏`,
         ...(missing.length?[``,`Not handed in yet:`,...missing]:[]),...(unfinished.length?[``,`Not finished yet, please complete it before handing in:`,...unfinished]:[])].join('\n')
-      :[`各位家长好 🌷`,``,`想麻烦家长帮忙提醒孩子：${what} 的练习（${m} 月 ${d} 日要交）还没有交齐。`,`请孩子下一堂课带来交给老师就可以了，谢谢家长的配合与支持！🙏`,
+      :[`各位家长好 🌷`,``,`想麻烦家长帮忙提醒孩子：${what} 的练习${a.due?`（${m} 月 ${d} 日要交）`:''}还没有交齐。`,`请孩子下一堂课带来交给老师就可以了，谢谢家长的配合与支持！🙏`,
         ...(missing.length?[``,`还没交的同学：`,...missing]:[]),...(unfinished.length?[``,`还没写完的同学（请完成后再交）：`,...unfinished]:[])].join('\n');
   }
   function parentNote(){
@@ -591,6 +591,7 @@
       selectField('category',t('类别','Category'),[['homework',t('功课','Homework')],['tuition',t('补习考试','Tuition exam')],['school',t('学校考试','School exam')],['quiz',t('小考','Quiz')]],initial)+
       field('title',t('名称','Title'),'text','','required maxlength="100"')+
       field('date',t('日期','Date'),'date',recordDate(),`required min="${state.year}-01-01" max="${state.year}-12-31"`)+
+      `<div data-due-field>${field('due',t('截止日期（选填）','Due date (optional)'),'date','',`min="${state.year}-01-01"`)}</div>`+
       `<div class="full" data-homework-fields>${topicField()}</div><div data-exam-fields>${field('max',t('满分','Maximum score'),'number',50,'required min="1" max="10000"')}</div>`+
       `<details class="full note-toggle"><summary>${t('+ 备注','+ Note')}</summary><textarea name="note" rows="2" maxlength="500" aria-label="${t('备注','Note')}"></textarea></details>`,
       f=>{
@@ -599,12 +600,14 @@
         if(!['homework','tuition','school','quiz'].includes(category))throw Error(t('请选择类别','Choose a category'));
         const title=f.get('title').trim(),max=isHW?1:Number(f.get('max'));
         if(!title)throw Error(t('请输入名称','Enter a title'));
+        const due=isHW?String(f.get('due')||''):'';
+        if(due&&!C.validDue(f.get('date'),due))throw Error(t('截止日期不能早于日期','Due date cannot be before the date'));
         if(!Number.isFinite(max)||max<1||max>10000)throw Error(t('请填写有效满分','Enter a valid maximum score'));
         let n=data.activities.length+1,recordCode;
         do{recordCode=`${isHW?'HW':'EX'}-${state.year}-${String(n++).padStart(4,'0')}`;}while(data.activities.some(a=>(a.recordCode||'').toLowerCase()===recordCode.toLowerCase()));
         const ids=roster().map(s=>s.id),results={};
         ids.forEach(id=>results[id]={status:'unrecorded',score:null,note:''});
-        const a={id:C.uid(),recordCode,classId:state.classId,kind:category,type:({homework:'Homework',tuition:'Tuition Exam',school:'School Exam',quiz:'Quiz'})[category],title,date:f.get('date'),max,topic:isHW?(f.get('topic')||''):'',note:f.get('note'),students:ids,results,archived:false};
+        const a={id:C.uid(),recordCode,classId:state.classId,kind:category,type:({homework:'Homework',tuition:'Tuition Exam',school:'School Exam',quiz:'Quiz'})[category],title,date:f.get('date'),...(due?{due}:{}),max,topic:isHW?(f.get('topic')||''):'',note:f.get('note'),students:ids,results,archived:false};
         data.activities.push(a);state.activityId=a.id;state.kind=isHW?'homework':'exam';state.page='records';state.filter='all';
       });
     const category=modal.querySelector('[name=category]');
@@ -616,6 +619,7 @@
       picker.sync(isHW);
       modal.querySelector('[data-exam-fields]').hidden=isHW;
       modal.querySelector('[name=max]').disabled=isHW;
+      modal.querySelector('[data-due-field]').hidden=!isHW;modal.querySelector('[name=due]').disabled=!isHW;
     };
     category.onchange=updateFields;
     updateFields();
@@ -639,10 +643,11 @@
     showModal(t('编辑记录','Edit record'),
       field('title',t('名称','Title'),'text',a.title,'required maxlength="100"')+
       field('date',t('日期','Date'),'date',a.date,`required min="${state.year}-01-01" max="${state.year}-12-31"`)+
+      (a.kind==='homework'?`<div data-due-field>${field('due',t('截止日期（选填）','Due date (optional)'),'date',a.due||'',`min="${state.year}-01-01"`)}</div>`:'')+
       (a.kind==='homework'?topicField(a.topic||''):field('max',t('满分','Maximum score'),'number',a.max,'required min="1" max="10000"'))+
       `<details class="full note-toggle" ${a.note?'open':''}><summary>${t('+ 备注','+ Note')}</summary><textarea name="note" rows="2" maxlength="500" aria-label="${t('备注','Note')}">${esc(a.note||'')}</textarea></details>`,
       f=>{
-        const before=C.editActivity(data,a.id,{title:f.get('title'),date:f.get('date'),max:f.get('max'),topic:a.kind==='homework'?picker.read(f):'',note:f.get('note')});
+        const before=C.editActivity(data,a.id,{title:f.get('title'),date:f.get('date'),...(a.kind==='homework'?{due:f.get('due')||''}:{}),max:f.get('max'),topic:a.kind==='homework'?picker.read(f):'',note:f.get('note')});
         undoAction={activityId:a.id,metadata:before};
       });
     const picker=a.kind==='homework'?wireTopicPicker(null):null;

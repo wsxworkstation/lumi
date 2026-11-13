@@ -167,3 +167,13 @@ test('"没完成" (incomplete) homework is owed, not done, and is not a missing 
   assert.equal(C.homeworkStats(d,c.id,2027,b.id,undefined,'2027-12-31').done,1);
   assert.ok(C.owed('incomplete')&&C.owed('missing')&&!C.owed('late'));
 });
+
+test('homework due date is optional, kept separate from the date, and can be edited or cleared',()=>{
+  const d=C.seed(),a=d.activities.find(a=>a.kind==='homework'),date=a.date;
+  const before=C.editActivity(d,a.id,{title:a.title,date,max:a.max,topic:a.topic,note:a.note,due:date.slice(0,8)+'28'});
+  assert.equal(a.date,date);assert.equal(a.due,date.slice(0,8)+'28');assert.equal(before.due,'');
+  assert.throws(()=>C.editActivity(d,a.id,{title:a.title,date,max:a.max,due:date.slice(0,8)+'01'}),/截止日期/);
+  assert.equal(a.due,date.slice(0,8)+'28','a rejected edit changes nothing');
+  C.editActivity(d,a.id,{title:a.title,date,max:a.max});assert.equal(a.due,date.slice(0,8)+'28','leaving due out keeps it');
+  C.editActivity(d,a.id,{title:a.title,date,max:a.max,due:''});assert.ok(!('due' in a));
+});
