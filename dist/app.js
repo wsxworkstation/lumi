@@ -336,7 +336,7 @@
     return heading(t('功课与成绩','Homework & scores'),t('全班一起录入，修改后自动保存到当前浏览器。','Enter a whole class at once. Changes save in this browser.'),button(t('新增记录','New record'),'new-record','primary','','plus'))+classStrip()+
       `<div class="filters"><div class="tab-group"><button class="${state.kind==='homework'?'active':''}" data-action="record-kind" data-kind="homework">${t('功课记录','Homework')}</button><button class="${state.kind!=='homework'?'active':''}" data-action="record-kind" data-kind="exam">${t('考试成绩','Exams')}</button></div><select id="activity-select" aria-label="${t('选择记录','Select record')}">${list.map(r=>`<option value="${r.id}" ${a?.id===r.id?'selected':''}>${esc(label(r))} · ${r.date}</option>`).join('')}</select><select id="record-filter" aria-label="${t('筛选状态','Filter status')}">${[['all',t('全部学生','All students')],['missing',t('只看欠交','Owed only')],['unrecorded',t('只看未记录','Unrecorded only')]].map(([v,l])=>`<option value="${v}" ${state.filter===v?'selected':''}>${l}</option>`).join('')}</select></div>`+
       (!a?empty(t('这个班级还没有记录，新增一份试试看。','No records in this class. Add one to get started.')):`
-      <section class="card"><div class="activity-header"><div class="row between"><div><h2>${esc(label(a))}</h2><p class="help">${typeName(a.kind)} · ${t(a.kind==='homework'?'日期':'考试日期',a.kind==='homework'?'Date':'Exam date')} ${a.date}${a.kind==='homework'&&a.due?` · <b>${t('截止','Due')} ${a.due}</b>`:''}${a.kind==='homework'?'':` · ${t('满分','Out of')} ${a.max}`}${a.topic?` · ${esc(topicShort(a.topic))}`:''}</p>${a.note?`<p class="help">${esc(a.note)}</p>`:''}</div><div class="row">${button(t('编辑','Edit'),'edit-activity','sm',`data-id="${a.id}"`,'edit')}${a.kind==='homework'?button(t('剩余未记录 → 已交','Mark remaining submitted'),'bulk-submit','soft sm'):button(t('贴成绩','Paste scores'),'paste-scores','sm','','upload')}${button(t('导出 CSV','Export CSV'),'export-csv','sm','','down')}${button(t('回收','Archive'),'archive-activity','sm danger',`data-id="${a.id}"`,'trash')}</div></div></div>
+      <section class="card"><div class="activity-header"><div class="row between"><div><h2>${esc(label(a))}</h2><p class="help">${typeName(a.kind)} · ${t(a.kind==='homework'?'日期':'考试日期',a.kind==='homework'?'Date':'Exam date')} ${a.date}${a.kind==='homework'&&a.due?` · <b>${t('截止','Due')} ${a.due}</b>`:''}${a.kind==='homework'?'':` · ${t('满分','Out of')} ${a.max}`}${a.topic?` · ${esc(topicShort(a.topic))}`:''}</p>${a.note?`<p class="help">${esc(a.note)}</p>`:''}</div><div class="row">${button(t('编辑','Edit'),'edit-activity','sm',`data-id="${a.id}"`,'edit')}${a.kind==='homework'?button(t('线上练习','Online practice'),'quiz-upload','sm','','upload')+button(t('剩余未记录 → 已交','Mark remaining submitted'),'bulk-submit','soft sm'):button(t('贴成绩','Paste scores'),'paste-scores','sm','','upload')}${button(t('导出 CSV','Export CSV'),'export-csv','sm','','down')}${button(t('回收','Archive'),'archive-activity','sm danger',`data-id="${a.id}"`,'trash')}</div></div></div>
       ${a.kind==='homework'?hwSummary(a):`<div class="info-banner">${icon('info')}${t(a.kind==='homework'?'选择提交状态，需要时填写备注。':'空白不是零分；缺席单独记录。不同满分自动换算为百分比。',a.kind==='homework'?'Select a submission status and optionally add a note.':'Blank is not zero. Absences are separate. Scores are converted to percentages.')}</div>`}
       <div class="table-wrap record-table-wrap"><table class="record-table"><thead><tr><th>#</th><th>${t('学生','Student')}</th><th>${t('状态','Status')}</th>${a.kind==='homework'?'':`<th>${t('得分','Score')} / ${a.max}</th><th>%</th>`}<th>${t('备注','Notes')}</th><th></th></tr></thead><tbody>${a.students.filter(id=>student(id)).filter(id=>state.filter==='all'||(state.filter==='missing'?C.owed(a.results[id]?.status):(a.results[id]?.status||'unrecorded')===state.filter)).map((id,i)=>recordRow(a,id,i)).join('')}</tbody></table></div>
       <p class="chart-caption">${t('修改自动保存。可复制「姓名＋分数」两列，系统按姓名配对。','Changes save automatically. Paste name and score columns to match students.')}</p></section>`)+footer();
@@ -369,6 +369,42 @@
     const form=modal.querySelector('form');modal.querySelector('button[type=submit]').textContent=t('复制','Copy');
     form.onsubmit=e=>{e.preventDefault();const text=form.msg.value,ok=()=>{modal.close();toast(t('已复制，可以贴到家长群了','Copied. Paste it into the parents chat.'));};
       if(navigator.clipboard?.writeText)navigator.clipboard.writeText(text).then(ok,()=>{form.msg.focus();form.msg.select();});else{form.msg.focus();form.msg.select();}};
+  }
+  /* Online practice, step 1: upload the quiz Excel and check every question before it goes to students. */
+  const imgSrc=img=>!img?'':img.url||(img.base64?`data:${img.type};base64,${img.base64}`:'');
+  /* Pictures are shrunk to at most 800px so a quiz stays small on phones. */
+  async function shrinkImage(img){
+    if(!img?.base64||typeof document==='undefined'||!window.createImageBitmap)return img;
+    try{
+      const blob=await (await fetch(imgSrc(img))).blob(),bmp=await createImageBitmap(blob),k=Math.min(1,800/Math.max(bmp.width,bmp.height));
+      const canvas=document.createElement('canvas');canvas.width=Math.round(bmp.width*k);canvas.height=Math.round(bmp.height*k);
+      const g=canvas.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,canvas.width,canvas.height);g.drawImage(bmp,0,0,canvas.width,canvas.height);
+      const url=canvas.toDataURL('image/jpeg',0.82);return {type:'image/jpeg',base64:url.split(',')[1]};
+    }catch{return img;}
+  }
+  function quizPreview(r){
+    const list=items=>items.map(x=>`<p>${esc(x)}</p>`).join('');
+    return `${r.errors.length?`<div class="import-message error-list"><strong>${t(`有 ${r.errors.length} 个问题要改`,`${r.errors.length} problems to fix`)}</strong>${list(r.errors)}</div>`:''}${r.warnings.length?`<div class="import-message ok-list">${list(r.warnings)}</div>`:''}
+      ${r.questions.length?`<p class="help">${t(`共 ${r.questions.length} 题。绿色是正确答案。`,`${r.questions.length} questions. Green marks the correct answer.`)}</p>`:''}
+      <ol class="quiz-preview">${r.questions.map(q=>`<li><div class="quiz-q">${esc(q.text)}<small>${({mc:t('选择题','Multiple choice'),multi:t('多选（全选对才算对）','Multi-select'),fill:t('填空','Fill in')})[q.type]}</small></div>${q.image?`<img src="${esc(imgSrc(q.image))}" alt="" loading="lazy">`:''}${q.type==='fill'?`<p class="quiz-opt right">${t('答案','Answer')}：${esc(q.accept.join(' / '))}</p>`:q.options.map((o,i)=>`<p class="quiz-opt ${q.answer.includes(i+1)?'right':''}">${q.answer.includes(i+1)?'✓ ':''}${esc(o)}</p>`).join('')}</li>`).join('')}</ol>`;
+  }
+  function quizUpload(){
+    const a=selectedActivity();if(!a||a.kind!=='homework')return;
+    showModal(t('线上练习','Online practice'),`<div class="full"><p class="help">${t('用微光的 Excel 模板出题（格式和 Quizizz 一样，别的 AI 做的 Quizizz 文件也可以直接用）。图片直接贴在那一题的那一行就好。','Write questions in the Lumi Excel template (same layout as Quizizz). Paste a picture on the question\'s row.')}</p>
+      <div class="row wrap" style="margin:12px 0"><a class="btn sm" href="./assets/lumi-quiz-template.xlsx" download="微光-线上练习模板.xlsx">${icon('down')}${t('下载模板','Download template')}</a><label class="btn sm primary">${icon('upload')}${t('上传 Excel','Upload Excel')}<input id="quiz-file" type="file" accept=".xlsx" hidden></label></div>
+      <div id="quiz-result"></div></div>`,()=>{});
+    modal.querySelector('button[type=submit]').hidden=true;
+    const input=modal.querySelector('#quiz-file'),out=modal.querySelector('#quiz-result');
+    input.onchange=async()=>{
+      const file=input.files?.[0];if(!file)return;
+      out.innerHTML=`<p class="help">${t('读取中…','Reading…')}</p>`;
+      try{
+        const r=LumiQuiz.parse(await ExcelWorkbook.read(file));
+        for(const q of r.questions)if(q.image)q.image=await shrinkImage(q.image);
+        out.innerHTML=quizPreview(r)+(r.errors.length?'':`<p class="help quiz-next">${t('检查没问题就好。下一步会加上「发布给学生」。','Looks right? Publishing to students comes in the next step.')}</p>`);
+      }catch(e){out.innerHTML=`<div class="import-message error-list"><strong>${t('读不到这个文件','Could not read this file')}</strong><p>${esc(e.message)}</p></div>`;}
+      input.value='';
+    };
   }
   /* Names only, one per line, ready to paste into WhatsApp or Excel. */
   const HW_GROUPS={done:['submitted','late','makeup'],owe:['missing','incomplete'],missing:['missing'],incomplete:['incomplete'],unrecorded:['unrecorded']};
@@ -729,6 +765,7 @@
     else if(action==='find-dups')duplicatesForm();
     else if(action==='copy-names')copyNames(el.dataset.group);
     else if(action==='parent-note')parentNote();
+    else if(action==='quiz-upload')quizUpload();
     else if(action==='merge-dup')mergeDuplicate(Number(el.dataset.i));
     else if(action==='edit-student')addStudent(true);
     else if(action==='student'){state.studentId=id;state.tab='progress';state.examFilter='all';go('student');}

@@ -48,12 +48,53 @@
     const sharedXml=await get('xl/sharedStrings.xml');
     const shared=[...sharedXml.matchAll(/<(?:\w+:)?si\b[^>]*>([\s\S]*?)<\/(?:\w+:)?si>/g)].map(m=>texts(m[1]));
     const dateStyles=parseStyles(await get('xl/styles.xml'));
-    const sheets={};
+    const sheets={},images={};
     for(const m of workbook.matchAll(/<(?:\w+:)?sheet\b([^>]*?)\/?>(?:<\/(?:\w+:)?sheet>)?/g)){
       const a=attrs(m[1]),target=relMap[a['r:id']];if(!target)continue;
-      const path=normalizePath('xl',target),xml=await get(path);if(xml)sheets[a.name]=parseSheet(xml,shared,dateStyles);
+      const path=normalizePath('xl',target),xml=await get(path);if(!xml)continue;
+      sheets[a.name]=parseSheet(xml,shared,dateStyles);
+      images[a.name]=await sheetImages(zip,get,path,xml);
     }
-    return {sheets};
+    return {sheets,images};
+  }
+  /* Pictures in a sheet, each with the 0-based row and column it sits on:
+     floating pictures (drawings), WPS in-cell pictures (=DISPIMG) and Excel in-cell pictures (rich values). */
+  const relsOf=async(get,path)=>{const dir=path.slice(0,path.lastIndexOf('/')),xml=await get(`${dir}/_rels/${path.slice(dir.length+1)}.rels`),out={};
+    for(const m of xml.matchAll(/<Relationship\b([^>]*?)\/?>/g)){const a=attrs(m[1]);out[a.Id]=normalizePath(dir,a.Target);}return out;};
+  const mime=p=>({png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp'})[p.split('.').pop().toLowerCase()]||'';
+  async function media(zip,path){const f=zip.file(path),type=mime(path);if(!f||!type)return null;return {type,base64:await f.async('base64')};}
+  async function sheetImages(zip,get,sheetPath,sheetXml){
+    const out=[],rels=await relsOf(get,sheetPath);
+    for(const m of sheetXml.matchAll(/<(?:\w+:)?drawing\b[^>]*r:id="([^"]+)"/g)){
+      const drawPath=rels[m[1]];if(!drawPath)continue;
+      const xml=await get(drawPath),drels=await relsOf(get,drawPath);
+      for(const anchor of xml.matchAll(/<(?:\w+:)?(?:twoCellAnchor|oneCellAnchor)\b[\s\S]*?<\/(?:\w+:)?(?:twoCellAnchor|oneCellAnchor)>/g)){
+        const from=anchor[0].match(/<(?:\w+:)?from>[\s\S]*?<(?:\w+:)?col>(\d+)<\/(?:\w+:)?col>[\s\S]*?<(?:\w+:)?row>(\d+)<\/(?:\w+:)?row>/),embed=anchor[0].match(/r:embed="([^"]+)"/);
+        if(!from||!embed||!drels[embed[1]])continue;
+        const img=await media(zip,drels[embed[1]]);if(img)out.push({row:Number(from[2]),col:Number(from[1]),...img});
+      }
+    }
+    // WPS: a cell formula =DISPIMG("ID_…",1) points to xl/cellimages.xml.
+    const wps=await get('xl/cellimages.xml');
+    if(wps){const wrels=await relsOf(get,'xl/cellimages.xml'),byName={};
+      for(const pic of wps.matchAll(/<(?:\w+:)?pic\b[\s\S]*?<\/(?:\w+:)?pic>/g)){const name=pic[0].match(/\bname="([^"]+)"/)?.[1],embed=pic[0].match(/r:embed="([^"]+)"/)?.[1];if(name&&embed&&wrels[embed])byName[name]=wrels[embed];}
+      for(const c of sheetXml.matchAll(/<(?:\w+:)?c\b([^>]*?)>([\s\S]*?)<\/(?:\w+:)?c>/g)){
+        const id=decode(c[2]).match(/DISPIMG\(\s*"([^"]+)"/)?.[1];if(!id||!byName[id])continue;
+        const a=attrs(c[1]),img=await media(zip,byName[id]);if(img)out.push({row:Number(String(a.r).match(/\d+/)[0])-1,col:colIndex(a.r),...img});
+      }
+    }
+    // Excel 365 "Place in cell": <c vm="n"> → rich value n → richValueRel → media.
+    const rich=await get('xl/richData/rdrichvalue.xml');
+    if(rich&&/\bvm="/.test(sheetXml)){
+      const values=[...rich.matchAll(/<(?:\w+:)?rv\b[^>]*>([\s\S]*?)<\/(?:\w+:)?rv>/g)].map(m=>Number(m[1].match(/<(?:\w+:)?v\b[^>]*>(\d+)</)?.[1]));
+      const relIds=[...(await get('xl/richData/richValueRel.xml')).matchAll(/r:id="([^"]+)"/g)].map(m=>m[1]),rrels=await relsOf(get,'xl/richData/richValueRel.xml');
+      for(const c of sheetXml.matchAll(/<(?:\w+:)?c\b([^>]*?)(?:\/>|>)/g)){
+        const a=attrs(c[1]);if(!a.vm)continue;
+        const path=rrels[relIds[values[Number(a.vm)-1]]];if(!path)continue;
+        const img=await media(zip,path);if(img)out.push({row:Number(String(a.r).match(/\d+/)[0])-1,col:colIndex(a.r),...img});
+      }
+    }
+    return out;
   }
   const api={read,parseSheet,parseStyles,excelDate};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
