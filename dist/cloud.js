@@ -212,6 +212,7 @@
     getBackup:id=>request(`/rest/v1/studylog_backups?select=data&id=eq.${Number(id)}`).then(r=>{if(!r[0])throw Error('missing');return r[0].data;}),
     snapshot:()=>request('/rest/v1/rpc/studylog_snapshot',{method:'POST',body:'{}'}),
     /* Online practice: publish a quiz, open/close it, and read who has finished. */
+    rosterPublish:levels=>request('/rest/v1/rpc/lumi_roster_publish',{method:'POST',body:JSON.stringify({p_levels:levels})}),
     quizPublish:p=>request('/rest/v1/rpc/lumi_quiz_publish',{method:'POST',body:JSON.stringify(p)}),
     quizSetOpen:(id,open)=>request(`/rest/v1/lumi_quizzes?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({open:!!open})}),
     quizProgress:ids=>request(`/rest/v1/lumi_quiz_progress?select=quiz_id,student_id,step,wrong,done_at&quiz_id=in.(${ids.map(encodeURIComponent).join(',')})`),

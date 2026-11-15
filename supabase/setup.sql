@@ -186,15 +186,47 @@ begin
 end;
 $$;
 
--- 学生入口：有开放练习的年级，以及这些练习名单里的学生。
+-- 学生名单（按年级）：老师的 app 自动上传，没有练习时学生也能选年级、点名字。只有名字和内部编号。
+create table if not exists public.lumi_roster (
+  owner uuid primary key references auth.users(id) on delete cascade,
+  levels jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.lumi_roster enable row level security;
+revoke all on public.lumi_roster from anon, authenticated;
+
+create or replace function public.lumi_roster_publish(p_levels jsonb)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null then raise exception 'STUDYLOG_AUTH'; end if;
+  if jsonb_typeof(p_levels) <> 'array' then raise exception 'LUMI_QUIZ_INVALID'; end if;
+  insert into public.lumi_roster (owner, levels) values (uid, p_levels)
+    on conflict (owner) do update set levels = excluded.levels, updated_at = now();
+  return jsonb_build_object('ok', true);
+end;
+$$;
+revoke all on function public.lumi_roster_publish(jsonb) from public, anon;
+grant execute on function public.lumi_roster_publish(jsonb) to authenticated;
+
+-- 学生入口：年级和学生名字（来自名单，以及开放练习的名单）。
 create or replace function public.lumi_portal()
 returns jsonb language sql stable security definer set search_path = '' as $$
   select coalesce(jsonb_agg(jsonb_build_object('level', t.level, 'students', t.students) order by t.level), '[]'::jsonb)
   from (
-    select q.level, jsonb_agg(distinct s.value) as students
-    from public.lumi_quizzes q cross join lateral jsonb_array_elements(q.roster) s
-    where q.open
-    group by q.level
+    select u.level, jsonb_agg(distinct u.student) as students
+    from (
+      select l.value ->> 'level' as level, s.value as student
+        from public.lumi_roster r
+        cross join lateral jsonb_array_elements(r.levels) l
+        cross join lateral jsonb_array_elements(l.value -> 'students') s
+      union all
+      select q.level, s.value
+        from public.lumi_quizzes q cross join lateral jsonb_array_elements(q.roster) s
+        where q.open
+    ) u
+    where u.level is not null
+    group by u.level
   ) t;
 $$;
 

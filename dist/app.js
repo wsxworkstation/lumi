@@ -100,7 +100,7 @@
   function persist() {
     const json=JSON.stringify(data);
     try{localStorage.setItem(KEY,json);storageOK=true;}catch{storageOK=false;if(!window.StudyCloud)toast(t('浏览器存储失败，请导出 JSON 备份。','Storage failed. Export a JSON backup.'));}
-    window.StudyCloud?.changed(json);
+    window.StudyCloud?.changed(json);publishRoster();
     saveView();savedIndicator();
   }
   function toast(msg){const el=document.querySelector('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),3300);}
@@ -433,6 +433,22 @@
   async function setQuizOpen(a,open){
     try{await StudyCloud.quizSetOpen(a.quiz.id,open);a.quiz.open=open;persist();render();toast(open?t('学生又可以做了','Open to students again'):t('已关闭，学生看不到了','Closed to students'));}
     catch{toast(t('连不上云端，请检查网络。','Cannot reach the cloud. Check the connection.'));}
+  }
+  /* Student page name list: each level's students (latest year), uploaded whenever it changes so students can always find their name. */
+  function rosterLevels(){
+    const live=data.classes.filter(c=>!c.archived),year=Math.max(0,...live.map(c=>c.year)),by=new Map();
+    for(const c of live.filter(c=>c.year===year)){
+      const list=by.get(c.grade)||new Map();by.set(c.grade,list);
+      c.students.map(student).filter(s=>s&&!s.archived).forEach(s=>list.set(s.id,{id:s.id,name:[s.en,s.name].filter(Boolean).join(' ')}));
+    }
+    return [...by].sort(([a],[b])=>C.levelOrder(a,b)).map(([level,list])=>({level,students:[...list.values()]}));
+  }
+  let rosterSent='',rosterTimer=0;
+  function publishRoster(){
+    if(!window.StudyCloud?.rosterPublish)return;
+    clearTimeout(rosterTimer);
+    rosterTimer=setTimeout(async()=>{const levels=rosterLevels(),json=JSON.stringify(levels);if(json===rosterSent)return;
+      try{await StudyCloud.rosterPublish(levels);rosterSent=json;}catch{}},3000);
   }
   /* Who finished online: fills in 已交 (or 迟交 after the due date) for students not yet marked, and keeps wrong-answer counts. */
   const quizLive={};let quizSyncAt=0;

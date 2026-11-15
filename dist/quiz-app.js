@@ -31,7 +31,7 @@
     root.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>pickName(b.dataset.level));
   }
   function pickName(level){
-    const students=(portal.find(p=>p.level===level)?.students||[]).slice().sort((a,b)=>a.name.localeCompare(b.name));
+    const seen=new Set(),students=(portal.find(p=>p.level===level)?.students||[]).filter(s=>!seen.has(s.id)&&seen.add(s.id)).sort((a,b)=>a.name.localeCompare(b.name));
     show(`<div class="top"><button class="link" id="back">← 年级 Form</button></div><h1>${esc(level)} · 点你的名字</h1><p class="sub">Tap your name</p><input class="search" id="find" placeholder="找名字 Search" autocomplete="off"><div class="list" id="names"></div>`);
     const box=root.querySelector('#names'),find=root.querySelector('#find');
     const draw=()=>{const k=find.value.trim().toLowerCase();const list=students.filter(s=>s.name.toLowerCase().includes(k));
@@ -45,7 +45,7 @@
     let list;try{list=await rpc('lumi_student_quizzes',{p_level:me.level,p_student:me.id});}catch{oops(quizList);return;}
     const due=d=>{if(!d)return '';const [,m,day]=d.split('-').map(Number);return ` · ${m} 月 ${day} 日要交`;};
     show(`<div class="top"><span>${esc(me.name)} · ${esc(me.level)}</span><button class="link" id="notme">不是我 Not me</button></div><h1>我的练习</h1><p class="sub">My practice</p>
-      <div class="list">${list.map(q=>`<button class="card" data-id="${esc(q.id)}"><span><b>${esc(q.title)}</b><small>${q.count} 题${due(q.due)}</small></span><span class="pill ${q.done?'done':''}">${q.done?'✓ 完成':q.step?`${q.step}/${q.count}`:'开始'}</span></button>`).join('')||'<p class="empty">现在没有练习 🎉</p>'}</div>`);
+      <div class="list">${list.map(q=>`<button class="card" data-id="${esc(q.id)}"><span><b>${esc(q.title)}</b><small>${q.count} 题${due(q.due)}</small></span><span class="pill ${q.done?'done':''}">${q.done?'✓ 完成':q.step?`${q.step}/${q.count}`:'开始'}</span></button>`).join('')||'<p class="empty">现在没有练习 🎉<br>No practice right now.</p>'}</div>`);
     root.querySelector('#notme').onclick=()=>{save(null);pickLevel();};
     root.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>openQuiz(b.dataset.id));
   }

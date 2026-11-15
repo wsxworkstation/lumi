@@ -19,7 +19,7 @@ function boot(saved,view,cloud){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist/core.js'),'utf8'),ctx);
   const source=fs.readFileSync(path.join(__dirname,'../dist/app.js'),'utf8').replace(
     '  persist();render();\n})();',
-    '  globalThis.testApp={state,render,selectClass,onClick,validateBackup,recordDate,studentNameLines,applyResults,undoLast,stat,parentMessage,applyQuizProgress,quizBar,quizTag,getData:()=>data};persist();render();\n})();'
+    '  globalThis.testApp={state,render,selectClass,onClick,validateBackup,recordDate,studentNameLines,applyResults,undoLast,stat,parentMessage,applyQuizProgress,quizBar,quizTag,rosterLevels,getData:()=>data};persist();render();\n})();'
   );
   vm.runInContext(source,ctx);
   return {ctx,elements,stored,api:ctx.testApp};
@@ -245,4 +245,15 @@ test('finished online practice marks homework 已交, or 迟交 after the due da
   assert.ok(!api.applyQuizProgress([{quiz_id:'q1',student_id:s1,step:3,wrong:[1,0,2],done_at:'2027-03-10T15:00:00Z'}]),'second sync changes nothing');
   assert.match(api.quizTag(a,s1),/错 3 次/);assert.ok(api.quizTag(a,s5).includes('1/3'));
   assert.match(api.quizBar(a),/4 人完成 · 1 人在做/);
+});
+test('student page name list: levels of the latest year, each student once, archived left out',()=>{
+  const {api}=boot(),d=api.getData();
+  d.classes.push({id:'old',code:'C2026-1',name:'F9 x',subject:'x',grade:'F9',year:2026,students:['s1'],archived:false});
+  const c2=d.classes.find(c=>c.id==='c2');c2.students.push('s1');
+  d.students.find(s=>s.id==='s2').archived=true;
+  const levels=api.rosterLevels();
+  assert.ok(!levels.some(l=>l.level==='F9'),'older year left out');
+  for(const l of levels)assert.equal(new Set(l.students.map(s=>s.id)).size,l.students.length);
+  assert.ok(!levels.some(l=>l.students.some(s=>s.id==='s2')));
+  assert.equal(JSON.stringify(levels.map(l=>l.level)),JSON.stringify([...levels.map(l=>l.level)].sort()));
 });
