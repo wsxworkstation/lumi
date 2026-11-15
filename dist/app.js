@@ -410,7 +410,7 @@
   }
   /* Online practice, step 2: questions go to the cloud; the answer key stays there, students only get the questions. */
   const quizKey=q=>q.type==='fill'?{type:'fill',accept:q.accept.map(v=>String(v).replace(/\s+/g,' ').trim().toLowerCase())}:{type:q.type,answer:q.answer};
-  const studentLink=()=>new URL('quiz.html',location.href).href.split('?')[0];
+  const studentLink=()=>new URL('quiz',location.href).href.split('?')[0];
   async function publishQuiz(a,questions,btn){
     const c=data.classes.find(x=>x.id===a.classId);if(!c)return;
     btn.disabled=true;btn.textContent=t('发布中…','Publishing…');
@@ -424,7 +424,7 @@
   }
   function quizShare(a){
     const link=studentLink();
-    showModal(t('已发布','Published'),`<div class="full"><p class="help">${t('把这个网址发给学生（班级群就好）。学生选年级、点名字，就能开始做。','Send this link to the students. They pick their level and name to start.')}</p><input class="quiz-link" value="${esc(link)}" readonly></div>`,()=>{});
+    showModal(t('已发布','Published'),`<div class="full"><p class="help">${t('把这个网址发给学生（班级群就好）。学生选年级、点名字，就能开始做。','Send this link to the students. They pick their level and name to start.')}</p><div class="quiz-qr"><img src="./assets/lumi-student-qr.png" alt="${t('学生网址 QR code','Student link QR code')}" width="220" height="220"><a class="btn sm" href="./assets/lumi-student-qr.png" download="微光-学生练习-QR.png">${icon('down')}${t('下载 QR','Download QR')}</a></div><input class="quiz-link" value="${esc(link)}" readonly></div>`,()=>{});
     const submit=modal.querySelector('button[type=submit]');submit.textContent=t('复制网址','Copy link');
     modal.querySelector('form').onsubmit=e=>{e.preventDefault();const box=modal.querySelector('.quiz-link');
       const done=()=>{modal.close();toast(t('已复制网址','Link copied'));};
