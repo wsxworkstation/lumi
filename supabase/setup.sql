@@ -115,3 +115,168 @@ $$;
 
 revoke all on function public.studylog_snapshot() from public, anon;
 grant execute on function public.studylog_snapshot() to authenticated;
+
+-- ============================================================
+-- 线上练习（学生版）：老师发布题目，学生选年级＋名字作答。
+-- 答案（answers）只存在这里；学生只能通过下面的函数作答，读不到答案。
+-- ============================================================
+create table if not exists public.lumi_quizzes (
+  id uuid primary key default gen_random_uuid(),
+  owner uuid not null references auth.users(id) on delete cascade,
+  activity_id text not null,
+  class_id text not null,
+  level text not null,
+  title text not null,
+  due date,
+  questions jsonb not null,
+  answers jsonb not null,
+  roster jsonb not null,
+  open boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (owner, activity_id)
+);
+create table if not exists public.lumi_quiz_progress (
+  quiz_id uuid not null references public.lumi_quizzes(id) on delete cascade,
+  student_id text not null,
+  step int not null default 0,
+  wrong jsonb not null default '[]'::jsonb,
+  started_at timestamptz not null default now(),
+  done_at timestamptz,
+  primary key (quiz_id, student_id)
+);
+alter table public.lumi_quizzes enable row level security;
+alter table public.lumi_quiz_progress enable row level security;
+revoke all on public.lumi_quizzes, public.lumi_quiz_progress from anon, authenticated;
+grant select, update on public.lumi_quizzes to authenticated;
+grant select on public.lumi_quiz_progress to authenticated;
+drop policy if exists "own quizzes" on public.lumi_quizzes;
+create policy "own quizzes" on public.lumi_quizzes for all to authenticated
+  using (owner = (select auth.uid())) with check (owner = (select auth.uid()));
+drop policy if exists "own quiz progress" on public.lumi_quiz_progress;
+create policy "own quiz progress" on public.lumi_quiz_progress for select to authenticated
+  using (exists (select 1 from public.lumi_quizzes q where q.id = quiz_id and q.owner = (select auth.uid())));
+
+-- 老师发布或更新一份练习。答案改了的话，还没做完的学生从头开始；做完的保留。
+create or replace function public.lumi_quiz_publish(p_activity text, p_class text, p_level text, p_title text, p_due date,
+  p_questions jsonb, p_answers jsonb, p_roster jsonb)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := auth.uid();
+  qid uuid;
+  old_answers jsonb;
+begin
+  if uid is null then raise exception 'STUDYLOG_AUTH'; end if;
+  if jsonb_typeof(p_questions) <> 'array' or jsonb_array_length(p_questions) = 0 or jsonb_typeof(p_answers) <> 'array'
+     or jsonb_array_length(p_questions) <> jsonb_array_length(p_answers) or jsonb_typeof(p_roster) <> 'array' then
+    raise exception 'LUMI_QUIZ_INVALID';
+  end if;
+  select q.id, q.answers into qid, old_answers from public.lumi_quizzes q where q.owner = uid and q.activity_id = p_activity;
+  if qid is null then
+    insert into public.lumi_quizzes (owner, activity_id, class_id, level, title, due, questions, answers, roster)
+      values (uid, p_activity, p_class, p_level, p_title, p_due, p_questions, p_answers, p_roster) returning id into qid;
+  else
+    update public.lumi_quizzes q set class_id = p_class, level = p_level, title = p_title, due = p_due, questions = p_questions,
+      answers = p_answers, roster = p_roster, open = true, updated_at = now() where q.id = qid;
+    if old_answers is distinct from p_answers then
+      delete from public.lumi_quiz_progress pr where pr.quiz_id = qid and pr.done_at is null;
+    end if;
+  end if;
+  return jsonb_build_object('id', qid);
+end;
+$$;
+
+-- 学生入口：有开放练习的年级，以及这些练习名单里的学生。
+create or replace function public.lumi_portal()
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select coalesce(jsonb_agg(jsonb_build_object('level', t.level, 'students', t.students) order by t.level), '[]'::jsonb)
+  from (
+    select q.level, jsonb_agg(distinct s.value) as students
+    from public.lumi_quizzes q cross join lateral jsonb_array_elements(q.roster) s
+    where q.open
+    group by q.level
+  ) t;
+$$;
+
+-- 这个学生可以做的练习（没做完的排前面）。
+create or replace function public.lumi_student_quizzes(p_level text, p_student text)
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select coalesce(jsonb_agg(jsonb_build_object('id', q.id, 'title', q.title, 'due', q.due,
+    'count', jsonb_array_length(q.questions), 'step', coalesce(pr.step, 0), 'done', pr.done_at is not null)
+    order by (pr.done_at is not null), q.due nulls last, q.created_at desc), '[]'::jsonb)
+  from public.lumi_quizzes q
+  left join public.lumi_quiz_progress pr on pr.quiz_id = q.id and pr.student_id = p_student
+  where q.open and q.level = p_level and q.roster @> jsonb_build_array(jsonb_build_object('id', p_student));
+$$;
+
+-- 开始或继续：返回题目（没有答案）和做到第几题。
+create or replace function public.lumi_quiz_start(p_quiz uuid, p_student text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  qz public.lumi_quizzes;
+  pr public.lumi_quiz_progress;
+begin
+  select * into qz from public.lumi_quizzes q where q.id = p_quiz and q.open;
+  if qz.id is null or not qz.roster @> jsonb_build_array(jsonb_build_object('id', p_student)) then
+    raise exception 'LUMI_QUIZ_NOT_FOUND';
+  end if;
+  insert into public.lumi_quiz_progress (quiz_id, student_id) values (p_quiz, p_student) on conflict do nothing;
+  select * into pr from public.lumi_quiz_progress x where x.quiz_id = p_quiz and x.student_id = p_student;
+  return jsonb_build_object('title', qz.title, 'questions', qz.questions, 'step', pr.step, 'done', pr.done_at is not null);
+end;
+$$;
+
+-- 回答当前这一题：答对到下一题；答错记一次。全部答对就算交。
+create or replace function public.lumi_quiz_answer(p_quiz uuid, p_student text, p_answer jsonb)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  qz public.lumi_quizzes;
+  pr public.lumi_quiz_progress;
+  k jsonb;
+  total int;
+  ok boolean;
+  given jsonb;
+  w jsonb;
+begin
+  select * into qz from public.lumi_quizzes q where q.id = p_quiz and q.open;
+  if qz.id is null then raise exception 'LUMI_QUIZ_NOT_FOUND'; end if;
+  select * into pr from public.lumi_quiz_progress x where x.quiz_id = p_quiz and x.student_id = p_student for update;
+  if pr.quiz_id is null then raise exception 'LUMI_QUIZ_NOT_STARTED'; end if;
+  total := jsonb_array_length(qz.answers);
+  if pr.done_at is not null or pr.step >= total then
+    return jsonb_build_object('correct', true, 'step', total, 'done', true);
+  end if;
+  k := qz.answers -> pr.step;
+  if k ->> 'type' = 'fill' then
+    ok := exists (select 1 from jsonb_array_elements_text(k -> 'accept') a(v)
+      where a.v = lower(regexp_replace(trim(coalesce(p_answer #>> '{}', '')), '\s+', ' ', 'g')));
+  else
+    if jsonb_typeof(p_answer) <> 'array' then raise exception 'LUMI_QUIZ_INVALID'; end if;
+    select coalesce(jsonb_agg(s.n order by s.n), '[]'::jsonb) into given
+      from (select distinct e.v::int as n from jsonb_array_elements_text(p_answer) e(v) where e.v ~ '^[0-9]{1,2}$') s;
+    ok := given = (k -> 'answer');
+  end if;
+  if ok then
+    update public.lumi_quiz_progress x set step = pr.step + 1,
+      done_at = case when pr.step + 1 >= total then now() else null end
+      where x.quiz_id = p_quiz and x.student_id = p_student;
+    return jsonb_build_object('correct', true, 'step', pr.step + 1, 'done', pr.step + 1 >= total);
+  end if;
+  w := pr.wrong;
+  while jsonb_array_length(w) <= pr.step loop w := w || '0'::jsonb; end loop;
+  w := jsonb_set(w, array[pr.step::text], to_jsonb((w ->> pr.step)::int + 1));
+  update public.lumi_quiz_progress x set wrong = w where x.quiz_id = p_quiz and x.student_id = p_student;
+  return jsonb_build_object('correct', false, 'step', pr.step, 'done', false);
+end;
+$$;
+
+revoke all on function public.lumi_quiz_publish(text, text, text, text, date, jsonb, jsonb, jsonb) from public, anon;
+grant execute on function public.lumi_quiz_publish(text, text, text, text, date, jsonb, jsonb, jsonb) to authenticated;
+revoke all on function public.lumi_portal() from public;
+revoke all on function public.lumi_student_quizzes(text, text) from public;
+revoke all on function public.lumi_quiz_start(uuid, text) from public;
+revoke all on function public.lumi_quiz_answer(uuid, text, jsonb) from public;
+grant execute on function public.lumi_portal() to anon, authenticated;
+grant execute on function public.lumi_student_quizzes(text, text) to anon, authenticated;
+grant execute on function public.lumi_quiz_start(uuid, text) to anon, authenticated;
+grant execute on function public.lumi_quiz_answer(uuid, text, jsonb) to anon, authenticated;

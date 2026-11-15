@@ -19,7 +19,7 @@ function boot(saved,view,cloud){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist/core.js'),'utf8'),ctx);
   const source=fs.readFileSync(path.join(__dirname,'../dist/app.js'),'utf8').replace(
     '  persist();render();\n})();',
-    '  globalThis.testApp={state,render,selectClass,onClick,validateBackup,recordDate,studentNameLines,applyResults,undoLast,stat,parentMessage,getData:()=>data};persist();render();\n})();'
+    '  globalThis.testApp={state,render,selectClass,onClick,validateBackup,recordDate,studentNameLines,applyResults,undoLast,stat,parentMessage,applyQuizProgress,quizBar,quizTag,getData:()=>data};persist();render();\n})();'
   );
   vm.runInContext(source,ctx);
   return {ctx,elements,stored,api:ctx.testApp};
@@ -222,4 +222,27 @@ test('homework header and parent note show the due date only when it is set',()=
   assert.ok(!elements.get('#content').innerHTML.includes('截止'));assert.ok(!api.parentMessage(a).includes('要交）'));
   a.due=a.date.slice(0,8)+'25';api.render();
   assert.ok(elements.get('#content').innerHTML.includes(`截止 ${a.due}`));assert.ok(api.parentMessage(a).includes('（'+Number(a.due.slice(5,7))+' 月 25 日要交）'));
+});
+test('finished online practice marks homework 已交, or 迟交 after the due date, and never overrides a teacher choice',()=>{
+  const {api,elements}=boot(),a=api.getData().activities.find(a=>a.kind==='homework');
+  const [s1,s2,s3,s4,s5]=a.students;
+  a.students.forEach(id=>{a.results[id]={status:'unrecorded',score:null,note:''};});
+  a.results[s3].status='late';a.results[s4].status='missing';a.due='2027-03-10';a.quiz={id:'q1',count:3,open:true};
+  const changed=api.applyQuizProgress([
+    {quiz_id:'q1',student_id:s1,step:3,wrong:[1,0,2],done_at:'2027-03-10T15:00:00Z'},
+    {quiz_id:'q1',student_id:s2,step:3,wrong:[],done_at:'2027-03-10T17:00:00Z'},
+    {quiz_id:'q1',student_id:s3,step:3,wrong:[],done_at:'2027-03-01T00:00:00Z'},
+    {quiz_id:'q1',student_id:s4,step:3,wrong:[],done_at:'2027-03-01T00:00:00Z'},
+    {quiz_id:'q1',student_id:s5,step:1,wrong:[4],done_at:null},
+    {quiz_id:'other',student_id:s1,step:3,wrong:[],done_at:'2027-03-01T00:00:00Z'}]);
+  assert.ok(changed);
+  assert.equal(a.results[s1].status,'submitted','11pm in Malaysia on the due date is on time');
+  assert.equal(a.results[s2].status,'late','1am the next day in Malaysia is late');
+  assert.equal(a.results[s3].status,'late','teacher choice kept');
+  assert.equal(a.results[s4].status,'submitted','missing becomes handed in');
+  assert.equal(a.results[s5].status,'unrecorded','unfinished stays unrecorded');
+  assert.equal(a.results[s1].quiz.wrong,3);
+  assert.ok(!api.applyQuizProgress([{quiz_id:'q1',student_id:s1,step:3,wrong:[1,0,2],done_at:'2027-03-10T15:00:00Z'}]),'second sync changes nothing');
+  assert.match(api.quizTag(a,s1),/错 3 次/);assert.ok(api.quizTag(a,s5).includes('1/3'));
+  assert.match(api.quizBar(a),/4 人完成 · 1 人在做/);
 });

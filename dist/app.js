@@ -337,7 +337,7 @@
       `<div class="filters"><div class="tab-group"><button class="${state.kind==='homework'?'active':''}" data-action="record-kind" data-kind="homework">${t('功课记录','Homework')}</button><button class="${state.kind!=='homework'?'active':''}" data-action="record-kind" data-kind="exam">${t('考试成绩','Exams')}</button></div><select id="activity-select" aria-label="${t('选择记录','Select record')}">${list.map(r=>`<option value="${r.id}" ${a?.id===r.id?'selected':''}>${esc(label(r))} · ${r.date}</option>`).join('')}</select><select id="record-filter" aria-label="${t('筛选状态','Filter status')}">${[['all',t('全部学生','All students')],['missing',t('只看欠交','Owed only')],['unrecorded',t('只看未记录','Unrecorded only')]].map(([v,l])=>`<option value="${v}" ${state.filter===v?'selected':''}>${l}</option>`).join('')}</select></div>`+
       (!a?empty(t('这个班级还没有记录，新增一份试试看。','No records in this class. Add one to get started.')):`
       <section class="card"><div class="activity-header"><div class="row between"><div><h2>${esc(label(a))}</h2><p class="help">${typeName(a.kind)} · ${t(a.kind==='homework'?'日期':'考试日期',a.kind==='homework'?'Date':'Exam date')} ${a.date}${a.kind==='homework'&&a.due?` · <b>${t('截止','Due')} ${a.due}</b>`:''}${a.kind==='homework'?'':` · ${t('满分','Out of')} ${a.max}`}${a.topic?` · ${esc(topicShort(a.topic))}`:''}</p>${a.note?`<p class="help">${esc(a.note)}</p>`:''}</div><div class="row">${button(t('编辑','Edit'),'edit-activity','sm',`data-id="${a.id}"`,'edit')}${a.kind==='homework'?button(t('线上练习','Online practice'),'quiz-upload','sm','','upload')+button(t('剩余未记录 → 已交','Mark remaining submitted'),'bulk-submit','soft sm'):button(t('贴成绩','Paste scores'),'paste-scores','sm','','upload')}${button(t('导出 CSV','Export CSV'),'export-csv','sm','','down')}${button(t('回收','Archive'),'archive-activity','sm danger',`data-id="${a.id}"`,'trash')}</div></div></div>
-      ${a.kind==='homework'?hwSummary(a):`<div class="info-banner">${icon('info')}${t(a.kind==='homework'?'选择提交状态，需要时填写备注。':'空白不是零分；缺席单独记录。不同满分自动换算为百分比。',a.kind==='homework'?'Select a submission status and optionally add a note.':'Blank is not zero. Absences are separate. Scores are converted to percentages.')}</div>`}
+      ${a.kind==='homework'?hwSummary(a)+quizBar(a):`<div class="info-banner">${icon('info')}${t(a.kind==='homework'?'选择提交状态，需要时填写备注。':'空白不是零分；缺席单独记录。不同满分自动换算为百分比。',a.kind==='homework'?'Select a submission status and optionally add a note.':'Blank is not zero. Absences are separate. Scores are converted to percentages.')}</div>`}
       <div class="table-wrap record-table-wrap"><table class="record-table"><thead><tr><th>#</th><th>${t('学生','Student')}</th><th>${t('状态','Status')}</th>${a.kind==='homework'?'':`<th>${t('得分','Score')} / ${a.max}</th><th>%</th>`}<th>${t('备注','Notes')}</th><th></th></tr></thead><tbody>${a.students.filter(id=>student(id)).filter(id=>state.filter==='all'||(state.filter==='missing'?C.owed(a.results[id]?.status):(a.results[id]?.status||'unrecorded')===state.filter)).map((id,i)=>recordRow(a,id,i)).join('')}</tbody></table></div>
       <p class="chart-caption">${t('修改自动保存。可复制「姓名＋分数」两列，系统按姓名配对。','Changes save automatically. Paste name and score columns to match students.')}</p></section>`)+footer();
   }
@@ -401,10 +401,75 @@
       try{
         const r=LumiQuiz.parse(await ExcelWorkbook.read(file));
         for(const q of r.questions)if(q.image)q.image=await shrinkImage(q.image);
-        out.innerHTML=quizPreview(r)+(r.errors.length?'':`<p class="help quiz-next">${t('检查没问题就好。下一步会加上「发布给学生」。','Looks right? Publishing to students comes in the next step.')}</p>`);
+        const can=!r.errors.length&&r.questions.length;
+        out.innerHTML=quizPreview(r)+(!can?'':window.StudyCloud?`<div class="quiz-next">${button(a.quiz?t('重新发布（换成这份题目）','Publish again with these questions'):t('发布给学生','Publish to students'),'quiz-publish','primary','type="button"','upload')}<p class="help">${t('学生选年级、点自己的名字就能做。全部答对才算交，会自动帮你记「已交」。','Students pick their level and name. Finishing with all answers right marks the homework submitted.')}</p></div>`:`<p class="help quiz-next">${t('要登录云端才能发布给学生。','Sign in to the cloud to publish to students.')}</p>`);
+        modal.querySelector('[data-action=quiz-publish]')?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();publishQuiz(a,r.questions,e.currentTarget);});
       }catch(e){out.innerHTML=`<div class="import-message error-list"><strong>${t('读不到这个文件','Could not read this file')}</strong><p>${esc(e.message)}</p></div>`;}
       input.value='';
     };
+  }
+  /* Online practice, step 2: questions go to the cloud; the answer key stays there, students only get the questions. */
+  const quizKey=q=>q.type==='fill'?{type:'fill',accept:q.accept.map(v=>String(v).replace(/\s+/g,' ').trim().toLowerCase())}:{type:q.type,answer:q.answer};
+  const studentLink=()=>new URL('quiz.html',location.href).href.split('?')[0];
+  async function publishQuiz(a,questions,btn){
+    const c=data.classes.find(x=>x.id===a.classId);if(!c)return;
+    btn.disabled=true;btn.textContent=t('发布中…','Publishing…');
+    try{
+      const roster=a.students.map(student).filter(s=>s&&!s.archived).map(s=>({id:s.id,name:[s.en,s.name].filter(Boolean).join(' ')}));
+      const res=await StudyCloud.quizPublish({p_activity:a.id,p_class:c.id,p_level:c.grade,p_title:label(a),p_due:a.due||null,
+        p_questions:questions.map(q=>({text:q.text,type:q.type,options:q.options,image:imgSrc(q.image)||null})),p_answers:questions.map(quizKey),p_roster:roster});
+      a.quiz={id:res.id,count:questions.length,open:true,publishedAt:new Date().toISOString()};persist();
+      if(modal.open)modal.close();render();quizShare(a);
+    }catch(e){btn.disabled=false;btn.textContent=t('再试一次','Try again');toast(/LUMI|function|relation|schema/i.test(e.message)?t('云端还没设置好：请先在 Supabase 运行最新的 setup.sql。','The cloud is not set up yet: run the latest setup.sql in Supabase.'):t('发布失败，请检查网络。','Publish failed. Check the connection.'));}
+  }
+  function quizShare(a){
+    const link=studentLink();
+    showModal(t('已发布','Published'),`<div class="full"><p class="help">${t('把这个网址发给学生（班级群就好）。学生选年级、点名字，就能开始做。','Send this link to the students. They pick their level and name to start.')}</p><input class="quiz-link" value="${esc(link)}" readonly></div>`,()=>{});
+    const submit=modal.querySelector('button[type=submit]');submit.textContent=t('复制网址','Copy link');
+    modal.querySelector('form').onsubmit=e=>{e.preventDefault();const box=modal.querySelector('.quiz-link');
+      const done=()=>{modal.close();toast(t('已复制网址','Link copied'));};
+      if(navigator.clipboard?.writeText)navigator.clipboard.writeText(link).then(done,()=>{box.focus();box.select();});else{box.focus();box.select();}};
+  }
+  async function setQuizOpen(a,open){
+    try{await StudyCloud.quizSetOpen(a.quiz.id,open);a.quiz.open=open;persist();render();toast(open?t('学生又可以做了','Open to students again'):t('已关闭，学生看不到了','Closed to students'));}
+    catch{toast(t('连不上云端，请检查网络。','Cannot reach the cloud. Check the connection.'));}
+  }
+  /* Who finished online: fills in 已交 (or 迟交 after the due date) for students not yet marked, and keeps wrong-answer counts. */
+  const quizLive={};let quizSyncAt=0;
+  const klDate=iso=>new Date(iso).toLocaleDateString('en-CA',{timeZone:'Asia/Kuala_Lumpur'});
+  function applyQuizProgress(rows){
+    let changed=false;
+    for(const p of rows){
+      const a=data.activities.find(x=>x.quiz?.id===p.quiz_id&&!x.archived);if(!a||!a.students.includes(p.student_id))continue;
+      const wrong=(p.wrong||[]).reduce((s,n)=>s+Number(n||0),0);
+      (quizLive[a.id]??={})[p.student_id]={step:p.step,done:!!p.done_at,wrong};
+      if(!p.done_at)continue;
+      const r=a.results[p.student_id]||{status:'unrecorded',score:null,note:''};
+      if(['unrecorded','missing'].includes(r.status)){
+        C.updateResult(data,a.id,p.student_id,{status:a.due&&klDate(p.done_at)>a.due?'late':'submitted'});changed=true;
+      }
+      const res=a.results[p.student_id],info={wrong,doneAt:p.done_at,perQuestion:p.wrong||[]};
+      if(JSON.stringify(res.quiz)!==JSON.stringify(info)){res.quiz=info;changed=true;}
+    }
+    return changed;
+  }
+  async function syncQuizzes(force=false){
+    if(!window.StudyCloud||(!force&&Date.now()-quizSyncAt<20000))return;
+    const ids=data.activities.filter(a=>a.quiz?.id&&!a.archived).map(a=>a.quiz.id);if(!ids.length)return;
+    quizSyncAt=Date.now();
+    try{const changed=applyQuizProgress(await StudyCloud.quizProgress(ids));if(changed)persist();if(changed||state.page==='records')render();}catch{}
+  }
+  function quizBar(a){
+    if(!a.quiz)return '';
+    const live=Object.values(quizLive[a.id]||{}),done=live.filter(x=>x.done).length,doing=live.filter(x=>!x.done&&x.step>0).length;
+    return `<div class="quiz-bar"><span>${t('线上练习','Online practice')} · ${a.quiz.count} ${t('题','questions')} · ${a.quiz.open?t(`${done} 人完成`,`${done} finished`)+(doing?t(` · ${doing} 人在做`,` · ${doing} in progress`):''):t('已关闭','Closed')}</span>${button(t('学生网址','Student link'),'quiz-share','sm')}${button(a.quiz.open?t('关闭','Close'):t('重新打开','Reopen'),'quiz-toggle','sm')}${button(t('刷新','Refresh'),'quiz-refresh','sm')}</div>`;
+  }
+  function quizTag(a,sid){
+    if(!a.quiz)return '';
+    const live=quizLive[a.id]?.[sid],saved=a.results[sid]?.quiz;
+    if(saved||live?.done)return `<small class="quiz-tag done">✓ ${t('线上完成','Done online')}${(saved?.wrong??live?.wrong)?t(` · 错 ${saved?.wrong??live.wrong} 次`,` · ${saved?.wrong??live.wrong} wrong`):''}</small>`;
+    if(live?.step)return `<small class="quiz-tag">${t(`线上做到 ${live.step}/${a.quiz.count}`,`Online ${live.step}/${a.quiz.count}`)}</small>`;
+    return '';
   }
   /* Names only, one per line, ready to paste into WhatsApp or Excel. */
   const HW_GROUPS={done:['submitted','late','makeup'],owe:['missing','incomplete'],missing:['missing'],incomplete:['incomplete'],unrecorded:['unrecorded']};
@@ -437,7 +502,7 @@
   function recordRow(a,id,i){
     const s=student(id),r=a.results[id]||{status:'unrecorded',score:null,note:''},opts=a.kind==='homework'?['unrecorded','submitted','missing','late','incomplete','makeup']:['unrecorded','recorded','absent'];
     return `<tr data-student-row="${id}"><td class="tiny muted" data-label="#">${String(i+1).padStart(2,'0')}</td><td data-label="${t('学生','Student')}"><div class="row">${avatar(s,i)}<button class="student-name" data-action="student" data-id="${id}">${studentNameLines(s)}<small>${esc(s.code)}${s.archived?` · ${t('已归档','Archived')}`:''}</small></button></div></td>
-      <td data-label="${t('状态','Status')}">${a.kind==='homework'?homeworkButtons(id,r.status,label(s)):examButtons(id,r.status,label(s),r.score)}</td>${a.kind==='homework'?'':`<td data-label="${t('得分','Score')} / ${a.max}"><input class="score" inputmode="decimal" type="number" min="0" max="${a.max}" step="any" value="${r.score??''}" data-result="score" data-sid="${id}" aria-label="${esc(label(s))} ${t('分数','score')}"></td><td class="small muted" data-label="%" data-pct="${id}">${percent(C.pct(r,a))}</td>`}<td data-label="${t('备注','Note')}"><details class="row-note"><summary>${r.note?t('查看备注','View note'):t('+备注','+Note')}</summary><input class="note-input" value="${esc(r.note)}" placeholder="${t('添加备注…','Add a note…')}" data-result="note" data-sid="${id}" aria-label="${esc(label(s))} ${t('备注','notes')}"></details></td><td><button class="icon-btn" data-action="history" data-id="${id}" aria-label="${t('查看修改历史','View history')}">${icon('clock')}</button></td></tr>`;
+      <td data-label="${t('状态','Status')}">${a.kind==='homework'?homeworkButtons(id,r.status,label(s))+quizTag(a,id):examButtons(id,r.status,label(s),r.score)}</td>${a.kind==='homework'?'':`<td data-label="${t('得分','Score')} / ${a.max}"><input class="score" inputmode="decimal" type="number" min="0" max="${a.max}" step="any" value="${r.score??''}" data-result="score" data-sid="${id}" aria-label="${esc(label(s))} ${t('分数','score')}"></td><td class="small muted" data-label="%" data-pct="${id}">${percent(C.pct(r,a))}</td>`}<td data-label="${t('备注','Note')}"><details class="row-note"><summary>${r.note?t('查看备注','View note'):t('+备注','+Note')}</summary><input class="note-input" value="${esc(r.note)}" placeholder="${t('添加备注…','Add a note…')}" data-result="note" data-sid="${id}" aria-label="${esc(label(s))} ${t('备注','notes')}"></details></td><td><button class="icon-btn" data-action="history" data-id="${id}" aria-label="${t('查看修改历史','View history')}">${icon('clock')}</button></td></tr>`;
   }
   function studentList(){
     const list=roster().filter(s=>`${s.name} ${s.en} ${s.code}`.toLowerCase().includes(state.search.toLowerCase()));
@@ -516,6 +581,7 @@
     document.querySelector('#content').innerHTML=(pages[state.page]||overview)();
     if(restoredView){restoredView=false;if(state.page==='records'&&state.focusStudentId)app.querySelector(`[data-result=score][data-sid="${esc(state.focusStudentId)}"]`)?.focus?.({preventScroll:true});window.scrollTo({top:state.scrollY||0});}
     saveView();
+    if(state.page==='records')syncQuizzes();
   }
   function field(name,title,type='text',value='',attrs=''){return `<label class="form-field">${title}<input name="${name}" type="${type}" value="${esc(value)}" ${attrs}></label>`;}
   function selectField(name,title,options,value=''){return `<label class="form-field">${title}<select name="${name}">${options.map(([v,l])=>`<option value="${esc(v)}" ${v===value?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;}
@@ -766,6 +832,9 @@
     else if(action==='copy-names')copyNames(el.dataset.group);
     else if(action==='parent-note')parentNote();
     else if(action==='quiz-upload')quizUpload();
+    else if(action==='quiz-share'){const a=selectedActivity();if(a?.quiz)quizShare(a);}
+    else if(action==='quiz-toggle'){const a=selectedActivity();if(a?.quiz)setQuizOpen(a,!a.quiz.open);}
+    else if(action==='quiz-refresh')syncQuizzes(true);
     else if(action==='merge-dup')mergeDuplicate(Number(el.dataset.i));
     else if(action==='edit-student')addStudent(true);
     else if(action==='student'){state.studentId=id;state.tab='progress';state.examFilter='all';go('student');}
@@ -961,6 +1030,7 @@
   // <details> toggle does not bubble; capture it so re-renders keep the roster as the teacher left it.
   document.addEventListener?.('toggle',e=>{if(e.target?.classList?.contains('workspace-roster'))state.rosterOpen=e.target.open;},true);
   openTodaysClass();
+  setTimeout(()=>syncQuizzes(true),0);window.addEventListener('focus',()=>syncQuizzes());
   window.addEventListener('lumi-theme',()=>{const b=document.querySelector('.theme-toggle');if(b)render();});
   persist();render();
 })();

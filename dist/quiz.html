@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>微光 Lumi · 线上练习</title>
+  <meta name="theme-color" content="#f6f8fc">
+  <link rel="icon" type="image/png" href="./assets/studylog-starloop-96.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/zqfs@3.0.0/dist/ZhuqueFangsong-Regular/result.css">
+  <style>
+    :root{--bg:#f6f8fc;--card:#fff;--ink:#202938;--muted:#748197;--line:#e3e8f0;--blue:#3564db;--blue-soft:#edf2ff;--green:#2f8a5f;--green-soft:#e9f6ef;--red:#c2414f;--red-soft:#fdeef0}
+    *{box-sizing:border-box}
+    html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Figtree,"Zhuque Fangsong (technical preview)",system-ui,sans-serif;font-synthesis:none;-webkit-tap-highlight-color:transparent}
+    main{max-width:560px;margin:0 auto;padding:20px 16px 40px;min-height:100vh}
+    .brand{display:flex;align-items:center;gap:10px;margin:4px 0 22px}
+    .brand img{width:36px;height:36px}
+    .brand b{font-size:20px;letter-spacing:.06em}
+    .brand small{display:block;color:var(--muted);font-size:12px;letter-spacing:.02em}
+    h1{font-size:22px;margin:0 0 6px;font-weight:600}
+    .sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
+    button{font:inherit;color:inherit;cursor:pointer}
+    .tile{padding:18px 10px;border:1px solid var(--line);border-radius:14px;background:var(--card);font-size:20px;font-weight:600}
+    .tile:active,.opt:active,.card:active{transform:scale(.98)}
+    .search{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;font:inherit;font-size:16px;margin-bottom:12px;background:var(--card)}
+    .list{display:grid;gap:8px}
+    .name{display:block;width:100%;text-align:left;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:16px}
+    .card{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;text-align:left;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+    .card b{display:block;font-size:17px;font-weight:600}
+    .card small{color:var(--muted);font-size:13px}
+    .pill{flex:none;padding:5px 10px;border-radius:99px;background:var(--blue-soft);color:var(--blue);font-size:13px;font-weight:600}
+    .pill.done{background:var(--green-soft);color:var(--green)}
+    .link{background:none;border:0;color:var(--blue);padding:8px 0;font-size:14px}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px}
+    .bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin-bottom:18px}
+    .bar i{display:block;height:100%;background:var(--blue);border-radius:99px;transition:width .3s}
+    .q{font-size:19px;line-height:1.5;margin:0 0 14px;white-space:pre-wrap}
+    .q-img{display:block;max-width:100%;max-height:300px;margin:0 auto 16px;border-radius:12px}
+    .opts{display:grid;gap:10px}
+    .opt{display:flex;gap:12px;align-items:center;width:100%;text-align:left;padding:15px 16px;border:2px solid var(--line);border-radius:14px;background:var(--card);font-size:17px;transition:background .15s,border-color .15s}
+    .opt .k{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--blue-soft);color:var(--blue);font-size:14px;font-weight:600}
+    .opt.sel{border-color:var(--blue);background:var(--blue-soft)}
+    .opt.right{border-color:var(--green);background:var(--green-soft)}
+    .opt.wrong{border-color:var(--red);background:var(--red-soft);animation:shake .35s}
+    .opt:disabled{opacity:.55;cursor:default}
+    .opt.right:disabled{opacity:1}
+    .fill{width:100%;padding:14px 16px;border:2px solid var(--line);border-radius:14px;font:inherit;font-size:18px;background:var(--card)}
+    .fill.wrong{border-color:var(--red);animation:shake .35s}
+    .go{width:100%;margin-top:14px;padding:15px;border:0;border-radius:14px;background:var(--blue);color:#fff;font-size:17px;font-weight:600}
+    .go:disabled{opacity:.4}
+    .msg{min-height:24px;margin:12px 0 0;text-align:center;font-size:15px}
+    .msg.no{color:var(--red)}.msg.yes{color:var(--green)}
+    .done-box{text-align:center;padding:40px 10px}
+    .done-box .big{font-size:56px}
+    .empty{color:var(--muted);text-align:center;padding:30px 0}
+    @keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+    @media (prefers-reduced-motion:reduce){.opt.wrong,.fill.wrong{animation:none}.bar i{transition:none}}
+  </style>
+</head>
+<body>
+  <main id="quiz-app"><p class="empty">载入中… Loading…</p></main>
+  <script src="./cloud-config.js?v=__V__"></script>
+  <script src="./quiz-app.js?v=__V__"></script>
+</body>
+</html>
