@@ -280,3 +280,10 @@ test('students left without a class can be found and binned, and come back when 
   api.onClick({preventDefault(){},target:{closest:q=>q==='[data-action]'?{dataset:{action:'restore',kind:'class',id:'c2'}}:null}});
   assert.ok(only.every(id=>!d.students.find(s=>s.id===id).archived),'students come back with their class');
 });
+test('practices in the cloud that no live homework points to are closed',async()=>{
+  const calls=[],cloud={label:()=>'',changed(){},quizList:async()=>[{id:'gone',open:true},{id:'closed',open:false},{id:'live',open:true}],quizSetOpen:async(id,open)=>calls.push([id,open]),quizSetRoster:async()=>{}};
+  const {api}=boot(undefined,undefined,cloud),a=api.getData().activities.find(a=>a.kind==='homework');
+  a.quiz={id:'live',count:1,open:true,rosterSig:'x'};
+  await api.tidyQuizzes();
+  assert.deepEqual(calls,[['gone',false]],'only the orphan is closed');
+});

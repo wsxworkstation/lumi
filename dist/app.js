@@ -430,6 +430,24 @@
       const done=()=>{modal.close();toast(t('已复制网址','Link copied'));};
       if(navigator.clipboard?.writeText)navigator.clipboard.writeText(link).then(done,()=>{box.focus();box.select();});else{box.focus();box.select();}};
   }
+  /* Every practice in the cloud, including ones whose homework or class is gone, so the teacher can always close them. */
+  async function quizManage(){
+    if(modal.open)modal.close();
+    showModal(t('线上练习','Online practice'),`<div class="full" id="quiz-manage"><p class="help">${t('读取中…','Loading…')}</p></div>`,()=>{});
+    modal.querySelector('button[type=submit]').hidden=true;
+    let list;try{list=await StudyCloud.quizList();}catch{modal.querySelector('#quiz-manage').innerHTML=`<p class="help">${t('连不上云端，请检查网络。','Cannot reach the cloud.')}</p>`;return;}
+    const where=q=>{const a=data.activities.find(x=>x.quiz?.id===q.id),c=a&&data.classes.find(x=>x.id===a.classId);
+      if(!a)return t('这份功课已不在 app 里','This homework is no longer in the app');if(a.archived)return t('功课在回收站','Homework is in the recycle bin');
+      if(!c||c.archived)return t('班级已删除','Class deleted');return `${label(c)} · ${c.year}`;};
+    const box=modal.querySelector('#quiz-manage');if(!box)return;
+    box.innerHTML=list.length?list.map(q=>{const a=data.activities.find(x=>x.quiz?.id===q.id),canOpen=a&&quizWanted(a);
+      return `<div class="version-row"><div><strong>${esc(q.title)}</strong><small>${esc(q.level)} · ${esc(where(q))} · ${q.open?t('学生看得到','Visible to students'):t('已关闭','Closed')}</small></div>${q.open?button(t('关闭','Close'),'quiz-manage-toggle','sm',`type="button" data-id="${esc(q.id)}" data-open="0"`):canOpen?button(t('打开','Open'),'quiz-manage-toggle','sm',`type="button" data-id="${esc(q.id)}" data-open="1"`):''}</div>`;}).join(''):`<p class="help">${t('还没有发布过练习。','No practice published yet.')}</p>`;
+  }
+  async function quizManageToggle(id,open){
+    try{await StudyCloud.quizSetOpen(id,open);const a=data.activities.find(x=>x.quiz?.id===id);if(a){a.quiz.open=open;delete a.quiz.autoClosed;persist();}
+      toast(open?t('学生又可以做了','Open to students again'):t('已关闭，学生看不到了','Closed to students'));quizManage();}
+    catch{toast(t('连不上云端，请检查网络。','Cannot reach the cloud. Check the connection.'));}
+  }
   async function setQuizOpen(a,open){
     try{await StudyCloud.quizSetOpen(a.quiz.id,open);a.quiz.open=open;delete a.quiz.autoClosed;persist();render();toast(open?t('学生又可以做了','Open to students again'):t('已关闭，学生看不到了','Closed to students'));}
     catch{toast(t('连不上云端，请检查网络。','Cannot reach the cloud. Check the connection.'));}
@@ -463,6 +481,13 @@
   async function tidyQuizzes(){
     if(!window.StudyCloud?.quizSetRoster)return;
     let changed=false;
+    // Practices in the cloud that no live homework here points to (record or class deleted, or published elsewhere): close them.
+    try{
+      for(const q of await StudyCloud.quizList()){
+        const a=data.activities.find(x=>x.quiz?.id===q.id);
+        if(q.open&&(!a||!quizWanted(a))){await StudyCloud.quizSetOpen(q.id,false);if(a){a.quiz.open=false;a.quiz.autoClosed=true;changed=true;}}
+      }
+    }catch{}
     for(const a of data.activities.filter(a=>a.quiz?.id)){
       const q=a.quiz,ok=quizWanted(a);
       try{
@@ -598,7 +623,7 @@
     <div class="dashboard-grid"><section class="card"><div class="card-head"><h2>${t('统计与提醒','Statistics & reminders')}</h2></div><div class="setting-grid">
     <p class="help full">${t('功课统计跟随当前年份和月份，不需要调整参考日期。','Homework statistics follow the selected year and month.')}</p>
     ${[['pass','及格线 (%)','Passing score (%)',0,100],['low','低分提醒 (%)','Low-score alert (%)',0,100],['missing','连续未交次数','Consecutive missing assignments',1,20],['declines','连续下降次数','Consecutive score declines',1,10],['termEnd','第一学期结束月份','Last month of term 1',1,11]].map(([key,zh,en,min,max])=>`<label>${t(zh,en)}<input type="number" min="${min}" max="${max}" step="1" value="${data.settings[key]}" data-setting="${key}"></label>`).join('')}</div><div class="divider"></div><p class="help">${t('功课：补交计入完成率，不计入准时率。分母按截止日期和当次应交名单计算。考试：百分比等权平均，学校与补习分开；缺席和空白不计作 0 分；小考不计入学期平均。排名并列时采用 1、2、2、4。等级 A/B/C 的界线尚未确定。','Homework: made-up work counts as completed, not on-time. Denominator uses due dates and assigned students. Exams: equal-weight percentages, school and tuition separate. Absence and blanks are not zero. Quizzes are excluded from term averages. Ties use competition ranking: 1, 2, 2, 4. Grade boundaries are not configured.')}</p></section>
-    <div class="stack"><section class="card"><div class="card-head"><h2>${t('重复的学生','Duplicate students')}</h2>${button(t('检查','Check'),'find-dups','sm','','users')}</div><p class="help">${t('同一个学生在不同科目被建立了两次时，可以合并成一个编号，记录都保留。','If a student was added twice for different subjects, merge them into one code. All records stay.')}</p></section>${window.LumiTopics?`<section class="card"><div class="card-head"><h2>${t('章节库','Topic library')}</h2>${button(t('编辑','Edit'),'topic-library','sm','','edit')}</div><p class="help">${t('记功课时可直接选的章节。已放入 KSSM 数学、附加数学、科学 F1–F5，可自己修改。','Chapters you can pick when recording homework. KSSM Maths, Add Maths and Science F1–F5 are included, and you can edit them.')}</p></section>`:''}<section class="card"><div class="card-head"><h2>${t('记录种类','Record types')}</h2>${button(t('新增','Add'),'add-type','sm','','plus')}</div>${data.types.map(type=>`<div class="row between" style="margin:12px 0"><span class="small">${esc(type)}</span>${button(t('移除','Remove'),'remove-type','sm',`data-type="${esc(type)}"`)}</div>`).join('')}<p class="help">${t('种类名称可自定义，每次记录仍需选择功课或考试的计算方式。移除种类不会删除旧记录。','Types are labels; each record also selects a homework or exam calculation. Removing a type keeps historical records.')}</p></section>
+    <div class="stack">${window.StudyCloud?.quizList?`<section class="card"><div class="card-head"><h2>${t('线上练习','Online practice')}</h2>${button(t('管理','Manage'),'quiz-manage','sm','','edit')}</div><p class="help">${t('看全部发布过的练习，可以关闭，学生就看不到。','See every practice you published and close any of them.')}</p></section>`:''}<section class="card"><div class="card-head"><h2>${t('重复的学生','Duplicate students')}</h2>${button(t('检查','Check'),'find-dups','sm','','users')}</div><p class="help">${t('同一个学生在不同科目被建立了两次时，可以合并成一个编号，记录都保留。','If a student was added twice for different subjects, merge them into one code. All records stay.')}</p></section>${window.LumiTopics?`<section class="card"><div class="card-head"><h2>${t('章节库','Topic library')}</h2>${button(t('编辑','Edit'),'topic-library','sm','','edit')}</div><p class="help">${t('记功课时可直接选的章节。已放入 KSSM 数学、附加数学、科学 F1–F5，可自己修改。','Chapters you can pick when recording homework. KSSM Maths, Add Maths and Science F1–F5 are included, and you can edit them.')}</p></section>`:''}<section class="card"><div class="card-head"><h2>${t('记录种类','Record types')}</h2>${button(t('新增','Add'),'add-type','sm','','plus')}</div>${data.types.map(type=>`<div class="row between" style="margin:12px 0"><span class="small">${esc(type)}</span>${button(t('移除','Remove'),'remove-type','sm',`data-type="${esc(type)}"`)}</div>`).join('')}<p class="help">${t('种类名称可自定义，每次记录仍需选择功课或考试的计算方式。移除种类不会删除旧记录。','Types are labels; each record also selects a homework or exam calculation. Removing a type keeps historical records.')}</p></section>
     ${window.LumiTheme?`<section class="card"><div class="card-head"><h2>${t('显示','Display')}</h2></div><div class="tab-group theme-modes">${[['light',t('浅色','Light')],['dark',t('深色','Dark')],['auto',t('跟随系统','Match device')]].map(([m,l])=>`<button type="button" class="${LumiTheme.mode===m?'active':''}" data-action="theme-mode" data-mode="${m}" aria-pressed="${LumiTheme.mode===m}">${l}</button>`).join('')}</div><p class="help" style="margin-top:10px">${t('只影响这台设备。跟随系统：手机或电脑开了深色模式，就自动变深色。','Applies to this device only. Match device follows your phone or computer setting.')}</p></section>`:''}${window.StudyCloud?`<section class="card"><div class="card-head"><h2>${t('云端同步','Cloud sync')}</h2></div><p class="help">${t('登录账号','Signed in as')}：<strong>${esc(StudyCloud.email)}</strong></p><p class="help">${t('每次修改会自动上传。云端每天自动保留一份旧版本，误删时可以恢复。','Every change uploads automatically. The cloud keeps one older version per day, so mistakes can be undone.')}</p><div class="row wrap" style="margin-top:12px">${button(t('恢复旧版本','Restore an older version'),'cloud-versions','','','restore')}${button(t('退出登录','Sign out'),'cloud-logout','','','back')}</div></section>`:''}<section class="card"><div class="card-head"><h2>${t('备份','Backup')}</h2></div><div class="row wrap">${button(t('下载 JSON 备份','Download JSON'),'backup','','','down')}${button(t('恢复 JSON 备份','Restore JSON'),'restore-backup','','','restore')}</div><input id="backup-file" type="file" accept=".json,application/json" hidden><p class="help" style="margin-top:12px">${t('JSON 保存全部记录；单次功课或考试可在录入页导出 CSV。恢复 JSON 后会同步到云端。','JSON contains all records. Export a record as CSV from Quick entry. A restored JSON syncs to the cloud.')}</p></section></div></div>`+footer();}
   function importsPage(){
     const p=state.importPlan,hasBackup=!!localStorage.getItem(IMPORT_BACKUP_KEY),c=p?.counts||{};
@@ -887,6 +912,8 @@
     else if(action==='quiz-share'){const a=selectedActivity();if(a?.quiz)quizShare(a);}
     else if(action==='quiz-toggle'){const a=selectedActivity();if(a?.quiz)setQuizOpen(a,!a.quiz.open);}
     else if(action==='quiz-refresh')syncQuizzes(true);
+    else if(action==='quiz-manage')quizManage();
+    else if(action==='quiz-manage-toggle')quizManageToggle(el.dataset.id,el.dataset.open==='1');
     else if(action==='merge-dup')mergeDuplicate(Number(el.dataset.i));
     else if(action==='edit-student')addStudent(true);
     else if(action==='student'){state.studentId=id;state.tab='progress';state.examFilter='all';go('student');}

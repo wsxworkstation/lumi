@@ -214,6 +214,7 @@
     /* Online practice: publish a quiz, open/close it, and read who has finished. */
     rosterPublish:levels=>request('/rest/v1/rpc/lumi_roster_publish',{method:'POST',body:JSON.stringify({p_levels:levels})}),
     quizPublish:p=>request('/rest/v1/rpc/lumi_quiz_publish',{method:'POST',body:JSON.stringify(p)}),
+    quizList:()=>request('/rest/v1/lumi_quizzes?select=id,activity_id,title,level,open,created_at&order=created_at.desc'),
     quizSetRoster:(id,roster)=>request(`/rest/v1/lumi_quizzes?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({roster})}),
     quizSetOpen:(id,open)=>request(`/rest/v1/lumi_quizzes?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({open:!!open})}),
     quizProgress:ids=>request(`/rest/v1/lumi_quiz_progress?select=quiz_id,student_id,step,wrong,done_at&quiz_id=in.(${ids.map(encodeURIComponent).join(',')})`),
