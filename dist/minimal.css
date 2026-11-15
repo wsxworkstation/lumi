@@ -314,3 +314,5 @@ dialog .form-field{line-height:1.65}dialog .form-field input,dialog .form-field 
 .quiz-link{width:100%;margin-top:8px}
 .quiz-qr{display:grid;justify-items:center;gap:10px;margin:14px 0 6px}
 .quiz-qr img{width:220px;height:220px;border-radius:12px;background:#fff;padding:6px;border:1px solid #e6eaf0}
+.classless-list{display:grid;gap:6px;margin-top:10px;max-height:45vh;overflow:auto}
+.classless-list p{margin:0;padding:8px 12px;border:1px solid #e6eaf0;border-radius:8px}

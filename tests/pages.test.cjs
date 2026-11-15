@@ -19,7 +19,7 @@ function boot(saved,view,cloud){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist/core.js'),'utf8'),ctx);
   const source=fs.readFileSync(path.join(__dirname,'../dist/app.js'),'utf8').replace(
     '  persist();render();\n})();',
-    '  globalThis.testApp={state,render,selectClass,onClick,validateBackup,recordDate,studentNameLines,applyResults,undoLast,stat,parentMessage,applyQuizProgress,quizBar,quizTag,rosterLevels,getData:()=>data};persist();render();\n})();'
+    '  globalThis.testApp={state,render,selectClass,onClick,validateBackup,recordDate,studentNameLines,applyResults,undoLast,stat,parentMessage,applyQuizProgress,quizBar,quizTag,rosterLevels,tidyQuizzes,classless,getData:()=>data};persist();render();\n})();'
   );
   vm.runInContext(source,ctx);
   return {ctx,elements,stored,api:ctx.testApp};
@@ -256,4 +256,27 @@ test('student page name list: levels of the latest year, each student once, arch
   for(const l of levels)assert.equal(new Set(l.students.map(s=>s.id)).size,l.students.length);
   assert.ok(!levels.some(l=>l.students.some(s=>s.id==='s2')));
   assert.equal(JSON.stringify(levels.map(l=>l.level)),JSON.stringify([...levels.map(l=>l.level)].sort()));
+});
+test('deleting a class closes its online practice; students who left drop off; restoring reopens it',async()=>{
+  const calls=[],cloud={label:()=>'',changed(){},quizSetOpen:async(id,open)=>calls.push(['open',id,open]),quizSetRoster:async(id,r)=>calls.push(['roster',id,r.map(x=>x.id).join(',')])};
+  const {api}=boot(undefined,undefined,cloud),d=api.getData(),a=d.activities.find(a=>a.kind==='homework'),c=d.classes.find(x=>x.id===a.classId);
+  a.quiz={id:'q1',count:2,open:true,rosterSig:'old'};
+  await api.tidyQuizzes();assert.equal(calls[0][0],'roster','a changed name list is sent');calls.length=0;
+  await api.tidyQuizzes();assert.equal(calls.length,0,'nothing to do twice');
+  d.students.find(s=>s.id===a.students[0]).archived=true;await api.tidyQuizzes();
+  assert.ok(!calls[0][2].split(',').includes(a.students[0]),'archived student removed');calls.length=0;
+  c.archived=true;await api.tidyQuizzes();
+  assert.deepEqual(calls[0],['open','q1',false]);assert.equal(a.quiz.open,false);calls.length=0;
+  c.archived=false;await api.tidyQuizzes();
+  assert.deepEqual(calls[0],['open','q1',true],'restoring the class reopens it');
+});
+test('students left without a class can be found and binned, and come back when the class is restored',()=>{
+  const {api}=boot(),d=api.getData(),c=d.classes.find(x=>x.id==='c2');
+  const only=c.students.filter(id=>!d.classes.some(x=>x!==c&&x.students.includes(id)));
+  assert.equal(api.classless().length,0);
+  c.archived=true;assert.equal(api.classless().length,only.length);
+  for(const s of api.classless()){s.archived=true;s.orphaned=true;}
+  assert.equal(api.classless().length,0);
+  api.onClick({preventDefault(){},target:{closest:q=>q==='[data-action]'?{dataset:{action:'restore',kind:'class',id:'c2'}}:null}});
+  assert.ok(only.every(id=>!d.students.find(s=>s.id===id).archived),'students come back with their class');
 });

@@ -415,10 +415,10 @@
     const c=data.classes.find(x=>x.id===a.classId);if(!c)return;
     btn.disabled=true;btn.textContent=t('发布中…','Publishing…');
     try{
-      const roster=a.students.map(student).filter(s=>s&&!s.archived).map(s=>({id:s.id,name:[s.en,s.name].filter(Boolean).join(' ')}));
+      const roster=quizRoster(a);
       const res=await StudyCloud.quizPublish({p_activity:a.id,p_class:c.id,p_level:c.grade,p_title:label(a),p_due:a.due||null,
         p_questions:questions.map(q=>({text:q.text,type:q.type,options:q.options,image:imgSrc(q.image)||null})),p_answers:questions.map(quizKey),p_roster:roster});
-      a.quiz={id:res.id,count:questions.length,open:true,publishedAt:new Date().toISOString()};persist();
+      a.quiz={id:res.id,count:questions.length,open:true,publishedAt:new Date().toISOString(),rosterSig:JSON.stringify(roster)};persist();
       if(modal.open)modal.close();render();quizShare(a);
     }catch(e){btn.disabled=false;btn.textContent=t('再试一次','Try again');toast(/LUMI|function|relation|schema/i.test(e.message)?t('云端还没设置好：请先在 Supabase 运行最新的 setup.sql。','The cloud is not set up yet: run the latest setup.sql in Supabase.'):t('发布失败，请检查网络。','Publish failed. Check the connection.'));}
   }
@@ -431,7 +431,7 @@
       if(navigator.clipboard?.writeText)navigator.clipboard.writeText(link).then(done,()=>{box.focus();box.select();});else{box.focus();box.select();}};
   }
   async function setQuizOpen(a,open){
-    try{await StudyCloud.quizSetOpen(a.quiz.id,open);a.quiz.open=open;persist();render();toast(open?t('学生又可以做了','Open to students again'):t('已关闭，学生看不到了','Closed to students'));}
+    try{await StudyCloud.quizSetOpen(a.quiz.id,open);a.quiz.open=open;delete a.quiz.autoClosed;persist();render();toast(open?t('学生又可以做了','Open to students again'):t('已关闭，学生看不到了','Closed to students'));}
     catch{toast(t('连不上云端，请检查网络。','Cannot reach the cloud. Check the connection.'));}
   }
   /* Student page name list: each level's students (latest year), uploaded whenever it changes so students can always find their name. */
@@ -447,8 +447,33 @@
   function publishRoster(){
     if(!window.StudyCloud?.rosterPublish)return;
     clearTimeout(rosterTimer);
-    rosterTimer=setTimeout(async()=>{const levels=rosterLevels(),json=JSON.stringify(levels);if(json===rosterSent)return;
+    rosterTimer=setTimeout(async()=>{
+      tidyQuizzes();
+      const levels=rosterLevels(),json=JSON.stringify(levels);if(json===rosterSent)return;
       try{await StudyCloud.rosterPublish(levels);rosterSent=json;}catch{}},3000);
+  }
+  /* Who may do a published practice: students still in that class and not archived. */
+  function quizRoster(a){
+    const c=data.classes.find(x=>x.id===a.classId);
+    return a.students.filter(id=>c?.students.includes(id)).map(student).filter(s=>s&&!s.archived).map(s=>({id:s.id,name:[s.en,s.name].filter(Boolean).join(' ')}));
+  }
+  /* Keep the cloud in step with the teacher's changes: a deleted class or record closes its practice (and reopens it when
+     restored); students who left or were archived drop off its name list. */
+  const quizWanted=a=>{const c=data.classes.find(x=>x.id===a.classId);return !a.archived&&c&&!c.archived;};
+  async function tidyQuizzes(){
+    if(!window.StudyCloud?.quizSetRoster)return;
+    let changed=false;
+    for(const a of data.activities.filter(a=>a.quiz?.id)){
+      const q=a.quiz,ok=quizWanted(a);
+      try{
+        if(q.open&&!ok){await StudyCloud.quizSetOpen(q.id,false);q.open=false;q.autoClosed=true;changed=true;continue;}
+        if(!q.open&&q.autoClosed&&ok){await StudyCloud.quizSetOpen(q.id,true);q.open=true;delete q.autoClosed;changed=true;}
+        if(!q.open)continue;
+        const roster=quizRoster(a),sig=JSON.stringify(roster);
+        if(q.rosterSig!==sig){await StudyCloud.quizSetRoster(q.id,roster);q.rosterSig=sig;changed=true;}
+      }catch{}
+    }
+    if(changed)persist();
   }
   /* Who finished online: fills in 已交 (or 迟交 after the due date) for students not yet marked, and keeps wrong-answer counts. */
   const quizLive={};let quizSyncAt=0;
@@ -522,8 +547,8 @@
   }
   function studentList(){
     const list=roster().filter(s=>`${s.name} ${s.en} ${s.code}`.toLowerCase().includes(state.search.toLowerCase()));
-    const e=latest(),es=C.examStats(e),dups=C.findDuplicates(data).length;
-    return heading(t('每位学生，都值得被看见。','Every student, a story.'),t('查看个人记录、进步和下一步目标。','Explore their records, progress and next goals.'),(dups?button(t(`${dups} 组可能重复`,`${dups} possible duplicates`),'find-dups','','',''):'')+button(t('添加学生','Add student'),'add-student','primary','','plus'))+classStrip()+
+    const e=latest(),es=C.examStats(e),dups=C.findDuplicates(data).length,lost=classless().length;
+    return heading(t('每位学生，都值得被看见。','Every student, a story.'),t('查看个人记录、进步和下一步目标。','Explore their records, progress and next goals.'),(lost?button(t(`${lost} 位没有班级`,`${lost} without a class`),'classless','','',''):'')+(dups?button(t(`${dups} 组可能重复`,`${dups} possible duplicates`),'find-dups','','',''):'')+button(t('添加学生','Add student'),'add-student','primary','','plus'))+classStrip()+
       `<div class="filters"><input class="search" id="student-search" placeholder="${t('搜索姓名或学生编号…','Search name or student code…')}" value="${esc(state.search)}" aria-label="${t('搜索学生','Search students')}"></div><section class="card"><div class="table-wrap"><table><thead><tr><th>${t('学生','Student')}</th><th>${t('标签','Tag')}</th><th>${t('功课完成率','Completion')}</th><th>${t('未交','Missing')}</th><th>${t('最近考试','Latest exam')}</th><th>${t('本场排名','Exam rank')}</th><th></th></tr></thead><tbody>${list.map((s,i)=>{const stats=stat(s.id),p=e?C.pct(e.results[s.id],e):null;return `<tr><td><div class="row">${avatar(s,i)}<button class="student-name" data-action="student" data-id="${s.id}">${studentNameLines(s)}<small>${esc(s.code)}</small></button></div></td><td>${s.tag?badge(s.tag==='focus'?t('需要关注','Needs attention'):s.tag==='new'?t('新生','New student'):s.tag,s.tag==='focus'?'red':''): '—'}</td><td>${percent(stats.rate)}</td><td>${stats.missing?badge(stats.missing,'red'):'—'}</td><td>${percent(p)}</td><td>${es.rank[s.id]?`${es.rank[s.id]} / ${es.count}`:'—'}</td><td>${button(t('查看档案','View profile'),'student','sm',`data-id="${s.id}"`)}</td></tr>`;}).join('')}</tbody></table></div>${!list.length?empty(t('没有匹配的学生','No matching students')):''}</section>`+footer();
   }
   function studentPage(){
@@ -614,6 +639,16 @@
       const parts=[r.created.length&&t(`新增 ${r.created.length} 人`,`${r.created.length} new`),r.linked.length&&t(`${r.linked.length} 人已在别科，直接加入`,`${r.linked.length} from other subjects`),r.already.length&&t(`${r.already.length} 人本来就在这班`,`${r.already.length} already here`),r.ambiguous.length&&t(`同名的人请用「加学生」挑选：${r.ambiguous.join('、')}`,`Same name as several students, add individually: ${r.ambiguous.join(', ')}`)].filter(Boolean);
       setTimeout(()=>toast(parts.join(' · ')),0);
     });
+  }
+  /* Students left without any class (e.g. their class was deleted): they are invisible elsewhere, so list them here. */
+  const classless=()=>data.students.filter(s=>!s.archived&&!data.classes.some(c=>!c.archived&&c.students.includes(s.id)));
+  function classlessForm(){
+    if(modal.open)modal.close();
+    const list=classless();
+    showModal(t('没有班级的学生','Students without a class'),`<div class="full"><p class="help">${t('他们原本的班级被删除了，所以在别的地方看不到。移到回收站后，学生版也不会再出现他们；以后恢复那个班级，他们会一起回来。','Their class was deleted, so they do not show anywhere else. Moving them to the recycle bin also removes them from the student page; restoring the class brings them back.')}</p><div class="classless-list">${list.map(s=>`<p>${studentNameLines(s)}</p>`).join('')||`<p class="help">${t('没有','None')}</p>`}</div></div>`,()=>{
+      for(const s of classless()){s.archived=true;s.orphaned=true;}
+    });
+    modal.querySelector('button[type=submit]').textContent=t(`全部移到回收站（${list.length}）`,`Move all to recycle bin (${list.length})`);
   }
   /* Students entered twice (e.g. once per subject) before names were matched. */
   function duplicatesForm(){
@@ -845,6 +880,7 @@
     else if(action==='add-student')addStudent();
     else if(action==='bulk-students')bulkStudents();
     else if(action==='find-dups')duplicatesForm();
+    else if(action==='classless')classlessForm();
     else if(action==='copy-names')copyNames(el.dataset.group);
     else if(action==='parent-note')parentNote();
     else if(action==='quiz-upload')quizUpload();
@@ -910,7 +946,9 @@
     else if(action==='leave-class')confirmation(t('从当前班退班','Leave current class'),t('旧成绩和功课留在原班。以后可以在添加学生时重新加入。','Old records stay in this class. Enroll the existing student again when needed.'),()=>{cls().students=cls().students.filter(id=>id!==state.studentId);state.page='students';});
     else if(action==='archive-goal')confirmation(t('归档目标','Archive goal'),t('目标历史保留，可在回收站恢复。','The goal can be restored from the recycle bin.'),()=>{data.goals.find(g=>g.id===id).archived=true;});
     else if(action==='restore'){
-      const group={class:data.classes,student:data.students,activity:data.activities,goal:data.goals}[el.dataset.kind];group.find(o=>o.id===id).archived=false;persist();render();toast(t('已恢复','Restored'));
+      const group={class:data.classes,student:data.students,activity:data.activities,goal:data.goals}[el.dataset.kind];const item=group.find(o=>o.id===id);item.archived=false;
+      if(el.dataset.kind==='class')item.students.map(student).filter(s=>s?.orphaned).forEach(s=>{s.archived=false;delete s.orphaned;});
+      if(el.dataset.kind==='student')delete item.orphaned;persist();render();toast(t('已恢复','Restored'));
     }
     else if(action==='export-csv')exportCsv();
     else if(action==='points')givePoints(el.dataset.id,Number(el.dataset.delta));
