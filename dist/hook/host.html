@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#070b19">
+  <title>勾题大作战 老师控制台</title>
+  <link rel="icon" href="../assets/studylog-starloop-96.png">
+  <link rel="stylesheet" href="./hook.css?v=__V__">
+</head>
+<body class="host">
+  <main class="console" id="setup">
+    <header><h1 class="logo">勾题大作战</h1><span class="logo-en" style="margin:0">Hook Rush · 老师控制台（测试版）</span></header>
+    <aside>
+      <section class="panel join-card">
+        <h2>学生扫码加入</h2>
+        <img src="../assets/lumi-hook-qr.png" alt="QR">
+        <p class="code" id="code">----</p>
+        <p class="url" id="url"></p>
+      </section>
+      <section class="panel" style="margin-top:16px">
+        <h2>题目</h2>
+        <div class="row">
+          <label class="btn">上传 Excel<input id="file" type="file" accept=".xlsx" hidden></label>
+          <button class="btn" id="demo">用示范题目</button>
+        </div>
+        <p class="msgs" id="qmsg">还没有题目。Excel 用线上练习同一个模板（Quizizz 格式）。</p>
+      </section>
+      <section class="panel" style="margin-top:16px">
+        <h2>设定</h2>
+        <p class="msgs">几队</p>
+        <div class="seg" id="teams"><button data-n="2" class="on">2 队</button><button data-n="3">3 队</button></div>
+        <div class="row" style="margin-top:12px"><span class="msgs" style="margin:0">先到几分赢</span><input class="num" id="target" type="number" min="5" max="200" value="20"></div>
+        <p class="msgs">另外最多 5 分钟，时间到就看分数。</p>
+      </section>
+    </aside>
+    <section class="panel">
+      <div class="row" style="justify-content:space-between;margin-top:0">
+        <h2 style="margin:0">玩家 <span id="pcount"></span></h2>
+        <div class="row" style="margin:0"><button class="btn" id="bot1">+1 机器人</button><button class="btn" id="bot5">+5 机器人</button><button class="btn" id="nobots">清除机器人</button></div>
+      </div>
+      <div id="players"></div>
+      <button class="big-btn" id="start" disabled>开始 Start</button>
+      <p class="msgs" id="startHint"></p>
+    </section>
+  </main>
+  <div id="stage" class="hidden">
+    <canvas id="cv"></canvas>
+    <div class="bar">
+      <div class="clock" id="clock"></div>
+      <div class="scores" id="scores"></div>
+      <div class="ctrl"><span class="rate" id="rate"></span><button class="btn" id="pause">暂停</button><button class="btn danger" id="stop">结束</button></div>
+    </div>
+    <div id="count3" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:160px;font-weight:900;text-shadow:0 0 40px #5fd4ff;pointer-events:none"></div>
+    <div class="end-panel hidden" id="end"></div>
+  </div>
+  <script src="../vendor/jszip.min.js?v=__V__"></script>
+  <script src="../xlsx-lite.js?v=__V__"></script>
+  <script src="../quiz-import.js?v=__V__"></script>
+  <script src="../cloud-config.js?v=__V__"></script>
+  <script src="./engine.js?v=__V__"></script>
+  <script src="./host.js?v=__V__"></script>
+</body>
+</html>

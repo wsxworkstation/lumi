@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#070b19">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>勾题大作战 Hook Rush</title>
+  <link rel="icon" href="../assets/studylog-starloop-96.png">
+  <link rel="stylesheet" href="./hook.css?v=__V__">
+</head>
+<body>
+  <canvas id="cv"></canvas>
+  <div id="hud" class="hidden">
+    <div class="clock" id="clock"></div>
+    <div class="scores" id="scores"></div>
+    <button class="icon-btn" id="mute" aria-label="声音 Sound">🔊</button>
+  </div>
+  <div id="joy" class="hidden"><i></i></div>
+  <div class="joy-hint hidden" id="joyHint">左边拖动 走路</div>
+  <button id="hookBtn" class="hidden"><b>⚓</b>甩钩</button>
+  <div id="frost" class="hidden"></div>
+  <div id="count" class="hidden"></div>
+  <div id="toast"></div>
+  <div id="net" class="hidden">连线中… Reconnecting</div>
+  <div id="ask" class="hidden"></div>
+  <div id="ui"></div>
+  <div id="rotate"><div><span>📱</span>请把手机横过来<br><small>Turn your phone sideways</small></div></div>
+  <script src="../cloud-config.js?v=__V__"></script>
+  <script src="./engine.js?v=__V__"></script>
+  <script src="./player.js?v=__V__"></script>
+</body>
+</html>

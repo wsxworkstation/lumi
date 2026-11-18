@@ -23,7 +23,7 @@ jobs:
           node-version: 22
       - run: npm test
       - name: Stamp asset versions so browsers fetch new files after each deploy
-        run: sed -i "s/__V__/${GITHUB_SHA::7}/g" dist/index.html dist/quiz.html
+        run: sed -i "s/__V__/${GITHUB_SHA::7}/g" dist/index.html dist/quiz.html dist/hook/index.html dist/hook/host.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
