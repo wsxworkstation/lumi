@@ -3,11 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <meta name="theme-color" content="#070b19">
+  <meta name="theme-color" content="#bfe7ff">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>勾题大作战 Hook Rush</title>
   <link rel="icon" href="../assets/studylog-starloop-96.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=ZCOOL+KuaiLe&display=swap">
   <link rel="stylesheet" href="./hook.css?v=__V__">
 </head>
 <body>
@@ -15,18 +18,18 @@
   <div id="hud" class="hidden">
     <div class="clock" id="clock"></div>
     <div class="scores" id="scores"></div>
-    <button class="icon-btn" id="mute" aria-label="声音 Sound">🔊</button>
+    <button class="icon-btn" id="mute" aria-label="声音 Sound"></button>
   </div>
   <div id="joy" class="hidden"><i></i></div>
   <div class="joy-hint hidden" id="joyHint">左边拖动 走路</div>
-  <button id="hookBtn" class="hidden"><b>⚓</b>甩钩</button>
+  <button id="hookBtn" class="hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3.5V14a4.5 4.5 0 0 1-9 0v-2.5l3 2.5"/><circle cx="15" cy="3" r="1.4" fill="currentColor"/></svg>甩竿</button>
   <div id="frost" class="hidden"></div>
   <div id="count" class="hidden"></div>
   <div id="toast"></div>
   <div id="net" class="hidden">连线中… Reconnecting</div>
   <div id="ask" class="hidden"></div>
   <div id="ui"></div>
-  <div id="rotate"><div><span>📱</span>请把手机横过来<br><small>Turn your phone sideways</small></div></div>
+  <div id="rotate"><div><i class="phone"></i>请把手机横过来<br><small>Turn your phone sideways</small></div></div>
   <script src="../cloud-config.js?v=__V__"></script>
   <script src="./engine.js?v=__V__"></script>
   <script src="./player.js?v=__V__"></script>

@@ -103,6 +103,17 @@ test('fewer snapshots as more phones join, to stay under the free Supabase limit
   assert.ok((20+1)*1000/H.snapEvery(20)<=50);
 });
 
+test('each player keeps the animal they picked, and can change it in the lobby', () => {
+  const g=game(),N=H.ANIMALS.length;
+  g.input({k:'join',id:'a',name:'Ali',av:3});
+  assert.equal(g.players.get('a').av,3);
+  g.input({k:'join',id:'a',name:'Ali',av:7});assert.equal(g.players.get('a').av,7,'changed in the lobby');
+  g.input({k:'join',id:'a',name:'Ali'});assert.equal(g.players.get('a').av,7,'a rejoin without a choice keeps it');
+  for(const bad of [99,-1,1.5,'x'])assert.ok(g.join('b'+bad,'B',false,bad).av<N,'unknown choice → some animal');
+  const s=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));assert.equal(s.p.find(p=>p.id==='a').av,7);
+  g.start();g.stop();assert.equal(g.end.players.find(r=>r[0]==='Ali')[4],7,'results show the animal');
+});
+
 test('a move message adds back the walk done while it travelled', () => {
   const g=game();g.join('a','A');g.start();run(g,C.COUNT+1000);
   const p=g.players.get('a'),start=H.confine(200,40);

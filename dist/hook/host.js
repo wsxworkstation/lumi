@@ -80,14 +80,14 @@
   /* ── Lobby ── */
   $('#teams').onclick=e=>{const b=e.target.closest('[data-n]');if(!b)return;$('#teams').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));game.setTeams(Number(b.dataset.n));drawPlayers();};
   $('#target').onchange=e=>{const v=Math.round(Number(e.target.value));game.target=Number.isFinite(v)?G.clamp(v,5,200):C.TARGET;e.target.value=game.target;};
-  const addBots=n=>{for(let i=0;i<n&&game.players.size<30;i++)game.join('bot'+(++botN),'机器人 '+botN,true);drawPlayers();};
+  const addBots=n=>{for(let i=0;i<n&&game.players.size<30;i++)game.join('bot'+(++botN),'机器人 '+botN,true,Math.floor(Math.random()*G.ANIMALS.length));drawPlayers();};
   $('#bot1').onclick=()=>addBots(1);$('#bot5').onclick=()=>addBots(5);
   $('#nobots').onclick=()=>{for(const p of [...game.players.values()])if(p.bot)game.kick(p.id);drawPlayers();};
   function drawPlayers(){
     const list=[...game.players.values()],now=Date.now();
     $('#pcount').textContent=list.length?`· ${list.length} 人`:'';
-    $('#players').innerHTML=list.length?`<div class="teams t${game.teams}">${Array.from({length:game.teams},(_,t)=>`<div class="team-col"><h3 style="color:${teamOf(t).color}">${teamOf(t).zh} ${teamOf(t).en}</h3>
-      ${list.filter(p=>p.team===t).map(p=>`<div class="chip ${!p.bot&&now-p.seen>12000?'off':''}"><span>${p.bot?'🤖 ':''}${esc(p.name)}</span><button data-kick="${esc(p.id)}" title="移除">✕</button></div>`).join('')||'<p class="empty">—</p>'}</div>`).join('')}</div>`
+    $('#players').innerHTML=list.length?`<div class="teams t${game.teams}">${Array.from({length:game.teams},(_,t)=>{const T=teamOf(t);return `<div class="team-col" style="--soft:${T.soft}"><h3 style="color:${T.ink}">${T.zh} ${T.en}</h3>
+      ${list.filter(p=>p.team===t).map(p=>`<div class="chip ${!p.bot&&now-p.seen>12000?'off':''}"><img src="${G.animalIcon(p.av,32,p.team)}" alt=""><span>${esc(p.name)}</span><button data-kick="${esc(p.id)}" title="移除">✕</button></div>`).join('')||'<p class="empty">—</p>'}</div>`;}).join('')}</div>`
       :'<p class="empty">学生扫码、打名字以后就会出现在这里。也可以先加机器人试玩。</p>';
     $('#players').querySelectorAll('[data-kick]').forEach(b=>b.onclick=()=>{game.kick(b.dataset.kick);drawPlayers();snapNow();});
     const ready=game.qs.length&&list.length;$('#start').disabled=!ready;
@@ -107,12 +107,17 @@
   function snapNow(){lastSnap=performance.now();push('snap',game.snapshot());}
   function showEnd(){
     const e=game.end,win=e.win>=0?teamOf(e.win):null;
-    $('#end').innerHTML=`<div class="box"><p class="win-title" style="color:${win?win.color:'#fff'}">${win?`${win.zh}赢了！`:'平手！'}</p>
+    // Top three stand on a little podium: 2nd, 1st, 3rd.
+    const podium=[1,0,2].map(i=>e.players[i]&&[e.players[i],i]).filter(Boolean)
+      .map(([r,i])=>`<div class="p${i+1}"><img src="${G.animalIcon(r[4],i?64:84,r[1])}" alt=""><span>${esc(r[0])}</span><b>${i+1}</b></div>`).join('');
+    $('#end').innerHTML=`<div class="box"><p class="win-title" style="color:${win?win.ink:'#8d7f9c'}">${win?`${win.zh}赢了！`:'平手！'}</p>
       <p class="sub">${game.sc.slice(0,game.teams).map((v,i)=>`${teamOf(i).zh} ${v}`).join(' · ')} · ${e.reason==='time'?'时间到':e.reason==='stop'?'老师结束':`先到 ${game.target} 分`}</p>
-      <table class="rank"><tr><td></td><td>名字</td><td>答对 / 答错</td></tr>${e.players.map((r,i)=>`<tr><td>${i+1}</td><td><span class="dot" style="background:${teamOf(r[1]).color}"></span>${esc(r[0])}</td><td>✓ ${r[2]} · ✗ ${r[3]}</td></tr>`).join('')}</table>
+      ${podium?`<div class="podium">${podium}</div>`:''}
+      <table class="rank"><tr class="head"><td></td><td>名字</td><td>答对 / 答错</td></tr>${e.players.map((r,i)=>`<tr><td>${i+1}</td><td><img src="${G.animalIcon(r[4],26,r[1])}" alt="">${esc(r[0])}</td><td>✓ ${r[2]} · ✗ ${r[3]}</td></tr>`).join('')}</table>
       ${e.hard>=0?`<div class="hard">最多人答错的题（错 ${e.hardWrong} 次）<br><b>${esc(e.hardText)}</b></div>`:''}
-      <div class="row" style="justify-content:center;margin-top:16px"><button class="btn primary" id="again">再来一局</button><button class="btn" id="lobby">回到房间（换题目／分队）</button></div></div>`;
+      <div class="row actions"><button class="btn primary" id="again">再来一局</button><button class="btn" id="lobby">回到房间（换题目／分队）</button></div></div>`;
     $('#end').classList.remove('hidden');$('#again').onclick=startGame;$('#lobby').onclick=toLobby;G.sfx.win();
+    if(win)G.confetti($('#end'));
   }
 
   /* A worker keeps the referee ticking even if this tab is behind another window. */
@@ -138,16 +143,21 @@
   function frame(){
     requestAnimationFrame(frame);
     if($('#stage').classList.contains('hidden'))return;
-    const t=game.t,players=[...game.players.values()].map(p=>({...p,fx:p.dx,fy:p.dy}));
-    const hooks=game.hooks.map(h=>{const tip=G.hookTip(h,t);return {x:h.x,y:h.y,tx:tip.x,ty:tip.y,team:game.players.get(h.o)?.team};});
-    const orbs=[];for(const o of game.orbs){const at=game.orbAt(o);if(at)orbs.push({id:o.id,k:o.k,x:at.x,y:at.y,alpha:o.hk||o.by?1:Math.min(1,(t-o.b)/300),pop:o.by?0.7:1});}
+    const t=game.t,hooked=new Set(game.hooks.map(h=>h.o));
+    const players=[...game.players.values()].map(p=>({...p,fx:p.dx,fy:p.dy,mv:game.ph==='play'&&p.st===0&&!!(p.dx||p.dy)&&!hooked.has(p.id)}));
+    const hooks=game.hooks.map(h=>{const tip=G.hookTip(h,t);return {o:h.o,x:h.x,y:h.y,tx:tip.x,ty:tip.y,team:game.players.get(h.o)?.team,caught:!!h.orb};});
+    const orbs=[];for(const o of game.orbs){const at=game.orbAt(o);if(at)orbs.push({id:o.id,k:o.k,x:at.x,y:at.y,alpha:o.hk||o.by?1:Math.min(1,(t-o.b)/300),held:!!o.by,hooked:!!o.hk&&!o.by});}
     G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:game.teams,players,orbs,hooks},performance.now(),64);
     const left=Math.max(0,(game.limit-t)/1000);
-    $('#clock').innerHTML=game.ph==='pause'?'⏸ 暂停中':`${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')} <small>先到 ${game.target} 分</small>`;
-    const sc=game.sc.slice(0,game.teams).map((v,i)=>`<div class="score" style="color:${teamOf(i).color}">${v}<small>${teamOf(i).zh}</small></div>`).join('');
+    const clock=game.ph==='pause'?'暂停中':`${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')} <small>先到 ${game.target} 分</small>`;
+    if($('#clock').innerHTML!==clock)$('#clock').innerHTML=clock;
+    const sc=game.sc.slice(0,game.teams).map((v,i)=>{const T=teamOf(i);return `<div class="score" style="--tc:${T.color};--ti:${T.ink}">${v}<small>${T.zh}</small></div>`;}).join('');
     if($('#scores').innerHTML!==sc)$('#scores').innerHTML=sc;
     $('#pause').textContent=game.ph==='pause'?'继续':'暂停';
-    const c3=$('#count3');if(game.ph==='count'){const n=Math.max(1,Math.ceil(game.cd/1000));c3.textContent=n;c3.classList.remove('hidden');if(n!==lastCount){lastCount=n;G.sfx.tick();}}else c3.classList.add('hidden');
+    const c3=$('#count3');
+    if(game.ph==='count'){const n=Math.max(1,Math.ceil(game.cd/1000));c3.classList.remove('hidden');
+      if(n!==lastCount){lastCount=n;c3.textContent=n;c3.classList.remove('bump');void c3.offsetWidth;c3.classList.add('bump');G.sfx.tick();}}
+    else{c3.classList.add('hidden');lastCount=-1;}
   }
   requestAnimationFrame(frame);
   drawPlayers();
