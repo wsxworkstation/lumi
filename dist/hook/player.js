@@ -78,8 +78,8 @@
   function waiting(text){ui.dataset.key='';ui.innerHTML=`<div class="screen"><div class="box">${head('房间 '+esc(room))}<div class="sheet"><img class="wait-pet" src="${pet(myAv,96)}" alt=""><p class="sub dots">${esc(text)}</p></div></div></div>`;}
   function message(text,btn,fn){ui.dataset.key='';ui.innerHTML=`<div class="screen"><div class="box">${head('Hook Rush')}<div class="sheet"><p class="sub">${text}</p><button class="big-btn" id="again">${btn}</button></div></div></div>`;$('#again').onclick=fn;}
   function closed(){message('老师已经关掉房间。<br>The room is closed.','重新找房间 Find a room',()=>location.reload());setPlaying(false);}
-  // Keep telling the teacher we are here (also rejoins after the teacher's page reloads).
-  setInterval(()=>{if(!room||kicked||now()-joinedAt<1200)return;
+  // Keep telling the teacher we are here (also rejoins after the teacher's page reloads). Only after pressing Join.
+  setInterval(()=>{if(!up||kicked||now()-joinedAt<1200)return;
     if(!mine)send({k:'join',name:myName,av:myAv});else if(now()-lastSend>5000)send({k:'hi'});},1500);
   setInterval(()=>{$('#net').classList.toggle('hidden',!room||!S||kicked||now()-lastSnapAt<4000||S.ph==='end');},1000);
 
@@ -291,5 +291,7 @@
     if(mine.st===1){const bar=$('#tbar');if(bar){const pct=Math.max(0,(mine.until-t)/C.ANSWER*100);bar.style.width=pct+'%';bar.style.background=pct>50?'#3cc895':pct>25?'#ffc93c':'#ff7096';}}
   }
   requestAnimationFrame(frame);
+  // Make sure this phone runs the newest version (only before a room is picked, so nobody is thrown out mid-way).
+  const ver=G.freshen(()=>!!room);if(ver)$('#ver').textContent='版本 '+ver;
   findRooms();
 })();

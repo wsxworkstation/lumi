@@ -525,6 +525,23 @@
     el.appendChild(box);setTimeout(()=>box.remove(),6500);
   }
 
+  /* GitHub Pages lets a browser keep a page for 10 minutes, so right after a fix a phone can still run the old copy.
+     At start-up, ask for this page again (skipping every cache); if it carries a newer version, switch to it once.
+     busy() says "don't switch now" (e.g. the student already picked a room). Returns this page's version. */
+  function freshen(busy=()=>false){
+    if(typeof document==='undefined')return '';
+    const ver=document.querySelector('meta[name="hook-version"]')?.content||'';
+    if(!/^[0-9a-f]{7}$/.test(ver)||/[?&]local\b/.test(location.search))return ver;
+    fetch(location.pathname+'?fresh='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(t=>{
+      const m=/name="hook-version" content="([0-9a-f]{7})"/.exec(t);if(!m||m[1]===ver||busy())return;
+      let tried='';try{tried=sessionStorage.getItem('lumi-hook-upd')||'';}catch{}
+      if(tried===m[1])return;
+      try{sessionStorage.setItem('lumi-hook-upd',m[1]);}catch{}
+      const q=new URLSearchParams(location.search);q.set('v',m[1]);location.replace(location.pathname+'?'+q);
+    }).catch(()=>{});
+    return ver;
+  }
+
   /* ── Sound: tiny soft synth, no files ── */
   let actx=null,muted=false;try{muted=localStorage.getItem('lumi-hook-mute')==='1';}catch{}
   function tone(f,d,type='sine',vol=.15,slide=0,delay=0){
@@ -544,7 +561,7 @@
     win(){[523,659,784,1047,1319].forEach((f,i)=>tone(f,.24,'triangle',.14,0,i*.11));}
   };
 
-  const api={C,ANIMALS,TURN,clamp,rng,bases,confine,orbPos,hookDist,hookTip,hookDone,outgoing,segDist,createGame,snapEvery,unpack,createNet,createLocalNet,viewport,render,drawAnimal,animalIcon,confetti,sfx};
+  const api={C,ANIMALS,TURN,clamp,rng,bases,confine,orbPos,hookDist,hookTip,hookDone,outgoing,segDist,createGame,snapEvery,unpack,createNet,createLocalNet,viewport,render,drawAnimal,animalIcon,confetti,freshen,sfx};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.HookGame=api;
 })(globalThis);

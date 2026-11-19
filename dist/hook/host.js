@@ -162,4 +162,6 @@
   requestAnimationFrame(frame);
   drawPlayers();
   if(qp.has('demo'))useQuestions(DEMO,'示范题目');
+  // Run the newest version (only while the room is still empty, so a running game is never reloaded).
+  const ver=G.freshen(()=>game.players.size>0||game.ph!=='lobby');if(ver)$('#ver').textContent='版本 '+ver;
 })();
