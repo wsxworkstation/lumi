@@ -30,10 +30,13 @@
   const rooms=new Map();let roomTimer=null;
   function findRooms(){
     if(qp.get('r'))return askName(qp.get('r'));
+    // Rooms announce themselves every 2 s. Only redraw the list while the student is still choosing a room —
+    // once a room is picked (name screen), the list must never come back over it.
     net.join('hook-lobby',(ev,p)=>{if(ev==='room'&&p?.room){rooms.set(String(p.room),{...p,at:Date.now()});drawRooms();}});
-    drawRooms();roomTimer=setInterval(drawRooms,2000);
+    clearInterval(roomTimer);drawRooms();roomTimer=setInterval(drawRooms,2000);
   }
   function drawRooms(){
+    if(room)return;
     const list=[...rooms.values()].filter(r=>Date.now()-r.at<6000&&r.ph!=='closed');
     const key='rooms:'+list.map(r=>r.room+'/'+r.n).join(',');if(ui.dataset.key===key)return;ui.dataset.key=key;
     ui.innerHTML=`<div class="screen"><div class="box">${head('Hook Rush')}<div class="sheet">
