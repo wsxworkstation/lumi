@@ -220,7 +220,7 @@
 
   /* ── Network: Supabase Realtime (Phoenix websocket) for listening and the host's pushes; REST broadcast for phones' messages ── */
   function createNet(cfg){
-    const handlers=new Map(),joinRefs=new Map();let ws=null,ref=0,hb=null,closed=false,open=false,status=()=>{};
+    const handlers=new Map(),joinRefs=new Map();let ws=null,ref=0,hb=null,closed=false,open=false,status=()=>{},downSince=Date.now();
     const raw=(topic,event,payload,jr)=>{if(open)ws.send(JSON.stringify({topic,event,payload,ref:String(++ref),join_ref:jr}));};
     const joinMsg=topic=>{const jr=String(++ref);joinRefs.set(topic,jr);raw('realtime:'+topic,'phx_join',{config:{broadcast:{self:false,ack:false},presence:{key:''},postgres_changes:[],private:false}},jr);};
     function connect(){
@@ -229,7 +229,7 @@
       ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch{return;}
         if(m.event==='broadcast'){const h=handlers.get(String(m.topic).replace(/^realtime:/,''));if(h)h(m.payload.event,m.payload.payload);}
         else if(m.event==='phx_error'||m.event==='phx_close'){const t=String(m.topic).replace(/^realtime:/,'');if(!closed&&handlers.has(t))setTimeout(()=>handlers.has(t)&&joinMsg(t),1000);}};
-      ws.onclose=()=>{open=false;clearInterval(hb);status(false);if(!closed)setTimeout(connect,1000);};
+      ws.onclose=()=>{if(open)downSince=Date.now();open=false;clearInterval(hb);status(false);setTimeout(()=>{if(!closed)connect();},1000);};
       ws.onerror=()=>{};
     }
     return {
@@ -238,6 +238,8 @@
       push(topic,event,payload){if(!open)return false;raw('realtime:'+topic,'broadcast',{type:'broadcast',event,payload},joinRefs.get(topic));return true;},
       post(topic,event,payload){return fetch(cfg.url+'/realtime/v1/api/broadcast',{method:'POST',keepalive:true,headers:{apikey:cfg.key,'Content-Type':'application/json'},body:JSON.stringify({messages:[{topic,event,payload}]})}).then(r=>r.ok,()=>false);},
       onStatus(fn){status=fn;if(open)fn(true);},
+      // How long (ms) we have been unable to reach the server; 0 while connected. Lets the screens warn instead of waiting forever.
+      downFor(){return open?0:Date.now()-downSince;},
       close(){closed=true;clearInterval(hb);ws?.close();}
     };
   }
@@ -247,7 +249,7 @@
     return {
       join(topic,fn){const c=new BroadcastChannel('hook:'+topic);c.onmessage=e=>fn(e.data.event,e.data.payload);chans.set(topic,c);},
       leave(topic){chans.get(topic)?.close();chans.delete(topic);},
-      push:send,post:(t,e,p)=>Promise.resolve(send(t,e,p)),onStatus:fn=>fn(true),close(){for(const c of chans.values())c.close();}
+      push:send,post:(t,e,p)=>Promise.resolve(send(t,e,p)),onStatus:fn=>fn(true),downFor:()=>0,close(){for(const c of chans.values())c.close();}
     };
   }
 

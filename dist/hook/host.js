@@ -28,6 +28,8 @@
     const before=game.players.size,p=game.input(m);
     if(m.k==='join'&&p&&game.players.size!==before)drawPlayers();
   });
+  // If this computer can't reach the server, students never see the room. Say so instead of looking fine.
+  setInterval(()=>{$('#netWarn').classList.toggle('hidden',net.downFor()<4000);},1000);
   addEventListener('beforeunload',()=>{net.push(down,'closed',{});net.push('hook-lobby','room',{room:code,n:0,ph:'closed'});});
 
   /* ── Questions ── */

@@ -132,6 +132,12 @@ input{font:inherit}
 @keyframes turn{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
 @media (orientation:portrait) and (pointer:coarse){body.playing #rotate{display:flex}}
 #net{position:fixed;left:50%;top:50px;transform:translateX(-50%);z-index:16;background:#fff;color:var(--pink-d);font-family:var(--fun);padding:4px 14px;border-radius:999px;font-size:14px;box-shadow:0 3px 0 rgba(74,59,85,.12)}
+.warn{color:var(--pink-d);font-family:var(--fun);font-size:18px}
+/* The teacher's computer can't reach the server, so no phone can see the room. */
+.net-warn{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:40;width:min(560px,calc(100% - 32px));background:var(--pink-d);color:#fff;
+  padding:12px 18px;border-radius:16px;box-shadow:0 6px 0 rgba(120,20,50,.25);font-size:15px;line-height:1.5}
+.net-warn b{display:block;font-family:var(--fun);font-size:19px;font-weight:600}
+.net-warn small{display:block;opacity:.85;margin-top:2px}
 
 #ver{position:fixed;right:max(10px,env(safe-area-inset-right));bottom:max(6px,env(safe-area-inset-bottom));z-index:21;font-size:11px;color:rgba(74,59,85,.45);pointer-events:none}
 body.playing #ver{display:none}

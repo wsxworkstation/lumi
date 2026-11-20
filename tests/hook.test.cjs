@@ -121,3 +121,14 @@ test('a move message adds back the walk done while it travelled', () => {
   assert.ok(Math.abs(p.x-(start.x+C.SPEED*0.2))<1,'moved on by 0.2 s of walking');
   g.input({k:'mv',id:'a',s:1,x:0,y:0,dx:0,dy:0,t:g.t});assert.ok(p.x>100,'old message ignored');
 });
+
+test('the screens can tell when the server cannot be reached', async () => {
+  // A websocket that never connects (no internet / blocked): downFor keeps growing so the teacher and phones get a warning.
+  const made=[];global.WebSocket=class{constructor(){made.push(this);}send(){}close(){}};
+  const net=H.createNet({url:'https://x.supabase.co',key:'k'});net.join('hook-lobby',()=>{});
+  await new Promise(r=>setTimeout(r,30));assert.ok(net.downFor()>=25,'counting while never connected');
+  made[0].onopen();assert.equal(net.downFor(),0,'connected');
+  made[0].onclose();assert.ok(net.downFor()<20,'counts again from the moment it dropped');
+  net.close();delete global.WebSocket;
+  assert.equal(H.createLocalNet().downFor(),0);
+});
