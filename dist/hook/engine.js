@@ -518,9 +518,9 @@
     ctx.save();ctx.globalAlpha=a;ctx.translate(o.x,o.y);
     // The glowing goldfish: a soft pulsing halo with turning rays, so everyone sees it from far away.
     if(o.k==='g'){const pu=0.75+Math.sin(now/220)*0.25,glow=globalThis.HookArt?.get('rush-glow');
-      if(glow){ctx.save();ctx.globalAlpha=a*pu*0.65;ctx.drawImage(glow,-65*s,-52*s,130*s,104*s);ctx.restore();}
-      else{const gr=ctx.createRadialGradient(0,0,6,0,0,58*s);
-      gr.addColorStop(0,`rgba(255,236,140,${0.75*pu})`);gr.addColorStop(1,'rgba(255,214,80,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(0,0,58*s,0,TAU);ctx.fill();}
+      const gr=ctx.createRadialGradient(0,0,6,0,0,58*s);
+      gr.addColorStop(0,`rgba(255,236,140,${0.8*pu})`);gr.addColorStop(1,'rgba(255,214,80,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(0,0,58*s,0,TAU);ctx.fill();
+      if(glow){ctx.save();ctx.globalAlpha=a*pu;ctx.drawImage(glow,-62*s,-44*s,124*s,88*s);ctx.restore();}
       ctx.save();ctx.rotate(now/1600);ctx.strokeStyle=`rgba(255,226,120,${0.55*pu})`;ctx.lineWidth=4;ctx.lineCap='round';
       for(let i=0;i<8;i++){const r=i*TAU/8;ctx.beginPath();ctx.moveTo(Math.cos(r)*36*s,Math.sin(r)*30*s);ctx.lineTo(Math.cos(r)*50*s,Math.sin(r)*42*s);ctx.stroke();}ctx.restore();}
     if(!busy){ctx.fillStyle='rgba(255,255,255,.3)';ctx.beginPath();ctx.ellipse(0,11*s,26*s,7*s,0,0,TAU);ctx.fill();}
@@ -672,16 +672,17 @@
   /* Goldfish rush: the lake glows warm gold and sparkles drift over it. */
   function rushGlow(ctx,now,left){
     const s=C.SEA,pu=0.85+Math.sin(now/300)*0.15,fade=Math.min(1,left/800);
-    const glow=globalThis.HookArt?.get('rush-glow');
-    if(glow){
-      ctx.save();ctx.beginPath();ctx.ellipse(s.x,s.y,s.rx,s.ry,0,0,TAU);ctx.clip();
-      ctx.globalAlpha=fade*pu*0.16;ctx.fillStyle='#ffd86a';ctx.fillRect(s.x-s.rx,s.y-s.ry,s.rx*2,s.ry*2);
-      ctx.globalAlpha=fade*pu*0.32;ctx.drawImage(glow,s.x-s.rx,s.y-s.ry,s.rx*2,s.ry*2);ctx.restore();return;
-    }
-    ctx.save();ctx.globalAlpha=fade;ctx.fillStyle=`rgba(255,200,60,${0.13*pu})`;ctx.fillRect(0,0,C.W,C.H);
-    const gr=ctx.createRadialGradient(s.x,s.y,20,s.x,s.y,s.rx);gr.addColorStop(0,`rgba(255,230,120,${0.35*pu})`);gr.addColorStop(1,'rgba(255,200,60,0)');
+    // The whole picture turns warm gold and the lake glows (the teacher asked for a clearly different colour),
+    // with Codex's sparkling ring around the water's edge when the picture has loaded.
+    ctx.save();ctx.globalAlpha=fade;ctx.fillStyle=`rgba(255,196,50,${0.15*pu})`;ctx.fillRect(0,0,C.W,C.H);
+    // Recolour the water itself to gold (a plain yellow wash over blue water looks green).
+    ctx.globalCompositeOperation='color';ctx.globalAlpha=fade*0.7;ctx.fillStyle='#ffbf2e';ctx.beginPath();ctx.ellipse(s.x,s.y,s.rx,s.ry,0,0,TAU);ctx.fill();
+    ctx.globalCompositeOperation='source-over';ctx.globalAlpha=fade;
+    const gr=ctx.createRadialGradient(s.x,s.y,20,s.x,s.y,s.rx);gr.addColorStop(0,`rgba(255,240,170,${0.45*pu})`);gr.addColorStop(0.7,`rgba(255,220,110,${0.18*pu})`);gr.addColorStop(1,'rgba(255,200,60,0)');
     ctx.fillStyle=gr;ctx.beginPath();ctx.ellipse(s.x,s.y,s.rx,s.ry,0,0,TAU);ctx.fill();
-    ctx.fillStyle='#fff6c8';for(let i=0;i<14;i++){const t=now/2600+i*0.71,x=s.x+Math.cos(t*1.3+i)*s.rx*0.85,y=s.y+Math.sin(t+i*2.1)*s.ry*0.85,tw=Math.sin(now/240+i*1.7);if(tw>0)sparkle(ctx,x,y,2+tw*4);}
+    const glow=globalThis.HookArt?.get('rush-glow');
+    if(glow){ctx.globalAlpha=fade*pu;ctx.drawImage(glow,s.x-s.rx-14,s.y-s.ry-10,s.rx*2+28,s.ry*2+20);ctx.globalAlpha=fade;}
+    ctx.fillStyle='#fff6c8';for(let i=0;i<18;i++){const t=now/2600+i*0.71,x=s.x+Math.cos(t*1.3+i)*s.rx*0.85,y=s.y+Math.sin(t+i*2.1)*s.ry*0.85,tw=Math.sin(now/240+i*1.7);if(tw>0)sparkle(ctx,x,y,2.5+tw*4.5);}
     ctx.restore();
   }
   let sceneKey='',sceneCv=null;
