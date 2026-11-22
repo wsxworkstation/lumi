@@ -14,7 +14,8 @@
 </head>
 <body class="host">
   <main class="console" id="setup">
-    <header><h1 class="logo">勾题大作战</h1><span class="logo-en" style="margin:0">Hook Rush · 老师控制台（测试版）</span><span class="ver-tag" id="ver"></span></header>
+    <header><h1 class="logo">勾题大作战</h1><span class="logo-en" style="margin:0">Hook Rush · 老师控制台（测试版）</span><span class="ver-tag" id="ver"></span>
+      <nav class="room-tabs" id="roomsSetup"></nav></header>
     <aside>
       <section class="panel join-card">
         <h2>学生扫码加入</h2>
@@ -34,8 +35,12 @@
         <h2>设定</h2>
         <p class="msgs">几队</p>
         <div class="seg" id="teams"><button data-n="2" class="on">2 队</button><button data-n="3">3 队</button></div>
-        <div class="row" style="margin-top:12px"><span class="msgs" style="margin:0">先到几分赢</span><input class="num" id="target" type="number" min="5" max="200" value="20"></div>
-        <p class="msgs">另外最多 5 分钟，时间到就看分数。</p>
+        <p class="msgs">模式</p>
+        <div class="seg" id="mode"><button data-m="score" class="on">抢分</button><button data-m="time">限时</button></div>
+        <div class="row" id="targetRow" style="margin-top:10px"><span class="msgs" style="margin:0">先到几分赢</span><input class="num" id="target" type="number" min="5" max="200" value="20"></div>
+        <p class="msgs" id="timeLabel">时间上限</p>
+        <div class="row" style="margin-top:4px"><div class="seg" id="time" style="flex:1"><button data-t="3">3</button><button data-t="5" class="on">5</button><button data-t="7">7</button><button data-t="9">9</button></div><input class="num" id="timeOther" type="number" min="1" max="30" placeholder="自填" title="自己填几分钟"></div>
+        <p class="msgs" id="modeHint">先到目标分数的队赢；时间到还没人到，就看分数。</p>
         <p class="msgs">道具卡（击飞、冷冻、保护罩、加倍、三连钩）</p>
         <div class="seg" id="items"><button data-on="1" class="on">开</button><button data-on="0">关</button></div>
         <p class="msgs">声音（这台电脑）</p>
@@ -57,7 +62,7 @@
   <div id="stage" class="hidden">
     <canvas id="cv"></canvas>
     <div class="bar">
-      <div class="clock" id="clock"></div>
+      <div class="bar-left"><div class="clock" id="clock"></div><nav class="room-tabs mini" id="roomsStage"></nav></div>
       <div class="scores" id="scores"></div>
       <div class="ctrl"><span class="rate" id="rate"></span><button class="btn" id="hsound" data-quiet></button><button class="btn" id="pause">暂停</button><button class="btn danger" id="stop">结束</button></div>
     </div>

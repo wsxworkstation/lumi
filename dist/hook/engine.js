@@ -79,6 +79,7 @@
   function createGame(opt={}){
     const rnd=opt.rng||Math.random,check=opt.check||((q,v)=>JSON.stringify(v)===JSON.stringify(q.answer));
     const g={ph:'lobby',t:0,cd:0,teams:2,sc:[0,0,0],players:new Map(),orbs:[],hooks:[],qs:[],qStats:[],deck:[],kicked:new Map(),end:null,target:opt.target||C.TARGET,limit:opt.limit||C.LIMIT,log:[],
+      mode:opt.mode==='time'?'time':'score',   // score: first team to the target wins (time limit as a backstop); time: highest score when time runs out
       items:opt.items!==false,drops:[],dropN:0,dropAt:0,fx:[],fxN:0,rush:0,glowAt:0,gone:new Map()};
     const nameKey=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
     const fresh=()=>({st:0,until:0,q:-1,orb:0,ok:0,bad:0,rk:0,goal:null,cool:800,botAt:0,cards:[],sh:0,x2:0,tri:0,bag:[],triLeft:0,triBad:false,useAt:0});
@@ -227,7 +228,7 @@
       else{p.bad++;p.rk=-1;p.triBad=true;g.deck.splice(Math.floor(rnd()*(g.deck.length+1)),0,p.q);if(o)releaseOrb(o.id,300);}
       p.rs++;p.orb=0;p.botAt=0;p.st=0;
       if(p.bag.length)ask(p,p.bag.shift());else if(!p.triLeft)endTurn(p);
-      if(g.sc[p.team]>=g.target)finish('target');
+      if(g.mode!=='time'&&g.sc[p.team]>=g.target)finish('target');
     }
     g.answer=(id,qn,v)=>{const p=g.players.get(id);if(!p||g.ph!=='play'||p.st!==1||qn!==p.qn)return false;settle(p,!!check(g.qs[p.q],v));return true;};
     g.input=m=>{
@@ -321,21 +322,22 @@
         o:g.orbs.map(o=>[o.id,o.k,o.s,Math.round(o.b),o.hk,o.by]),
         h:g.hooks.map(h=>[h.o,Math.round(h.x),Math.round(h.y),+h.a.toFixed(4),Math.round(h.t0),Math.round(h.tt),Math.round(h.d),h.orb]),
         d:g.drops.map(d=>[d.id,d.x,d.y]),fx:g.fx.map(f=>[f.id,f.k,Math.round(f.at),f.by,f.x,f.y,f.to,f.tx||0,f.ty||0]),
-        ru:g.rush?Math.round(g.rush):0,it:g.items?1:0,
+        ru:g.rush?Math.round(g.rush):0,it:g.items?1:0,md:g.mode,
         k:[...g.kicked.keys()],end:g.end};
     };
     return g;
   }
   /* Supabase free plan: 100 Realtime messages a second for the whole project, and every phone that receives a
      snapshot counts. More phones → fewer snapshots (phones fill the gaps by themselves). */
-  const snapEvery=phones=>phones<=6?250:phones<=12?333:phones<=16?400:500;
+  // phones = all phones in every room this computer runs (the free limit is shared by the whole project).
+  const snapEvery=phones=>phones<=6?250:phones<=12?333:phones<=16?400:phones<=20?500:phones<=26?600:phones<=32?700:phones<=40?850:1000;
   /* Unpack a snapshot into objects (phones). */
   function unpack(s){
     return {...s,
       p:s.p.map(a=>({id:a[0],name:a[1],team:a[2],x:a[3],y:a[4],dx:a[5],dy:a[6],st:a[7],until:a[8],q:a[9],ok:a[10],rs:a[11],rk:a[12],qn:a[13],av:a[14]??avOf(a[0]),
         cards:a[15]?String(a[15]).split(','):[],sh:a[16]||0,x2:!!(a[17]&1),tri:!!(a[17]&2)})),
       d:(s.d||[]).map(a=>({id:a[0],x:a[1],y:a[2]})),
-      fx:(s.fx||[]).map(a=>({id:a[0],k:a[1],at:a[2],by:a[3],x:a[4],y:a[5],to:a[6]||[],tx:a[7],ty:a[8]})),ru:s.ru||0,it:s.it??1,
+      fx:(s.fx||[]).map(a=>({id:a[0],k:a[1],at:a[2],by:a[3],x:a[4],y:a[5],to:a[6]||[],tx:a[7],ty:a[8]})),ru:s.ru||0,it:s.it??1,md:s.md||'score',
       o:s.o.map(a=>({id:a[0],k:a[1],s:a[2],b:a[3],hk:a[4],by:a[5]})),
       h:s.h.map(a=>({o:a[0],x:a[1],y:a[2],a:a[3],t0:a[4],tt:a[5],d:a[6],orb:a[7]}))};
   }

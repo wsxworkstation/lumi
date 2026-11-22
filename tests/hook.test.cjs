@@ -252,3 +252,22 @@ test('a student who drops out mid-game leaves the field but keeps team and score
   const back=g.join('a-new','Mei');assert.equal(back.team,a.team);assert.equal(back.ok,1,'score kept');assert.equal(back.st,0);
   g.leave('a-new');g.stop();assert.ok(g.end.players.some(r=>r[0]==='Mei'),'results still count what they answered');
 });
+
+test('time mode: reaching the target does not end the game; when time is up the highest score wins', () => {
+  const g=game();g.join('a','A');g.join('b','B');g.mode='time';g.limit=60000;g.target=5;g.start();run(g,C.COUNT+10);g.dropAt=1e9;g.glowAt=1e9;
+  const a=g.players.get('a');
+  for(let i=0;i<7;i++){const o=g.orbs.find(x=>!x.by&&!x.hk);o.by='a';Object.assign(a,{st:1,orb:o.id,q:0,until:g.t+C.ANSWER});a.qn++;g.input({k:'ans',id:'a',qn:a.qn,v:qs[0].answer});}
+  assert.ok(g.sc[a.team]>=7);assert.equal(g.ph,'play','past the target but still playing');
+  assert.equal(H.unpack(JSON.parse(JSON.stringify(g.snapshot()))).md,'time');
+  run(g,60000);assert.equal(g.ph,'end');assert.equal(g.end.reason,'time');assert.equal(g.end.win,a.team);
+  // Score mode (the default) still ends at the target.
+  const s=game();s.join('a','A');s.target=5;s.start();run(s,C.COUNT+10);const p=s.players.get('a');
+  for(let i=0;i<5&&s.ph==='play';i++){const o=s.orbs.find(x=>!x.by&&!x.hk);o.by='a';Object.assign(p,{st:1,orb:o.id,q:0,until:s.t+C.ANSWER});p.qn++;s.input({k:'ans',id:'a',qn:p.qn,v:qs[0].answer});}
+  assert.equal(s.ph,'end');assert.equal(s.end.reason,'target');
+});
+
+test('three rooms share the free message limit: updates slow down as the total number of phones grows', () => {
+  let prev=0;for(const n of [5,10,20,30,40,60]){const e=H.snapEvery(n);assert.ok(e>=prev,'never faster with more phones');prev=e;}
+  // 3 rooms, 30 phones in total: snapshots sent + received stay well under 100 a second.
+  assert.ok((30+3)*1000/H.snapEvery(30)<=55);assert.ok((45+3)*1000/H.snapEvery(45)<=55);
+});

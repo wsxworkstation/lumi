@@ -179,11 +179,13 @@
   }
   function lobby(){
     const team=teamOf(mine.team),mates=S.p.filter(p=>p.team===mine.team&&p.id!==myId);
-    const key='lobby:'+mine.team+':'+myAv+':'+S.it+':'+mates.map(p=>p.name+p.av).join('|');if(ui.dataset.key===key)return;ui.dataset.key=key;
+    const rule=S.md==='time'?`本局：限时 ${Math.round(S.tl/60000)} 分钟，时间到分数高的队赢`:`本局：先到 ${S.tg} 分的队赢（最多 ${Math.round(S.tl/60000)} 分钟）`;
+    const key='lobby:'+mine.team+':'+myAv+':'+S.it+':'+rule+':'+mates.map(p=>p.name+p.av).join('|');if(ui.dataset.key===key)return;ui.dataset.key=key;
     ui.innerHTML=`<div class="screen"><div class="box wide">${head('房间 '+esc(room))}<div class="sheet two">
       <div><img class="me-pet" id="mePet" src="${pet(myAv,110,mine.team)}" alt="" title="点一下换动物"><p class="tiny">点我换一只 Tap to change</p></div>
       <div><p class="you">你是 <span class="team-tag" style="background:${team.color}">${team.zh} ${team.en}</span></p>
       ${mates.length?`<div class="mates">${mates.map(p=>`<span><img src="${pet(p.av,30,p.team)}" alt="">${esc(p.name)}</span>`).join('')}</div>`:''}
+      <p class="rule">${rule}</p>
       <p class="sub dots">等老师开始 Waiting for the teacher</p>
       <p class="how">左手走路，右手「甩竿」钓鱼，钓到就答题，答错冻住 3 秒。${S.it?'<br>岸上的「?」卡走过去就拿，点卡片使用。':''}<br>发光金鱼答对 → 金鱼潮，每条鱼都 2 分！</p></div></div></div></div>`;
     $('#mePet').onclick=()=>{G.sfx.unlock();G.sfx.pop();myAv=(myAv+1)%N;store('lumi-hook-av',String(myAv));send({k:'join',name:myName,av:myAv});ui.dataset.key='';lobby();};
@@ -356,7 +358,7 @@
     const bf=[mine.tri&&'三连',mine.x2&&'×2'].filter(Boolean).join(' '),bt=$('#buff');if(bt.textContent!==bf){bt.textContent=bf;bt.classList.toggle('hidden',!bf);}
     if(usedAt&&now()-usedAt>1500){usedAt=0;drawCards();}   // the card didn't go off (nobody in reach after all): show it again
     const left=Math.max(0,(S.tl-t)/1000),mm=Math.floor(left/60),ss=String(Math.floor(left%60)).padStart(2,'0');
-    const clock=S.ph==='pause'?'暂停中':`${mm}:${ss} <small>先到 ${S.tg} 分</small>`;
+    const clock=S.ph==='pause'?'暂停中':`${mm}:${ss} <small>${S.md==='time'?'限时赛':`先到 ${S.tg} 分`}</small>`;
     if($('#clock').innerHTML!==clock)$('#clock').innerHTML=clock;
     const sc=S.sc.map((v,i)=>{const T=teamOf(i);return `<div class="score${i===mine.team?' mine':''}" style="--tc:${T.color};--ti:${T.ink}">${v}<small>${T.zh}${i===mine.team?' · 我':''}</small></div>`;}).join('');
     if($('#scores').innerHTML!==sc)$('#scores').innerHTML=sc;

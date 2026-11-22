@@ -277,3 +277,24 @@ body.host{overflow:auto;background:linear-gradient(#d4efff,#f4fbff 340px);backgr
   .sheet.end{grid-template-columns:1fr 1fr;align-items:start;text-align:left}
   .sheet.end .win-title,.sheet.end .sub{text-align:center}
 }
+
+/* Room tabs on the teacher's console: 0001 | 0002 | 0003 | ＋开新房间 */
+.room-tabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-left:auto}
+.room-tabs:empty{display:none}
+.room-tab{display:flex;align-items:stretch;border:3px solid var(--line);background:#fff;border-radius:14px;box-shadow:0 3px 0 var(--line);overflow:hidden}
+.room-tab.on{border-color:var(--pink);background:#fff0f4;box-shadow:0 3px 0 #ffc7d6}
+.room-tab>button{border:0;background:none;padding:4px 12px;font-family:var(--fun);display:flex;flex-direction:column;align-items:flex-start;line-height:1.15}
+.room-tab b{font-size:17px;letter-spacing:.06em;color:var(--ink)}
+.room-tab.on b{color:var(--pink-d)}
+.room-tab small{font-size:12px;color:var(--muted);white-space:nowrap}
+.room-tab .room-x{flex-direction:row;align-items:center;padding:0 9px;color:var(--muted);font-size:13px;border-left:2px solid var(--line)}
+.new-room{border:3px dashed #ffc7d6;background:#fff;border-radius:14px;padding:7px 14px;font-family:var(--fun);font-size:15px;color:var(--pink-d)}
+#stage .bar-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#stage .room-tabs.mini{margin-left:0}
+#stage .room-tabs.mini .room-tab>button{padding:2px 10px}
+#stage .room-tabs.mini b{font-size:15px}
+.rule{font-family:var(--fun);font-size:15px;color:var(--ink);background:#fff6d8;border-radius:12px;padding:5px 10px;margin:8px 0 0}
+/* The results sit below the top bar, so the room tabs stay clickable while one room shows its results. */
+#stage .end-panel{top:64px}
+#time button,#sound button{white-space:nowrap;padding:7px 4px}
+#sound button{font-size:14px}
