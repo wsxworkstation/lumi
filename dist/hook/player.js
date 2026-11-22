@@ -140,7 +140,8 @@
     tri:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 21V4M12 21 4.5 6.5M12 21l7.5-14.5"/><circle cx="12" cy="4" r="1.8" fill="currentColor"/><circle cx="4.5" cy="6.5" r="1.8" fill="currentColor"/><circle cx="19.5" cy="6.5" r="1.8" fill="currentColor"/></svg>'};
   function drawCards(){
     const box=$('#cards'),cards=mine?.cards||[];
-    box.innerHTML=cards.map((k,i)=>G.CARDS[k]?`<button class="card-btn" data-i="${i}" data-quiet style="--cc:${G.CARDS[k].color}">${ICON[k]}<span>${SHORT[k]}</span></button>`:'').join('');
+    const icon=k=>{const image=globalThis.HookArt?.get('card-'+k);return image?`<img class="item-art" src="${esc(image.src)}" alt="" width="32" height="32">`:ICON[k];};
+    box.innerHTML=cards.map((k,i)=>G.CARDS[k]?`<button class="card-btn" data-i="${i}" data-quiet style="--cc:${G.CARDS[k].color}">${icon(k)}<span>${SHORT[k]}</span></button>`:'').join('');
     box.querySelectorAll('[data-i]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();useCard(Number(b.dataset.i));}));
   }
   function useCard(i){

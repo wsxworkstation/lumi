@@ -3,8 +3,8 @@
    4 times a second. Phones draw the same arena themselves, move their own player at once, and smooth everyone else,
    so one slow phone only stutters for that student. Question fish follow paths computed from a seed, so their
    movement costs no network messages.
-   Look: a picnic by a lake — round little animals fish for question fish. Everything is drawn in code (no picture
-   files, no emoji), so every phone shows the same picture. */
+   Look: a picnic by a lake — round little animals fish for question fish. Optional decoded sprites have
+   procedural fallbacks; game rules and networking do not depend on artwork. */
 (root=>{
   'use strict';
   const C={
@@ -414,6 +414,12 @@
   function drawAnimal(ctx,av,o={}){
     const A=ANIMALS[av]||ANIMALS[0],k=A.kind,step=o.step||0;
     ctx.save();ctx.lineJoin='round';ctx.lineCap='round';ctx.lineWidth=2;ctx.strokeStyle=INK;
+    const sprite=globalThis.HookArt?.get('animal-'+(ANIMALS[av]?av:0));
+    if(sprite){
+      ctx.drawImage(sprite,-32,-38+step*0.25,64,64);
+      if(o.team!=null&&o.team>=0&&C.TEAMS[o.team])scarf(ctx,C.TEAMS[o.team]);
+      ctx.restore();return;
+    }
     for(const s of [-1,1]){ctx.beginPath();ctx.ellipse(s*9,21+s*step,7,4.6,0,0,TAU);paint(ctx,A.dark);}
     const after=k==='frog'||A.ear==='flop';
     if(!after)for(const s of [-1,1])ears(ctx,A,s);
@@ -427,7 +433,7 @@
   /* A picture of an animal for the HTML screens (name screen, lobby, results). */
   const icons=new Map();
   function animalIcon(av,size=64,team=-1){
-    const key=av+'|'+size+'|'+team;if(icons.has(key))return icons.get(key);
+    const key=av+'|'+size+'|'+team+'|'+(globalThis.HookArt?.revision||0);if(icons.has(key))return icons.get(key);
     if(typeof document==='undefined')return '';
     const d=Math.min(2,globalThis.devicePixelRatio||1),cv=document.createElement('canvas');cv.width=cv.height=Math.round(size*d);
     const ctx=cv.getContext('2d'),k=size*d/64;ctx.scale(k,k);ctx.translate(32,40);ctx.scale(0.8,0.8);
@@ -469,6 +475,8 @@
   function scenery(scale,tc){
     const cv=document.createElement('canvas');cv.width=Math.ceil(C.W*scale);cv.height=Math.ceil(C.H*scale);
     const ctx=cv.getContext('2d'),r=rng(20261119),s=C.SEA,bl=blankets(tc);ctx.scale(scale,scale);
+    const background=globalThis.HookArt?.get('lakeside');
+    if(background){ctx.drawImage(background,0,0,C.W,C.H);bl.forEach((b,i)=>blanket(ctx,b,C.TEAMS[i]));return cv;}
     ctx.fillStyle=GRASS;ctx.fillRect(0,0,C.W,C.H);
     ctx.fillStyle='rgba(255,255,255,.13)';for(let i=0;i<16;i++){ctx.beginPath();ctx.ellipse(r()*C.W,r()*C.H,50+r()*80,24+r()*36,0,0,TAU);ctx.fill();}
     bl.forEach((b,i)=>blanket(ctx,b,C.TEAMS[i]));
@@ -509,13 +517,18 @@
     const face=fishFace(o),busy=o.held||o.hooked,s=F.s*(o.held?0.72:1),wig=Math.sin(now/(o.k==='f'?60:120)+o.id*1.3);
     ctx.save();ctx.globalAlpha=a;ctx.translate(o.x,o.y);
     // The glowing goldfish: a soft pulsing halo with turning rays, so everyone sees it from far away.
-    if(o.k==='g'){const pu=0.75+Math.sin(now/220)*0.25,gr=ctx.createRadialGradient(0,0,6,0,0,58*s);
-      gr.addColorStop(0,`rgba(255,236,140,${0.75*pu})`);gr.addColorStop(1,'rgba(255,214,80,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(0,0,58*s,0,TAU);ctx.fill();
+    if(o.k==='g'){const pu=0.75+Math.sin(now/220)*0.25,glow=globalThis.HookArt?.get('rush-glow');
+      if(glow){ctx.save();ctx.globalAlpha=a*pu*0.65;ctx.drawImage(glow,-65*s,-52*s,130*s,104*s);ctx.restore();}
+      else{const gr=ctx.createRadialGradient(0,0,6,0,0,58*s);
+      gr.addColorStop(0,`rgba(255,236,140,${0.75*pu})`);gr.addColorStop(1,'rgba(255,214,80,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(0,0,58*s,0,TAU);ctx.fill();}
       ctx.save();ctx.rotate(now/1600);ctx.strokeStyle=`rgba(255,226,120,${0.55*pu})`;ctx.lineWidth=4;ctx.lineCap='round';
       for(let i=0;i<8;i++){const r=i*TAU/8;ctx.beginPath();ctx.moveTo(Math.cos(r)*36*s,Math.sin(r)*30*s);ctx.lineTo(Math.cos(r)*50*s,Math.sin(r)*42*s);ctx.stroke();}ctx.restore();}
     if(!busy){ctx.fillStyle='rgba(255,255,255,.3)';ctx.beginPath();ctx.ellipse(0,11*s,26*s,7*s,0,0,TAU);ctx.fill();}
     if(kind!=='n'){ctx.fillStyle='#fff';for(let i=0;i<3;i++){const t=now/500+i*2.1,tw=Math.sin(t*2);if(tw>0)sparkle(ctx,Math.cos(t)*30*s,Math.sin(t)*20*s-4,2+tw*3.5);}}
     ctx.rotate(busy?wig*0.35:wig*0.06);ctx.scale(face*s,s);
+    const sprite=globalThis.HookArt?.get(kind==='g'?'fish-special':kind==='n'?'fish-normal':'fish-gold');
+    if(sprite)ctx.drawImage(sprite,-36,-24,66,44);
+    else{
     ctx.lineJoin='round';ctx.strokeStyle=F.line;ctx.lineWidth=2;
     ctx.save();ctx.translate(-17,0);ctx.rotate(wig*(busy?0.5:0.3));ctx.fillStyle=F.fin;
     ctx.beginPath();ctx.moveTo(2,0);ctx.quadraticCurveTo(-8,-4,-14,-13);ctx.quadraticCurveTo(-10,0,-14,13);ctx.quadraticCurveTo(-8,4,2,0);ctx.fill();ctx.stroke();ctx.restore();
@@ -527,6 +540,7 @@
     ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(12.8,-5.2,1,0,TAU);ctx.fill();
     ctx.fillStyle='rgba(255,110,140,.45)';ctx.beginPath();ctx.ellipse(10,4,3.4,2.2,0,0,TAU);ctx.fill();
     ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(18,1.5,2.2,0.3,2.2);ctx.stroke();
+    }
     ctx.scale(face,1);const mark=kind==='f'||kind==='r'?'×2':'?';
     ctx.font=`700 ${mark==='×2'?14:18}px ${FUN}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=3.5;ctx.strokeStyle=F.fin;ctx.fillStyle='#fff';
     ctx.strokeText(mark,-4*face,0);ctx.fillText(mark,-4*face,0);
@@ -630,10 +644,14 @@
     ctx.save();ctx.translate(d.x,d.y);
     ctx.fillStyle='rgba(74,52,64,.16)';ctx.beginPath();ctx.ellipse(0,20,17-b,5,0,0,TAU);ctx.fill();
     ctx.translate(0,b-4);ctx.rotate(r);
+    const sprite=globalThis.HookArt?.get('card-mystery');
+    if(sprite)ctx.drawImage(sprite,-25,-30,50,60);
+    else{
     const gr=ctx.createLinearGradient(0,-22,0,22);gr.addColorStop(0,'#c6a8ff');gr.addColorStop(1,'#ff8fb5');
     rr(ctx,-16,-21,32,42,8);ctx.fillStyle=gr;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
     rr(ctx,-10,-15,20,30,5);ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=1.5;ctx.stroke();
     ctx.font=`700 22px ${FUN}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff';ctx.fillText('?',0,1);
+    }
     ctx.fillStyle='#fff';const tw=Math.max(0,Math.sin(now/260+d.id*2));if(tw>0.2)sparkle(ctx,15,-22,2+tw*4);
     ctx.restore();
   }
@@ -654,6 +672,12 @@
   /* Goldfish rush: the lake glows warm gold and sparkles drift over it. */
   function rushGlow(ctx,now,left){
     const s=C.SEA,pu=0.85+Math.sin(now/300)*0.15,fade=Math.min(1,left/800);
+    const glow=globalThis.HookArt?.get('rush-glow');
+    if(glow){
+      ctx.save();ctx.beginPath();ctx.ellipse(s.x,s.y,s.rx,s.ry,0,0,TAU);ctx.clip();
+      ctx.globalAlpha=fade*pu*0.16;ctx.fillStyle='#ffd86a';ctx.fillRect(s.x-s.rx,s.y-s.ry,s.rx*2,s.ry*2);
+      ctx.globalAlpha=fade*pu*0.32;ctx.drawImage(glow,s.x-s.rx,s.y-s.ry,s.rx*2,s.ry*2);ctx.restore();return;
+    }
     ctx.save();ctx.globalAlpha=fade;ctx.fillStyle=`rgba(255,200,60,${0.13*pu})`;ctx.fillRect(0,0,C.W,C.H);
     const gr=ctx.createRadialGradient(s.x,s.y,20,s.x,s.y,s.rx);gr.addColorStop(0,`rgba(255,230,120,${0.35*pu})`);gr.addColorStop(1,'rgba(255,200,60,0)');
     ctx.fillStyle=gr;ctx.beginPath();ctx.ellipse(s.x,s.y,s.rx,s.ry,0,0,TAU);ctx.fill();
@@ -664,7 +688,7 @@
   /* V = {tc, players:[{id,x,y,team,av,name,st,me,fx,fy,mv,rs,rk,sh,x2,tri,upRange}], orbs:[{id,k,x,y,alpha,held,hooked}], hooks:[{o,x,y,tx,ty,team,caught}],
          aim:{x,y,a}, drops:[{id,x,y}], fx:[{k,x,y,tx,ty,age}], rush: ms of goldfish rush left (0 = none)} */
   function render(ctx,cw,ch,dpr,V,now,top=0){
-    const vp=viewport(cw,ch-top);vp.oy+=top;const sc=vp.k*dpr,key=sc.toFixed(4)+'|'+(V.tc||2),rush=V.rush>0;
+    const vp=viewport(cw,ch-top);vp.oy+=top;const sc=vp.k*dpr,key=sc.toFixed(4)+'|'+(V.tc||2)+'|'+(globalThis.HookArt?.revision||0),rush=V.rush>0;
     ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=GRASS;ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
     if(key!==sceneKey){sceneKey=key;sceneCv=scenery(sc,V.tc||2);}
     ctx.drawImage(sceneCv,dpr*vp.ox,dpr*vp.oy,C.W*sc,C.H*sc);
