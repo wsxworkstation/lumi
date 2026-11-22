@@ -38,6 +38,10 @@
         <p class="msgs">另外最多 5 分钟，时间到就看分数。</p>
         <p class="msgs">道具卡（击飞、冷冻、保护罩、加倍、三连钩）</p>
         <div class="seg" id="items"><button data-on="1" class="on">开</button><button data-on="0">关</button></div>
+        <p class="msgs">声音（这台电脑）</p>
+        <div class="seg" id="sound"><button data-m="all" class="on">音乐＋音效</button><button data-m="sfx">只有音效</button><button data-m="off">静音</button></div>
+        <div class="row" style="margin-top:10px"><span class="msgs" style="margin:0">音乐大小</span><input id="musicVol" type="range" min="0" max="100" value="60" style="flex:1"><button class="btn" id="hear">试听</button></div>
+        <p class="msgs"><a href="./sound.html" target="_blank" rel="noopener">全部音乐和音效试听 →</a></p>
       </section>
     </aside>
     <section class="panel">
@@ -55,7 +59,7 @@
     <div class="bar">
       <div class="clock" id="clock"></div>
       <div class="scores" id="scores"></div>
-      <div class="ctrl"><span class="rate" id="rate"></span><button class="btn" id="pause">暂停</button><button class="btn danger" id="stop">结束</button></div>
+      <div class="ctrl"><span class="rate" id="rate"></span><button class="btn" id="hsound" data-quiet></button><button class="btn" id="pause">暂停</button><button class="btn danger" id="stop">结束</button></div>
     </div>
     <div class="rush-tag host-rush hidden" id="rush"></div>
     <div id="count3" class="count-big hidden"></div>
@@ -67,6 +71,7 @@
   <script src="../quiz-import.js?v=__V__"></script>
   <script src="../cloud-config.js?v=__V__"></script>
   <script src="./art.js?v=__V__"></script>
+  <script src="./audio.js?v=__V__"></script>
   <script src="./engine.js?v=__V__"></script>
   <script src="./boot.js?v=__V__" data-entry="host.js"></script>
 </body>

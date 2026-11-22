@@ -26,6 +26,10 @@
   const pet=(av,size,team=-1)=>G.animalIcon(av,size,team);
   const SOUND_ON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.2 6.5a8 8 0 0 1 0 11"/></svg>';
   const SOUND_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>';
+  // Music + effects: a speaker with a little note.
+  const SOUND_ALL='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5v5h3.2L10.5 18.5v-13L6.2 9.5z" fill="currentColor"/><path d="M14 8.5a4.2 4.2 0 0 1 0 7"/><path d="M18.5 16.5V5.5l3 1" /><circle cx="17" cy="17" r="1.8" fill="currentColor"/></svg>';
+  const SOUND={all:[SOUND_ALL,'音乐＋音效'],sfx:[SOUND_ON,'只有音效'],off:[SOUND_OFF,'静音']};
+  const HA=window.HookAudio;HA?.setup({key:'lumi-hook-sound',music:0.35});   // phones: music softer than the effects
 
   /* ── 1. Find the teacher's room ── */
   const rooms=new Map();let roomTimer=null;
@@ -90,7 +94,7 @@
     if(kicked)return;
     const s=G.unpack(raw),t=now();lastSnapAt=t;
     if(s.k?.includes(myId)){kicked=true;setPlaying(false);message('老师把你移出了房间。<br>The teacher removed you.','再加入 Join again',()=>location.reload());return;}
-    if(s.ph!==lastPh){off=null;phaseChange(lastPh,s.ph);lastPh=s.ph;}
+    if(s.ph!==lastPh){off=null;phaseChange(lastPh,s.ph,s);lastPh=s.ph;}
     const cand=s.t-t;off=off==null?cand:Math.max(cand,off-4);
     S=s;recvAt=t;
     const m=s.p.find(p=>p.id===myId);
@@ -119,7 +123,7 @@
       if(f.id<=lastFx)continue;const hitMe=f.to.includes(myId),mineFx=f.by===myId;
       if(f.k==='up'&&hitMe){note(`被 ${nameOf(f.by)} 击飞了！`,'bad');G.sfx.boom();buzz(120);}
       else if(f.k==='ice'&&hitMe){note(`被 ${nameOf(f.by)} 冻住了！`,'bad');G.sfx.freeze();buzz(120);}
-      else if(f.k==='block'&&mineFx){note('保护罩挡住了！','good');G.sfx.shield();}
+      else if(f.k==='block'&&mineFx){note('保护罩挡住了！','good');G.sfx.block();}
       else if(f.k==='up'&&mineFx)note(f.to.length?`击飞了 ${f.to.length} 人！`:'被保护罩挡住了','good');
       else if(f.k==='ice'&&mineFx)note(f.to.length?`冻住了 ${nameOf(f.to[0])}！`:'被保护罩挡住了','good');
       else if(f.k==='rush'){note(mineFx?'你钓到发光金鱼！金鱼潮开始！':`${nameOf(f.by)} 开启金鱼潮！每条鱼 2 分`,'gold');G.sfx.rush();}
@@ -151,14 +155,18 @@
     if(k==='up'&&!foes.some(p=>{const d=disp.get(p.id)||p;return Math.hypot(d.x-me.x,d.y-me.y)<=C.CARD.R_UP;})){note('身边没有敌人，走近一点','bad');return;}
     if(k==='ice'&&!foes.length){note('现在没有可以冻的人','bad');return;}
     usedAt=now();send({k:'use',i});buzz(25);
-    ({up:G.sfx.boom,ice:G.sfx.freeze,shield:G.sfx.shield}[k]||G.sfx.card)();
+    ({up:G.sfx.boom,ice:G.sfx.freeze,shield:G.sfx.shield}[k]||G.sfx.power)();
     $(`#cards [data-i="${i}"]`)?.classList.add('used');
   }
 
-  function phaseChange(from,to){
+  function phaseChange(from,to,s){
+    // Music follows the game: none in the room, on from the countdown, off when paused; at the end my team's tune.
+    if(to==='count'||to==='play')HA?.music(s.ru>s.t?'rush':'main');else HA?.music(null);
+    if(to==='play'&&from==='count')G.sfx.go();
+    if(to==='end'){const me=s.p.find(p=>p.id===myId);HA?.jingle(s.end&&me&&s.end.win===me.team?'win':'lose');}
     if(to==='play'||to==='count'||to==='pause')setPlaying(true);
     if(to==='count'){myHooks=[];hideQuestion();moveKey='0,0';}
-    if(to==='end'){setPlaying(false);G.sfx.win();}
+    if(to==='end')setPlaying(false);
     if(to==='lobby'){setPlaying(false);hideQuestion();myHooks=[];}
   }
   function setPlaying(on){
@@ -246,8 +254,9 @@
   addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;keys.add(e.key.toLowerCase());if(e.key===' '){e.preventDefault();fire(autoAim());}});
   addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
   addEventListener('blur',()=>keys.clear());
-  const muteIcon=()=>{$('#mute').innerHTML=G.sfx.muted?SOUND_OFF:SOUND_ON;};
-  $('#mute').onclick=()=>{G.sfx.muted=!G.sfx.muted;muteIcon();};muteIcon();
+  // One button, three settings: music + effects → effects only → silent.
+  const muteIcon=()=>{const [icon,label]=SOUND[HA?.mode||'all'];$('#mute').innerHTML=icon;$('#mute').setAttribute('aria-label',label);};
+  $('#mute').onclick=()=>{if(!HA)return;HA.unlock();HA.mode={all:'sfx',sfx:'off',off:'all'}[HA.mode];muteIcon();note(SOUND[HA.mode][1]);};muteIcon();
 
   let vp={k:1,ox:0,oy:0};
   const toWorld=(x,y)=>({x:(x-vp.ox)/vp.k,y:(y-vp.oy)/vp.k});
@@ -333,7 +342,13 @@
       drops:S.d,rush,fx:S.fx.map(f=>({...f,age:t-f.at}))},tn);
     hud(t,rush);
   }
+  let lastTick=0,glowSeen=false;
   function hud(t,rush){
+    // Music: the rock tune while the goldfish rush lasts; ticking in the last 10 seconds; a sparkle when a glowing goldfish appears.
+    if(S.ph==='play'||S.ph==='count')HA?.music(rush?'rush':'main');
+    const timeLeft=(S.tl-t)/1000,n10=Math.ceil(timeLeft);
+    if(S.ph==='play'&&timeLeft>0&&n10<=10&&n10!==lastTick){lastTick=n10;HA?.tick(n10);}
+    const glow=S.o.some(o=>o.k==='g');if(glow&&!glowSeen)G.sfx.glow();glowSeen=glow;
     const rt=rush?`金鱼潮 ×2 · ${Math.ceil(rush/1000)}`:'',rg=$('#rushTag');if(rg.textContent!==rt){rg.textContent=rt;rg.classList.toggle('hidden',!rt);}
     const bf=[mine.tri&&'三连',mine.x2&&'×2'].filter(Boolean).join(' '),bt=$('#buff');if(bt.textContent!==bf){bt.textContent=bf;bt.classList.toggle('hidden',!bf);}
     if(usedAt&&now()-usedAt>1500){usedAt=0;drawCards();}   // the card didn't go off (nobody in reach after all): show it again

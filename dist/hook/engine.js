@@ -13,7 +13,7 @@
     ORB:{n:{r:24,val:1,w:[0.32,0.55]},f:{r:18,val:2,w:[0.95,1.35]},g:{r:24,val:2,w:[0.7,0.95]}},
     ANSWER:15000,FREEZE:3000,TARGET:20,LIMIT:300000,RESPAWN:1200,COUNT:3000,SNAP:250,
     // Item cards: lie on the shore, walk over one to pick it up (hold up to 2), tap to use.
-    CARD:{UP:2000,ICE:3000,SHIELD:10000,R_UP:160,PICK:38,MAX:2,FIRST:6000,EVERY:[15000,20000],ON_MAP:2,SPREAD:0.34},
+    CARD:{UP:2000,ICE:3000,SHIELD:10000,R_UP:160,PICK:38,MAX:2,FIRST:15000,EVERY:[15000,15000],ON_MAP:2,SPREAD:0.34},   // one card every 15 s (teacher's choice)
     // A glowing goldfish shows up now and then; answer it right and every fish is worth 2 for a while.
     RUSH:{FIRST:40000,AFTER:40000,LEN:15000},
     TEAMS:[{zh:'草莓队',en:'Strawberry',color:'#ff7096',ink:'#e2416c',soft:'#ffe6ee'},
@@ -734,29 +734,16 @@
     return ver;
   }
 
-  /* ── Sound: tiny soft synth, no files ── */
-  let actx=null,muted=false;try{muted=localStorage.getItem('lumi-hook-mute')==='1';}catch{}
-  function tone(f,d,type='sine',vol=.15,slide=0,delay=0){
-    if(muted||!actx)return;const t=actx.currentTime+delay,o=actx.createOscillator(),gn=actx.createGain();
-    o.type=type;o.frequency.setValueAtTime(f,t);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(40,f+slide),t+d);
-    gn.gain.setValueAtTime(vol,t);gn.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(gn).connect(actx.destination);o.start(t);o.stop(t+d);
-  }
+  /* ── Sound: the music and effects live in audio.js (HookAudio). These names are what the pages call;
+     without audio.js (e.g. the tests) they simply do nothing. ── */
+  const HA=()=>root.HookAudio;
+  const fx=name=>()=>HA()?.sfx(name);
   const sfx={
-    unlock(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume();}catch{}},
-    get muted(){return muted;},set muted(v){muted=!!v;try{localStorage.setItem('lumi-hook-mute',muted?'1':'0');}catch{}},
-    fire(){tone(360,.18,'triangle',.1,560);},
-    catch(){tone(950,.08,'sine',.16,-520);tone(1250,.1,'sine',.1,0,.08);},
-    right(){[784,988,1175,1568].forEach((f,i)=>tone(f,.15,'triangle',.13,0,i*.07));},
-    wrong(){tone(440,.16,'sine',.14,-200);tone(330,.26,'sine',.12,-130,.15);},
-    tick(){tone(880,.07,'sine',.12);},
-    pop(){tone(700,.06,'sine',.12,300);},
-    tap(){tone(620,.05,'sine',.08,260);},
-    card(){[660,880,1320].forEach((f,i)=>tone(f,.1,'triangle',.11,0,i*.06));},
-    boom(){tone(220,.22,'triangle',.16,420);tone(900,.12,'sine',.08,-300,.05);},
-    freeze(){tone(1500,.18,'sine',.09,-900);tone(1900,.14,'sine',.06,-1100,.08);},
-    shield(){tone(520,.25,'sine',.1,260);},
-    rush(){[784,988,1175,1568,1976].forEach((f,i)=>tone(f,.16,'triangle',.12,0,i*.06));},
-    win(){[523,659,784,1047,1319].forEach((f,i)=>tone(f,.24,'triangle',.14,0,i*.11));}
+    unlock(){HA()?.unlock();},
+    get muted(){return HA()?.mode==='off';},set muted(v){if(HA())HA().mode=v?'off':'all';},
+    fire:fx('fire'),catch:fx('catch'),right:fx('right'),wrong:fx('wrong'),tick:fx('count'),go:fx('go'),pop:fx('tap'),tap:fx('tap'),
+    card:fx('card'),power:fx('power'),boom:fx('boom'),freeze:fx('freeze'),shield:fx('shield'),block:fx('block'),glow:fx('glow'),rush:fx('rushStart'),
+    win(){HA()?.jingle('win');},lose(){HA()?.jingle('lose');}
   };
 
   /* Every button shows it was pressed: it squashes (class "pressed", which also works on iPhones where :active

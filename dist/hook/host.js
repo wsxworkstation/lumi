@@ -10,6 +10,9 @@
   let pack=[],botN=0,lastSnap=0,lastAnnounce=0,lastPh='lobby',sent=0,recv=0,rateAt=performance.now(),needAt=new Map();
   let code='',down='',up='';const HID=Math.random().toString(36).slice(2,10);
   G.pressFeedback();
+  // Sound on the teacher's computer (the classroom speakers): its own setting and music volume.
+  const HA=window.HookAudio;let musicVol=0.6;try{const v=Number(localStorage.getItem('lumi-hook-music-vol'));if(v>=0&&v<=1&&localStorage.getItem('lumi-hook-music-vol')!==null)musicVol=v;}catch{}
+  HA?.setup({key:'lumi-hook-host-sound',music:musicVol});
   if(local)window.__hook=game;   // test mode only: lets a test script set up a situation
 
   const joinUrl=new URL('./',location.href).href.replace(/\/host\.html.*$/,'/');
@@ -95,6 +98,15 @@
 
   /* ── Lobby ── */
   $('#teams').onclick=e=>{const b=e.target.closest('[data-n]');if(!b)return;$('#teams').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));game.setTeams(Number(b.dataset.n));drawPlayers();};
+  // Sound: music + effects / effects only / silent, the music volume, and a quick listen. The same setting is in the game bar.
+  const SOUND_TXT={all:'音乐＋音效',sfx:'只有音效',off:'静音'};
+  const showSound=()=>{const m=HA?.mode||'all';$('#sound').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.m===m));$('#hsound').textContent=SOUND_TXT[m];};
+  $('#sound').onclick=e=>{const b=e.target.closest('[data-m]');if(!b||!HA)return;HA.unlock();HA.mode=b.dataset.m;showSound();};
+  $('#hsound').onclick=()=>{if(!HA)return;HA.unlock();HA.mode={all:'sfx',sfx:'off',off:'all'}[HA.mode];showSound();};
+  $('#musicVol').value=Math.round(musicVol*100);
+  $('#musicVol').oninput=e=>{musicVol=Number(e.target.value)/100;if(HA)HA.musicLevel=musicVol;try{localStorage.setItem('lumi-hook-music-vol',String(musicVol));}catch{}};
+  $('#hear').onclick=()=>{if(!HA)return;HA.unlock();const on=HA.playing!=='main';HA.music(on?'main':null);$('#hear').textContent=on?'停':'试听';};
+  showSound();
   // Item cards on/off (remembered on this computer).
   try{game.items=localStorage.getItem('lumi-hook-items')!=='0';}catch{}
   const showItems=()=>$('#items').querySelectorAll('button').forEach(x=>x.classList.toggle('on',(x.dataset.on==='1')===game.items));showItems();
@@ -119,7 +131,7 @@
   /* ── Game ── */
   function startGame(){
     game.start();sendPack();snapNow();
-    $('#setup').classList.add('hidden');$('#stage').classList.remove('hidden');$('#end').classList.add('hidden');G.sfx.unlock();
+    $('#setup').classList.add('hidden');$('#stage').classList.remove('hidden');$('#end').classList.add('hidden');G.sfx.unlock();$('#hear').textContent='试听';
   }
   $('#pause').onclick=()=>{if(game.ph==='play')game.pause();else if(game.ph==='pause')game.resume();snapNow();};
   $('#stop').onclick=()=>{if(game.ph==='end')return;if(confirm('现在结束这一局？')){game.stop();snapNow();}};
@@ -136,7 +148,7 @@
       <table class="rank"><tr class="head"><td></td><td>名字</td><td>答对 / 答错</td></tr>${e.players.map((r,i)=>`<tr><td>${i+1}</td><td><img src="${G.animalIcon(r[4],26,r[1])}" alt="">${esc(r[0])}</td><td>✓ ${r[2]} · ✗ ${r[3]}</td></tr>`).join('')}</table>
       ${e.hard>=0?`<div class="hard">最多人答错的题（错 ${e.hardWrong} 次）<br><b>${esc(e.hardText)}</b></div>`:''}
       <div class="row actions"><button class="btn primary" id="again">再来一局</button><button class="btn" id="lobby">回到房间（换题目／分队）</button></div></div>`;
-    $('#end').classList.remove('hidden');$('#again').onclick=startGame;$('#lobby').onclick=toLobby;G.sfx.win();
+    $('#end').classList.remove('hidden');$('#again').onclick=startGame;$('#lobby').onclick=toLobby;HA?.jingle(win?'win':'lose');
     if(win)G.confetti($('#end'));
   }
 
@@ -159,7 +171,7 @@
   const cv=$('#cv'),ctx=cv.getContext('2d');
   function resize(){const dpr=Math.min(2,devicePixelRatio||1);cv.width=innerWidth*dpr;cv.height=innerHeight*dpr;}
   addEventListener('resize',resize);resize();
-  let lastCount=-1,lastFx=0;
+  let lastCount=-1,lastFx=0,lastPlayPh='',lastTick=0,glowSeen=false;
   function frame(){
     requestAnimationFrame(frame);
     if($('#stage').classList.contains('hidden'))return;
@@ -170,7 +182,12 @@
     const rush=game.rush?Math.max(0,game.rush-t):0;
     G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:game.teams,players,orbs,hooks,drops:game.drops,rush,fx:game.fx.map(f=>({...f,age:t-f.at}))},performance.now(),64);
     // Sounds for card moves and the goldfish rush (the big screen is where the class watches).
-    for(const f of game.fx)if(f.id>lastFx){lastFx=f.id;({up:G.sfx.boom,ice:G.sfx.freeze,shield:G.sfx.shield,block:G.sfx.shield,rush:G.sfx.rush}[f.k]||(()=>{}))();}
+    for(const f of game.fx)if(f.id>lastFx){lastFx=f.id;({up:G.sfx.boom,ice:G.sfx.freeze,shield:G.sfx.shield,block:G.sfx.block,x2:G.sfx.power,tri:G.sfx.power,rush:G.sfx.rush}[f.k]||(()=>{}))();}
+    // Music follows the game (the rock tune during a goldfish rush), ticking in the last 10 seconds, a sparkle for a glowing goldfish.
+    HA?.music(game.ph==='play'||game.ph==='count'?(rush?'rush':'main'):null);
+    if(game.ph==='play'&&lastPlayPh==='count')G.sfx.go();lastPlayPh=game.ph;
+    const secs=(game.limit-t)/1000,n10=Math.ceil(secs);if(game.ph==='play'&&secs>0&&n10<=10&&n10!==lastTick){lastTick=n10;HA?.tick(n10);}
+    const glow=game.orbs.some(o=>o.k==='g');if(glow&&!glowSeen&&game.ph==='play')G.sfx.glow();glowSeen=glow;
     const rt=rush?`金鱼潮 ×2 · ${Math.ceil(rush/1000)}`:'';if($('#rush').textContent!==rt){$('#rush').textContent=rt;$('#rush').classList.toggle('hidden',!rt);}
     const left=Math.max(0,(game.limit-t)/1000);
     const clock=game.ph==='pause'?'暂停中':`${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')} <small>先到 ${game.target} 分</small>`;

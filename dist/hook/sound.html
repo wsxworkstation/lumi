@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#d4efff">
+  <title>勾题大作战 声音试听</title>
+  <link rel="icon" href="../assets/studylog-starloop-96.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=ZCOOL+KuaiLe&display=swap">
+  <link rel="stylesheet" href="./hook.css?v=__V__">
+  <style>
+    .listen{max-width:860px;margin:0 auto;padding:18px 16px 60px;display:grid;gap:16px}
+    .listen header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+    .snd{display:grid;gap:14px}
+    .item{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center}
+    .item b{font-family:var(--fun);font-size:17px;font-weight:600}
+    .vers{display:flex;gap:8px;flex-wrap:wrap}
+    .vers .btn.on{border-color:var(--pink);background:#fff0f4;color:var(--pink-d)}
+    .vers .btn.playing{background:var(--pink);color:#fff;border-color:var(--pink)}
+    #summary{font-family:var(--fun);font-size:16px;line-height:1.7;background:#f6f1fa;border-radius:14px;padding:10px 14px;margin:0 0 10px;word-break:break-all}
+    @media (max-width:560px){.item{grid-template-columns:1fr}}
+  </style>
+</head>
+<body class="host">
+  <main class="listen">
+    <header><h1 class="logo">勾题大作战</h1><span class="logo-en" style="margin:0">声音试听</span></header>
+    <section class="panel">
+      <p class="msgs" style="margin-top:0">点一个按钮就会播放，同时选中那个版本（粉红框）。背景音乐会一直循环，再点一次就停。</p>
+      <p class="msgs">选好以后，把最下面「我的选择」那一行复制给 Claude。手机要先关掉静音键才听得到。</p>
+    </section>
+    <section class="panel"><h2>音乐</h2><div class="snd" id="music"></div></section>
+    <section class="panel"><h2>音效</h2><div class="snd" id="sfx"></div></section>
+    <section class="panel"><h2>我的选择</h2><p id="summary"></p><button class="btn primary" id="copy">复制</button> <span class="msgs" id="copied"></span></section>
+  </main>
+  <script src="./audio.js?v=__V__"></script>
+  <script>
+  (()=>{
+    'use strict';
+    const H=window.HookAudio,$=s=>document.querySelector(s);
+    let choice={},playing='';
+    try{choice=JSON.parse(localStorage.getItem('lumi-hook-sound-pick')||'{}')||{};}catch{}
+    const pick=n=>choice[n]||H.PICK[n];
+    const versions=(kind,n)=>Object.keys(kind==='sfx'?H.SFX[n]:kind==='tick'?H.TICK:kind==='music'?H.SONGS[n]:H.JINGLES[n]);
+    const row=(kind,n)=>{const [zh,names]=H.LABEL[n];
+      return `<div class="item"><b>${zh}</b><div class="vers">${versions(kind,n).map(v=>`<button class="btn" data-kind="${kind}" data-name="${n}" data-v="${v}">${v}${names?.[v]?' · '+names[v]:''}</button>`).join('')}</div></div>`;};
+    $('#music').innerHTML=row('music','main')+row('music','rush')+row('jingle','win')+row('jingle','lose')+row('tick','tick');
+    $('#sfx').innerHTML=Object.keys(H.SFX).map(n=>row('sfx',n)).join('');
+    H.setup({key:'lumi-hook-preview-sound',music:0.6});H.mode='all';
+    function show(){
+      document.querySelectorAll('[data-v]').forEach(b=>{b.classList.toggle('on',pick(b.dataset.name)===b.dataset.v);b.classList.toggle('playing',playing===b.dataset.name+b.dataset.v);});
+      $('#summary').textContent='我的选择：'+Object.keys(H.LABEL).map(n=>`${H.LABEL[n][0]} ${pick(n)}`).join(' · ');
+    }
+    document.addEventListener('click',e=>{
+      const b=e.target.closest('[data-v]');if(!b)return;H.unlock();
+      const {kind,name,v}=b.dataset;choice[name]=v;try{localStorage.setItem('lumi-hook-sound-pick',JSON.stringify(choice));}catch{}
+      if(kind==='music'){const again=playing===name+v;H.music(null);playing='';if(!again){H.music(name,v);playing=name+v;}}
+      else if(kind==='jingle'){H.music(null);playing='';H.jingle(name,v);}
+      else if(kind==='tick')[10,9,8,3,2,1].forEach((n,i)=>setTimeout(()=>H.tick(n,v),i*1000));
+      else H.sfx(name,v);
+      show();
+    });
+    $('#copy').onclick=async()=>{const t=$('#summary').textContent;
+      try{await navigator.clipboard.writeText(t);$('#copied').textContent='已复制';}
+      catch{const r=document.createRange();r.selectNodeContents($('#summary'));const s=getSelection();s.removeAllRanges();s.addRange(r);$('#copied').textContent='已选取，请按复制';}};
+    show();
+  })();
+  </script>
+</body>
+</html>
