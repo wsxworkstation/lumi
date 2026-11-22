@@ -10,8 +10,9 @@
      HookAudio.mode = 'all'|'sfx'|'off'   music + effects / effects only / silent (remembered on this device) */
 (root=>{
   'use strict';
-  const PICK={main:'A',rush:'A',win:'A',lose:'A',tick:'A',
-    tap:'A',fire:'A',catch:'A',right:'A',wrong:'A',freeze:'A',count:'A',go:'A',card:'A',boom:'A',shield:'A',block:'A',power:'A',glow:'A',rushStart:'A'};
+  // The teacher's choice on sound.html (2026-11-22).
+  const PICK={main:'C',rush:'B',win:'A',lose:'B',tick:'B',
+    tap:'B',fire:'A',catch:'B',right:'A',wrong:'B',freeze:'B',count:'B',go:'A',card:'B',boom:'B',shield:'B',block:'B',power:'A',glow:'B',rushStart:'A'};
   const LABEL={
     main:['背景音乐（平常）',{A:'木琴野餐',B:'泡泡 pop',C:'小游戏 chiptune'}],
     rush:['金鱼潮音乐',{A:'电吉他摇滚',B:'chiptune 摇滚',C:'电子冲刺'}],
