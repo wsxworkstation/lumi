@@ -26,7 +26,7 @@
     if(ev!=='u'||!m||!m.id)return;recv++;
     if(m.k==='need'){const i=Number(m.q),at=needAt.get(i)||0;if(pack[i]&&performance.now()-at>800){needAt.set(i,performance.now());push('q',{items:[[i,pack[i]]]});}return;}
     const before=game.players.size,p=game.input(m);
-    if(m.k==='join'&&p&&game.players.size!==before)drawPlayers();
+    if((m.k==='join'&&p&&game.players.size!==before)||m.k==='bye')drawPlayers();
   }
   /* Room numbers start at 0001: listen to the other rooms for a moment, then take the smallest free number.
      A refresh keeps the same number (this tab remembers it). */
@@ -119,7 +119,7 @@
     const list=[...game.players.values()],now=Date.now();
     $('#pcount').textContent=list.length?`· ${list.length} 人`:'';
     $('#players').innerHTML=list.length?`<div class="teams t${game.teams}">${Array.from({length:game.teams},(_,t)=>{const T=teamOf(t);return `<div class="team-col" style="--soft:${T.soft}"><h3 style="color:${T.ink}">${T.zh} ${T.en}</h3>
-      ${list.filter(p=>p.team===t).map(p=>`<div class="chip ${!p.bot&&now-p.seen>12000?'off':''}"><img src="${G.animalIcon(p.av,32,p.team)}" alt=""><span>${esc(p.name)}</span><button data-kick="${esc(p.id)}" title="移除">✕</button></div>`).join('')||'<p class="empty">—</p>'}</div>`;}).join('')}</div>`
+      ${list.filter(p=>p.team===t).map(p=>`<div class="chip ${!p.bot&&now-p.seen>6000?'off':''}"><img src="${G.animalIcon(p.av,32,p.team)}" alt=""><span>${esc(p.name)}</span><button data-kick="${esc(p.id)}" title="移除">✕</button></div>`).join('')||'<p class="empty">—</p>'}</div>`;}).join('')}</div>`
       :'<p class="empty">学生扫码、打名字以后就会出现在这里。也可以先加机器人试玩。</p>';
     $('#players').querySelectorAll('[data-kick]').forEach(b=>b.onclick=()=>{game.kick(b.dataset.kick);drawPlayers();snapNow();});
     const ready=game.qs.length&&list.length;$('#start').disabled=!ready;
@@ -153,7 +153,7 @@
   }
 
   /* A worker keeps the referee ticking even if this tab is behind another window. */
-  let last=performance.now();
+  let last=performance.now(),lastSweep=0;
   function step(){
     const now=performance.now();let dt=now-last;last=now;
     while(dt>0){const d=Math.min(dt,50);game.tick(d);dt-=d;}
@@ -161,6 +161,8 @@
     const every=game.ph==='play'||game.ph==='count'?G.snapEvery(phones()):1000;
     if(now-lastSnap>=every)snapNow();
     if(code&&now-lastAnnounce>2000){lastAnnounce=now;net.push('hook-lobby','room',{room:code,n:game.players.size,ph:game.ph,hid:HID});}
+    // Students silent for 10 s have left: take them off (in a game they keep their team and score if they come back).
+    if(now-lastSweep>1000){lastSweep=now;if(game.sweep()&&game.ph==='lobby')drawPlayers();}
     if(now-rateAt>=2000){const r=Math.round((sent+recv)/((now-rateAt)/1000)),el=$('#rate');
       el.textContent=`≈ ${r} 条/秒（上限 100）`;el.style.color=r>85?'#ff8a9c':'';sent=recv=0;rateAt=now;}
   }

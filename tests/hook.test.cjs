@@ -222,3 +222,33 @@ test('bots pick up and use cards in a full game, and the snapshot stays small', 
     if(g.t%5000<33){const n=JSON.stringify(g.snapshot()).length;seen=Math.max(seen,n);}}
   assert.ok(used>0||was,'bots used cards');assert.ok(seen<6500,`snapshot ${seen} bytes`);
 });
+
+test('a student who left the room disappears; the same name coming back takes the old place', () => {
+  const g=game();g.join('a','Uh');g.join('b','Ali');const a=g.players.get('a');
+  // Closed the page: gone at once.
+  g.input({k:'bye',id:'b'});assert.equal(g.players.has('b'),false);
+  // Opened the game again (new id) while the old copy is still there but silent: no second "Uh".
+  a.seen=Date.now()-(C.TAKEOVER+500);const team=a.team;
+  const back=g.join('a2',' uh ');assert.equal(back,a,'same player');assert.equal(back.id,'a2');assert.equal(back.team,team);
+  assert.deepEqual([...g.players.keys()],['a2']);
+  // Two real students with the same name, both online: both stay.
+  g.join('c','Uh');assert.equal(g.players.size,2);
+  // Silent for 10 s in the room: taken off.
+  g.players.get('c').seen=Date.now()-(C.AWAY+100);assert.equal(g.sweep(),1);assert.equal(g.players.has('c'),false);
+  g.join('bot1','Bot',true);g.players.get('bot1').seen=0;g.sweep();assert.ok(g.players.has('bot1'),'bots never leave');
+});
+
+test('a student who drops out mid-game leaves the field but keeps team and score when they come back', () => {
+  const g=game();g.join('a','Mei');g.join('b','Ali');g.start();run(g,C.COUNT+10);g.dropAt=1e9;g.glowAt=1e9;
+  const a=g.players.get('a'),o=g.orbs[0];
+  o.by='a';Object.assign(a,{st:1,orb:o.id,q:0,until:g.t+C.ANSWER});a.qn++;
+  g.input({k:'ans',id:'a',qn:a.qn,v:qs[0].answer});assert.equal(a.ok,1);const pts=g.sc[a.team];
+  // Hooks out when they vanish: the line and its fish are released.
+  const o2=g.orbs[1];g.hooks.push({o:'a',x:a.x,y:a.y,a:0,t0:g.t,tt:g.t,d:200,orb:o2.id,lt:g.t});o2.hk='a';
+  a.seen=Date.now()-(C.AWAY+100);g.sweep();
+  assert.equal(g.players.has('a'),false,'off the field');assert.equal(g.hooks.length,0);assert.equal(o2.hk,'');
+  assert.equal(g.sc[a.team],pts,'team keeps its points');
+  assert.equal(H.unpack(JSON.parse(JSON.stringify(g.snapshot()))).p.length,1);
+  const back=g.join('a-new','Mei');assert.equal(back.team,a.team);assert.equal(back.ok,1,'score kept');assert.equal(back.st,0);
+  g.leave('a-new');g.stop();assert.ok(g.end.players.some(r=>r[0]==='Mei'),'results still count what they answered');
+});

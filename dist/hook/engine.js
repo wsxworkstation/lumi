@@ -12,6 +12,7 @@
     PR:20,SPEED:230,RANGE:400,OUT:950,BACK:650,TIP:12,
     ORB:{n:{r:24,val:1,w:[0.32,0.55]},f:{r:18,val:2,w:[0.95,1.35]},g:{r:24,val:2,w:[0.7,0.95]}},
     ANSWER:15000,FREEZE:3000,TARGET:20,LIMIT:300000,RESPAWN:1200,COUNT:3000,SNAP:250,
+    AWAY:10000,TAKEOVER:7000,   // silent this long = left (phones say "hi" every 4 s); the same name may take over a player silent 7 s
     // Item cards: lie on the shore, walk over one to pick it up (hold up to 2), tap to use.
     CARD:{UP:2000,ICE:3000,SHIELD:10000,R_UP:160,PICK:38,MAX:2,FIRST:15000,EVERY:[15000,15000],ON_MAP:2,SPREAD:0.34},   // one card every 15 s (teacher's choice)
     // A glowing goldfish shows up now and then; answer it right and every fish is worth 2 for a while.
@@ -78,7 +79,8 @@
   function createGame(opt={}){
     const rnd=opt.rng||Math.random,check=opt.check||((q,v)=>JSON.stringify(v)===JSON.stringify(q.answer));
     const g={ph:'lobby',t:0,cd:0,teams:2,sc:[0,0,0],players:new Map(),orbs:[],hooks:[],qs:[],qStats:[],deck:[],kicked:new Map(),end:null,target:opt.target||C.TARGET,limit:opt.limit||C.LIMIT,log:[],
-      items:opt.items!==false,drops:[],dropN:0,dropAt:0,fx:[],fxN:0,rush:0,glowAt:0};
+      items:opt.items!==false,drops:[],dropN:0,dropAt:0,fx:[],fxN:0,rush:0,glowAt:0,gone:new Map()};
+    const nameKey=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
     const fresh=()=>({st:0,until:0,q:-1,orb:0,ok:0,bad:0,rk:0,goal:null,cool:800,botAt:0,cards:[],sh:0,x2:0,tri:0,bag:[],triLeft:0,triBad:false,useAt:0});
     const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
     const seed=()=>Math.floor(rnd()*2**31);
@@ -91,12 +93,33 @@
     g.join=(id,name,bot=false,av)=>{
       id=String(id);name=String(name||'').trim().slice(0,16)||'玩家';
       if(g.kicked.has(id))return null;
-      let p=g.players.get(id);
-      if(p){p.name=name;if(av!=null)p.av=normAv(av,id);p.seen=Date.now();return p;}
+      let p=g.players.get(id);const now=Date.now();
+      if(p){p.name=name;if(av!=null)p.av=normAv(av,id);p.seen=now;return p;}
+      if(!bot){
+        // The same name coming back (the page was closed, or opened again on another phone) is the same student:
+        // take over the old place — same team, same score — instead of leaving a frozen copy behind.
+        const k=nameKey(name),old=[...g.players.values()].find(q=>!q.bot&&nameKey(q.name)===k&&now-q.seen>C.TAKEOVER);
+        if(old){rekey(old,id);old.name=name;if(av!=null)old.av=normAv(av,id);old.seen=now;return old;}
+        const back=g.gone.get(k);
+        if(back){g.gone.delete(k);back.id=id;back.name=name;if(av!=null)back.av=normAv(av,id);back.seen=now;back.seq=-1;
+          g.players.set(id,back);place(back,teamCount()[back.team]-1);return back;}
+      }
       const n=teamCount(),team=n.indexOf(Math.min(...n));
-      p={id,name,team,av:normAv(av,id),x:0,y:0,dx:0,dy:0,...fresh(),qn:0,rs:0,bot,seq:-1,seen:Date.now()};
+      p={id,name,team,av:normAv(av,id),x:0,y:0,dx:0,dy:0,...fresh(),qn:0,rs:0,bot,seq:-1,seen:now};
       g.players.set(id,p);place(p,n[team]);return p;
     };
+    function rekey(p,id){const old=p.id;g.players.delete(old);p.id=id;p.seq=-1;g.players.set(id,p);
+      for(const h of g.hooks)if(h.o===old)h.o=id;for(const o of g.orbs){if(o.hk===old)o.hk=id;if(o.by===old)o.by=id;}}
+    /* A student who left (closed the page, or silent for 10 s) disappears. In a game they are kept aside with their
+       team and score, so the same name can come back to them; the team keeps the points it already has. */
+    function retire(p){
+      g.hooks=g.hooks.filter(h=>{if(h.o!==p.id)return true;if(h.orb)releaseOrb(h.orb,300);return false;});
+      if(p.orb)releaseOrb(p.orb,300);for(const o of p.bag)releaseOrb(o,300);
+      g.players.delete(p.id);
+      if(g.ph!=='lobby'&&g.ph!=='end'){Object.assign(p,{st:0,until:0,q:-1,orb:0,bag:[],triLeft:0,triBad:false,dx:0,dy:0});g.gone.set(nameKey(p.name),p);}
+    }
+    g.leave=id=>{const p=g.players.get(String(id));if(p&&!p.bot)retire(p);};
+    g.sweep=(now=Date.now())=>{let n=0;for(const p of [...g.players.values()])if(!p.bot&&now-p.seen>C.AWAY){retire(p);n++;}return n;};
     function releaseOrb(id,delay){const o=g.orbs.find(x=>x.id===id);if(o){o.s=seed();o.b=g.t+delay;o.hk='';o.by='';}}
     g.kick=id=>{const p=g.players.get(id);if(!p)return;g.players.delete(id);if(!p.bot)g.kicked.set(id,Date.now());
       g.hooks=g.hooks.filter(h=>{if(h.o!==id)return true;if(h.orb)releaseOrb(h.orb,300);return false;});
@@ -104,7 +127,7 @@
     g.setTeams=n=>{g.teams=n===3?3:2;const list=shuffle([...g.players.values()]);list.forEach((p,i)=>p.team=i%g.teams);placeAll();};
     g.start=()=>{
       g.ph='count';g.cd=C.COUNT;g.t=0;g.sc=[0,0,0];g.hooks=[];g.end=null;g.deck=[];g.qStats=g.qs.map(()=>({right:0,wrong:0}));
-      g.drops=[];g.dropAt=C.CARD.FIRST;g.fx=[];g.rush=0;g.glowAt=C.RUSH.FIRST;
+      g.drops=[];g.dropAt=C.CARD.FIRST;g.fx=[];g.rush=0;g.glowAt=C.RUSH.FIRST;g.gone.clear();
       for(const p of g.players.values())Object.assign(p,fresh());
       placeAll();
       const n=clamp(Math.round(g.players.size*0.5)+3,5,13),fast=Math.max(1,Math.round(n/4));
@@ -112,7 +135,7 @@
     };
     g.pause=()=>{if(g.ph==='play')g.ph='pause';};
     g.resume=()=>{if(g.ph==='pause')g.ph='play';};
-    g.toLobby=()=>{g.ph='lobby';g.end=null;g.hooks=[];g.orbs=[];g.drops=[];g.fx=[];g.rush=0;placeAll();for(const p of g.players.values())Object.assign(p,{st:0,q:-1,orb:0,cards:[],sh:0,x2:0,tri:0,bag:[],triLeft:0,triBad:false});};
+    g.toLobby=()=>{g.ph='lobby';g.end=null;g.hooks=[];g.orbs=[];g.drops=[];g.fx=[];g.rush=0;g.gone.clear();placeAll();for(const p of g.players.values())Object.assign(p,{st:0,q:-1,orb:0,cards:[],sh:0,x2:0,tri:0,bag:[],triLeft:0,triBad:false});};
     function draw(){if(!g.deck.length)g.deck=shuffle(g.qs.map((_,i)=>i));return g.deck.pop();}
     function orbAt(o,t){
       if(o.by){const p=g.players.get(o.by);if(!p)return null;const held=g.orbs.filter(x=>x.by===o.by),i=held.indexOf(o);return {x:p.x+(i-(held.length-1)/2)*30,y:p.y-54};}
@@ -190,7 +213,8 @@
       let hard=-1,most=0;g.qStats.forEach((s,i)=>{if(s.wrong>most){most=s.wrong;hard=i;}});
       g.ph='end';g.hooks=[];
       g.end={win,reason,hard,hardWrong:most,hardText:hard>=0?g.qs[hard].text:'',
-        players:[...g.players.values()].sort((a,b)=>b.ok-a.ok||a.bad-b.bad).map(p=>[p.name,p.team,p.ok,p.bad,p.av])};
+        // Results also count a student who left during the game after answering (their answers still happened).
+        players:[...g.players.values(),...[...g.gone.values()].filter(p=>p.ok+p.bad>0)].sort((a,b)=>b.ok-a.ok||a.bad-b.bad).map(p=>[p.name,p.team,p.ok,p.bad,p.av])};
     }
     g.stop=()=>{if(g.ph==='play'||g.ph==='pause'||g.ph==='count')finish('stop');};
     function settle(p,ok,timeout){
@@ -217,6 +241,7 @@
       else if(m.k==='fire')fire(p,m.x,m.y,Number(m.a),m.t);
       else if(m.k==='ans')g.answer(p.id,m.qn,m.v);
       else if(m.k==='use')useCard(p,m.i);
+      else if(m.k==='bye'){g.leave(p.id);return null;}   // the phone closed the page
       return p;
     };
     g.useCard=(id,i)=>{const p=g.players.get(id);return !!p&&useCard(p,i);};

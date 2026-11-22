@@ -86,7 +86,10 @@
   function closed(){message('老师已经关掉房间。<br>The room is closed.','重新找房间 Find a room',()=>location.reload());setPlaying(false);}
   // Keep telling the teacher we are here (also rejoins after the teacher's page reloads). Only after pressing Join.
   setInterval(()=>{if(!up||kicked||now()-joinedAt<1200)return;
-    if(!mine)send({k:'join',name:myName,av:myAv});else if(now()-lastSend>5000)send({k:'hi'});},1500);
+    if(!mine)send({k:'join',name:myName,av:myAv});else if(now()-lastSend>4000)send({k:'hi'});},1500);
+  // Closing the page tells the teacher's computer right away, so the name disappears instead of standing there frozen.
+  // (Switching to another app only goes quiet: after 10 s the student is taken off, and comes back by themselves on return.)
+  addEventListener('pagehide',()=>{if(up&&!kicked&&mine)send({k:'bye'});});
   setInterval(()=>{$('#net').classList.toggle('hidden',!room||!S||kicked||now()-lastSnapAt<4000||S.ph==='end');},1000);
 
   function onQuestions(p){for(const [i,q] of p.items||[])qs[i]=q;if(mine?.st===1&&shownQn===-2)showQuestion();}
