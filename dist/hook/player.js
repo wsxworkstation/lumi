@@ -28,20 +28,17 @@
   const SOUND_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>';
 
   /* ── 1. Find the teacher's room ── */
-  const rooms=new Map();let roomTimer=null,lookingSince=0,autoOk=true;
+  const rooms=new Map();let roomTimer=null;
   function findRooms(){
     if(qp.get('r'))return askName(qp.get('r'));
     // Rooms announce themselves every 2 s. Only redraw the list while the student is still choosing a room —
     // once a room is picked (name screen), the list must never come back over it.
     net.join('hook-lobby',(ev,p)=>{if(ev==='room'&&p?.room){rooms.set(String(p.room),{...p,at:Date.now()});drawRooms();}});
-    lookingSince=Date.now();clearInterval(roomTimer);drawRooms();roomTimer=setInterval(drawRooms,700);
+    clearInterval(roomTimer);drawRooms();roomTimer=setInterval(drawRooms,2000);
   }
   function drawRooms(){
     if(room)return;
     const list=[...rooms.values()].filter(r=>Date.now()-r.at<6000&&r.ph!=='closed'),down=net.downFor()>4000;
-    // Only one room open: go straight to the name screen (after one full round of announcements, so a second room
-    // would have shown up). After "换房间" the student chooses by hand.
-    if(autoOk&&list.length===1&&Date.now()-lookingSince>2300){autoOk=false;return askName(list[0].room);}
     const key='rooms:'+(down?'down':list.map(r=>r.room+'/'+r.n).join(','));if(ui.dataset.key===key)return;ui.dataset.key=key;
     ui.innerHTML=`<div class="screen"><div class="box">${head('Hook Rush')}<div class="sheet">
       ${list.length?`<p class="sub">点老师的房间 Tap your teacher's room</p><div class="room-list">${list.map(r=>`<button class="room" data-room="${esc(r.room)}"><span>房间 ${esc(r.room)}</span><small>${r.n} 人</small></button>`).join('')}</div>`
@@ -65,7 +62,7 @@
     const ok=()=>{go.disabled=!input.value.trim();};input.oninput=ok;ok();
     input.onkeydown=e=>{if(e.key==='Enter'&&input.value.trim())go.click();};
     go.onclick=()=>{myName=input.value.trim().slice(0,16);store('lumi-hook-name',myName);G.sfx.unlock();goFullscreen();joinRoom();};
-    $('#back')&&($('#back').onclick=()=>{room=null;autoOk=false;findRooms();});
+    $('#back')&&($('#back').onclick=()=>{room=null;findRooms();});
     if(!('ontouchstart' in window))input.focus();
   }
   function goFullscreen(){
