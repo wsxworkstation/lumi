@@ -6,31 +6,45 @@
   const net=local?G.createLocalNet():G.createNet(window.STUDYLOG_CLOUD||{});
   const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const teamOf=i=>C.TEAMS[i]||C.TEAMS[0];
-  let code;try{code=sessionStorage.getItem('lumi-hook-room');}catch{}
-  if(!code){code=String(1000+Math.floor(Math.random()*9000));try{sessionStorage.setItem('lumi-hook-room',code);}catch{}}
-  const down=`hook-${code}`,up=`hook-${code}-u`;
   const game=G.createGame({check:(q,v)=>window.LumiQuiz.check(q,v)});
   let pack=[],botN=0,lastSnap=0,lastAnnounce=0,lastPh='lobby',sent=0,recv=0,rateAt=performance.now(),needAt=new Map();
+  let code='',down='',up='';const HID=Math.random().toString(36).slice(2,10);
+  G.pressFeedback();
+  if(local)window.__hook=game;   // test mode only: lets a test script set up a situation
 
-  $('#code').textContent=code;
   const joinUrl=new URL('./',location.href).href.replace(/\/host\.html.*$/,'/');
   $('#url').textContent=joinUrl.replace(/^https?:\/\//,'')+(local?'?local':'');
 
   /* ── Network ── */
   const phones=()=>{let n=0;for(const p of game.players.values())if(!p.bot)n++;return n;};
   // Supabase counts the message we send plus one for every phone that receives it.
-  const push=(event,payload)=>{if(net.push(down,event,payload))sent+=1+phones();};
-  net.join(down,()=>{});
-  net.join('hook-lobby',()=>{});
-  net.join(up,(ev,m)=>{
+  const push=(event,payload)=>{if(down&&net.push(down,event,payload))sent+=1+phones();};
+  function onUp(ev,m){
     if(ev!=='u'||!m||!m.id)return;recv++;
     if(m.k==='need'){const i=Number(m.q),at=needAt.get(i)||0;if(pack[i]&&performance.now()-at>800){needAt.set(i,performance.now());push('q',{items:[[i,pack[i]]]});}return;}
     const before=game.players.size,p=game.input(m);
     if(m.k==='join'&&p&&game.players.size!==before)drawPlayers();
+  }
+  /* Room numbers start at 0001: listen to the other rooms for a moment, then take the smallest free number.
+     A refresh keeps the same number (this tab remembers it). */
+  const others=new Map();
+  const inUse=()=>new Set([...others].filter(([,r])=>Date.now()-r.at<6000&&r.ph!=='closed').map(([c])=>c));
+  function openRoom(c){
+    if(down){net.leave(down);net.leave(up);}
+    code=c;down=`hook-${code}`;up=`hook-${code}-u`;try{sessionStorage.setItem('lumi-hook-code',code);}catch{}
+    net.join(down,()=>{});net.join(up,onUp);$('#code').textContent=code;lastAnnounce=0;
+  }
+  net.join('hook-lobby',(ev,p)=>{
+    if(ev!=='room'||!p?.room||p.hid===HID)return;const c=String(p.room);others.set(c,{ph:p.ph,at:Date.now()});
+    // Two empty rooms with the same number (e.g. opened at the same moment): one of them moves to the next number.
+    if(c===code&&p.ph!=='closed'&&p.hid&&p.hid<HID&&!game.players.size&&game.ph==='lobby')openRoom(G.pickRoom(new Set([...inUse(),code])));
   });
+  let saved='';try{saved=sessionStorage.getItem('lumi-hook-code')||'';}catch{}
+  if(/^\d{4}$/.test(saved))openRoom(saved);
+  else{$('#code').textContent='····';setTimeout(()=>openRoom(G.pickRoom(inUse())),2300);}
   // If this computer can't reach the server, students never see the room. Say so instead of looking fine.
   setInterval(()=>{$('#netWarn').classList.toggle('hidden',net.downFor()<4000);},1000);
-  addEventListener('beforeunload',()=>{net.push(down,'closed',{});net.push('hook-lobby','room',{room:code,n:0,ph:'closed'});});
+  addEventListener('beforeunload',()=>{if(!code)return;net.push(down,'closed',{});net.push('hook-lobby','room',{room:code,n:0,ph:'closed',hid:HID});});
 
   /* ── Questions ── */
   const DEMO=[
@@ -81,6 +95,10 @@
 
   /* ── Lobby ── */
   $('#teams').onclick=e=>{const b=e.target.closest('[data-n]');if(!b)return;$('#teams').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));game.setTeams(Number(b.dataset.n));drawPlayers();};
+  // Item cards on/off (remembered on this computer).
+  try{game.items=localStorage.getItem('lumi-hook-items')!=='0';}catch{}
+  const showItems=()=>$('#items').querySelectorAll('button').forEach(x=>x.classList.toggle('on',(x.dataset.on==='1')===game.items));showItems();
+  $('#items').onclick=e=>{const b=e.target.closest('[data-on]');if(!b)return;game.items=b.dataset.on==='1';try{localStorage.setItem('lumi-hook-items',game.items?'1':'0');}catch{}showItems();};
   $('#target').onchange=e=>{const v=Math.round(Number(e.target.value));game.target=Number.isFinite(v)?G.clamp(v,5,200):C.TARGET;e.target.value=game.target;};
   const addBots=n=>{for(let i=0;i<n&&game.players.size<30;i++)game.join('bot'+(++botN),'机器人 '+botN,true,Math.floor(Math.random()*G.ANIMALS.length));drawPlayers();};
   $('#bot1').onclick=()=>addBots(1);$('#bot5').onclick=()=>addBots(5);
@@ -130,7 +148,7 @@
     if(game.ph!==lastPh){if(game.ph==='end')showEnd();lastPh=game.ph;snapNow();}
     const every=game.ph==='play'||game.ph==='count'?G.snapEvery(phones()):1000;
     if(now-lastSnap>=every)snapNow();
-    if(now-lastAnnounce>2000){lastAnnounce=now;net.push('hook-lobby','room',{room:code,n:game.players.size,ph:game.ph});}
+    if(code&&now-lastAnnounce>2000){lastAnnounce=now;net.push('hook-lobby','room',{room:code,n:game.players.size,ph:game.ph,hid:HID});}
     if(now-rateAt>=2000){const r=Math.round((sent+recv)/((now-rateAt)/1000)),el=$('#rate');
       el.textContent=`≈ ${r} 条/秒（上限 100）`;el.style.color=r>85?'#ff8a9c':'';sent=recv=0;rateAt=now;}
   }
@@ -141,15 +159,19 @@
   const cv=$('#cv'),ctx=cv.getContext('2d');
   function resize(){const dpr=Math.min(2,devicePixelRatio||1);cv.width=innerWidth*dpr;cv.height=innerHeight*dpr;}
   addEventListener('resize',resize);resize();
-  let lastCount=-1;
+  let lastCount=-1,lastFx=0;
   function frame(){
     requestAnimationFrame(frame);
     if($('#stage').classList.contains('hidden'))return;
     const t=game.t,hooked=new Set(game.hooks.map(h=>h.o));
-    const players=[...game.players.values()].map(p=>({...p,fx:p.dx,fy:p.dy,mv:game.ph==='play'&&p.st===0&&!!(p.dx||p.dy)&&!hooked.has(p.id)}));
+    const players=[...game.players.values()].map(p=>({...p,fx:p.dx,fy:p.dy,mv:game.ph==='play'&&p.st===0&&!!(p.dx||p.dy)&&!hooked.has(p.id),sh:p.sh>t,x2:!!p.x2,tri:!!p.tri}));
     const hooks=game.hooks.map(h=>{const tip=G.hookTip(h,t);return {o:h.o,x:h.x,y:h.y,tx:tip.x,ty:tip.y,team:game.players.get(h.o)?.team,caught:!!h.orb};});
     const orbs=[];for(const o of game.orbs){const at=game.orbAt(o);if(at)orbs.push({id:o.id,k:o.k,x:at.x,y:at.y,alpha:o.hk||o.by?1:Math.min(1,(t-o.b)/300),held:!!o.by,hooked:!!o.hk&&!o.by});}
-    G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:game.teams,players,orbs,hooks},performance.now(),64);
+    const rush=game.rush?Math.max(0,game.rush-t):0;
+    G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:game.teams,players,orbs,hooks,drops:game.drops,rush,fx:game.fx.map(f=>({...f,age:t-f.at}))},performance.now(),64);
+    // Sounds for card moves and the goldfish rush (the big screen is where the class watches).
+    for(const f of game.fx)if(f.id>lastFx){lastFx=f.id;({up:G.sfx.boom,ice:G.sfx.freeze,shield:G.sfx.shield,block:G.sfx.shield,rush:G.sfx.rush}[f.k]||(()=>{}))();}
+    const rt=rush?`金鱼潮 ×2 · ${Math.ceil(rush/1000)}`:'';if($('#rush').textContent!==rt){$('#rush').textContent=rt;$('#rush').classList.toggle('hidden',!rt);}
     const left=Math.max(0,(game.limit-t)/1000);
     const clock=game.ph==='pause'?'暂停中':`${Math.floor(left/60)}:${String(Math.floor(left%60)).padStart(2,'0')} <small>先到 ${game.target} 分</small>`;
     if($('#clock').innerHTML!==clock)$('#clock').innerHTML=clock;

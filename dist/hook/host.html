@@ -36,6 +36,8 @@
         <div class="seg" id="teams"><button data-n="2" class="on">2 队</button><button data-n="3">3 队</button></div>
         <div class="row" style="margin-top:12px"><span class="msgs" style="margin:0">先到几分赢</span><input class="num" id="target" type="number" min="5" max="200" value="20"></div>
         <p class="msgs">另外最多 5 分钟，时间到就看分数。</p>
+        <p class="msgs">道具卡（击飞、冷冻、保护罩、加倍、三连钩）</p>
+        <div class="seg" id="items"><button data-on="1" class="on">开</button><button data-on="0">关</button></div>
       </section>
     </aside>
     <section class="panel">
@@ -55,6 +57,7 @@
       <div class="scores" id="scores"></div>
       <div class="ctrl"><span class="rate" id="rate"></span><button class="btn" id="pause">暂停</button><button class="btn danger" id="stop">结束</button></div>
     </div>
+    <div class="rush-tag host-rush hidden" id="rush"></div>
     <div id="count3" class="count-big hidden"></div>
     <div class="end-panel hidden" id="end"></div>
   </div>

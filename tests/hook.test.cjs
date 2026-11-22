@@ -132,3 +132,93 @@ test('the screens can tell when the server cannot be reached', async () => {
   net.close();delete global.WebSocket;
   assert.equal(H.createLocalNet().downFor(),0);
 });
+
+test('room numbers count up from 0001 and skip rooms already open', () => {
+  assert.equal(H.pickRoom(new Set()),'0001');
+  assert.equal(H.pickRoom(new Set(['0001','0002'])),'0003');
+  assert.equal(H.pickRoom(new Set(['0002'])),'0001');
+});
+
+// Helpers for the item-card tests: a game already playing, with no cards dropping and no goldfish unless asked.
+function playing(ids,seed=7){const g=game(seed);for(const id of ids)g.join(id,id.toUpperCase());g.start();run(g,C.COUNT+10);g.dropAt=1e9;g.glowAt=1e9;return g;}
+function give(g,p,o){o.hk='';o.by=p.id;Object.assign(p,{st:1,orb:o.id,q:0,until:g.t+C.ANSWER});p.qn++;}
+const right=(g,p)=>g.input({k:'ans',id:p.id,qn:p.qn,v:g.qs[p.q].answer});
+const wrong=(g,p)=>g.input({k:'ans',id:p.id,qn:p.qn,v:[g.qs[p.q].answer[0]%4+1]});
+
+test('cards appear on the shore and a player holds at most two', () => {
+  const g=game();g.join('a','A');g.join('b','B');g.start();run(g,C.COUNT+C.CARD.FIRST+50);
+  const held=()=>[...g.players.values()].reduce((n,p)=>n+p.cards.length,0);
+  assert.equal(g.drops.length+held(),1,'one card after 6 s');
+  const s=C.SEA;for(const d of g.drops)assert.ok(((d.x-s.x)/s.rx)**2+((d.y-s.y)/s.ry)**2>1,'on the shore, not in the lake');
+  const a=g.players.get('a');a.cards=[];g.drops=[{id:50,x:Math.round(a.x),y:Math.round(a.y)}];g.tick(33);
+  assert.equal(a.cards.length,1);assert.ok(H.CARDS[a.cards[0]],'a real card');assert.equal(g.drops.length,0);
+  a.cards=['up','ice'];g.drops=[{id:51,x:Math.round(a.x),y:Math.round(a.y)}];g.tick(33);
+  assert.equal(a.cards.length,2,'hands full');assert.equal(g.drops.length,1,'card stays on the grass');
+  const off=game();off.items=false;off.join('a','A');off.start();run(off,C.COUNT+40000);
+  assert.equal(off.drops.length,0,'teacher switched cards off');
+});
+
+test('knock-up throws nearby enemies in the air for 2 s, never a teammate or someone answering', () => {
+  const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
+  assert.deepEqual([a.team,b.team,c.team,d.team],[0,1,0,1]);
+  b.x=a.x+60;b.y=a.y;c.x=a.x+30;c.y=a.y;d.x=a.x;d.y=a.y+80;Object.assign(d,{st:1,until:g.t+C.ANSWER});
+  a.cards=['up'];assert.ok(g.useCard('a',0));
+  assert.equal(b.st,3,'enemy flies');assert.equal(c.st,0,'teammate safe');assert.equal(d.st,1,'answering is never interrupted');
+  assert.deepEqual(a.cards,[]);
+  const s=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));
+  assert.deepEqual(s.fx.map(f=>[f.k,f.by,f.to]),[['up','a',['b']]]);assert.equal(s.p.find(p=>p.id==='b').st,3);
+  g.input({k:'fire',id:'b',x:b.x,y:b.y,a:0,t:g.t});assert.equal(g.hooks.length,0,'cannot fish while flying');
+  run(g,C.CARD.UP+50);assert.equal(b.st,0,'lands after 2 s');
+  b.x=a.x+400;a.cards=['up'];assert.equal(g.useCard('a',0),false);assert.deepEqual(a.cards,['up'],'nobody in reach: card kept');
+});
+
+test('freeze hits the nearest enemy; a shield blocks one hit and stops steals', () => {
+  const g=playing(['a','b','c','d']),[a,b,,d]=['a','b','c','d'].map(id=>g.players.get(id));
+  b.x=a.x+100;b.y=a.y;d.x=a.x+500;d.y=a.y;
+  a.cards=['ice'];assert.ok(g.useCard('a',0));assert.equal(b.st,2,'nearest enemy frozen');assert.equal(d.st,0);
+  run(g,C.CARD.ICE+50);assert.equal(b.st,0);
+  b.cards=['shield'];g.useCard('b',0);assert.ok(b.sh>g.t,'shield on');
+  a.cards=['ice'];assert.ok(g.useCard('a',0));assert.equal(b.st,0,'blocked');assert.equal(b.sh,0,'shield used up');
+  assert.ok(g.fx.some(f=>f.k==='block'&&f.by==='b'));
+  // A shielded player's fish can't be stolen on the way back.
+  b.sh=g.t+5000;const o=g.orbs[0];g.orbs=[o];
+  g.hooks.push({o:'b',x:b.x,y:b.y,a:0,t0:g.t,tt:g.t,d:300,orb:o.id,lt:g.t});o.hk='b';
+  const tip=H.hookTip(g.hooks[0],g.t+33);a.x=tip.x-200;a.y=tip.y;g.hooks.push({o:'a',x:a.x,y:a.y,a:0,t0:g.t,tt:0,d:0,orb:0,lt:g.t});
+  let stolen=false;for(let i=0;i<14;i++){g.tick(33);if(o.hk==='a'||o.by==='a')stolen=true;}
+  assert.equal(stolen,false);
+});
+
+test('double card doubles the next right answer; the glowing goldfish starts a rush where every fish is worth 2', () => {
+  const g=playing(['a','b']),a=g.players.get('a');
+  a.cards=['x2'];g.useCard('a',0);assert.equal(a.x2,1);
+  give(g,a,g.orbs.find(o=>o.k==='n'));wrong(g,a);assert.equal(a.x2,1,'kept after a wrong answer');
+  run(g,C.FREEZE+50);give(g,a,g.orbs.find(o=>o.k==='n'));right(g,a);
+  assert.equal(g.sc[a.team],2,'1 point doubled');assert.equal(a.x2,0);
+  g.glowAt=g.t;g.tick(33);const glow=g.orbs.find(o=>o.k==='g');assert.ok(glow,'glowing goldfish appears');
+  assert.equal(g.orbs.filter(o=>o.k==='g').length,1);
+  give(g,a,glow);right(g,a);assert.equal(g.sc[a.team],4);assert.ok(g.rush>g.t,'rush started');assert.equal(glow.k,'n');
+  assert.ok(H.unpack(JSON.parse(JSON.stringify(g.snapshot()))).ru>g.t);
+  give(g,a,g.orbs.find(o=>o.k==='n'));right(g,a);assert.equal(g.sc[a.team],6,'every fish worth 2 during the rush');
+  run(g,C.RUSH.LEN+50);assert.equal(g.rush,0,'rush over');
+  give(g,a,g.orbs.find(o=>o.k==='n'));right(g,a);assert.equal(g.sc[a.team],7);
+});
+
+test('triple hook casts three lines; each fish is answered in turn, a wrong one freezes only at the end', () => {
+  const g=playing(['a','b']),a=g.players.get('a');
+  a.cards=['tri'];g.useCard('a',0);assert.equal(a.tri,1);
+  assert.ok(g.input({k:'fire',id:'a',x:a.x,y:a.y,a:0,t:g.t}));
+  const mine=g.hooks.filter(h=>h.o==='a');assert.equal(mine.length,3);assert.equal(a.tri,0,'used up');
+  const fish=g.orbs.filter(o=>!o.hk&&!o.by).slice(0,3);mine.forEach((h,i)=>{h.tt=g.t;h.d=40;h.orb=fish[i].id;fish[i].hk='a';});
+  run(g,300);
+  assert.equal(a.st,1,'answering the first fish');assert.equal(a.bag.length,2,'two more waiting');assert.ok(fish.every(o=>o.by==='a'));
+  wrong(g,a);assert.equal(a.st,1,'no freeze yet: next fish');right(g,a);assert.equal(a.st,1);right(g,a);
+  assert.equal(g.sc[a.team],2);assert.equal(a.st,2,'frozen once, at the end');
+});
+
+test('bots pick up and use cards in a full game, and the snapshot stays small', () => {
+  const g=game(5);for(let i=0;i<20;i++)g.join('bot'+i,'Bot '+i,true);g.start();
+  let used=0,seen=0;const was=g.fx.length;
+  for(let t=0;t<C.COUNT+C.LIMIT&&g.ph!=='end';t+=33){g.tick(33);if(g.fx.length)used=Math.max(used,g.fx.filter(f=>f.k!=='rush').length);
+    if(g.t%5000<33){const n=JSON.stringify(g.snapshot()).length;seen=Math.max(seen,n);}}
+  assert.ok(used>0||was,'bots used cards');assert.ok(seen<6500,`snapshot ${seen} bytes`);
+});

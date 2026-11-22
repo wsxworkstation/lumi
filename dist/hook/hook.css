@@ -121,6 +121,35 @@ input{font:inherit}
 @keyframes wobble{0%{opacity:0}10%{opacity:1;transform:translate(-50%,-50%) rotate(-6deg)}20%{transform:translate(-50%,-50%) rotate(5deg)}30%{transform:translate(-50%,-50%) rotate(-3deg)}40%{transform:translate(-50%,-50%) rotate(0)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%)}}
 #frost{position:fixed;inset:0;z-index:8;pointer-events:none;background:radial-gradient(ellipse at center,transparent 48%,rgba(175,228,255,.8));display:flex;align-items:flex-end;justify-content:center;padding-bottom:max(22px,env(safe-area-inset-bottom))}
 #frost b{background:#fff;color:#3c9ad6;font-family:var(--fun);font-size:24px;padding:6px 22px;border-radius:999px;box-shadow:0 4px 0 #bfe3f7}
+#frost.air{background:radial-gradient(ellipse at center,transparent 50%,rgba(255,196,130,.7))}
+#frost.air b{color:#e0761a;box-shadow:0 4px 0 #ffd9b0}
+
+/* Every button shows it was pressed (class added by HookGame.pressFeedback; works on iPhone too) */
+button,.btn,.room{-webkit-user-select:none;user-select:none}
+.pressed{transform:scale(.92)!important;filter:brightness(.9) saturate(1.1);transition:transform .05s,filter .05s!important}
+#hookBtn.pressed{transform:scale(.9)!important}
+
+/* Item cards: up to two buttons in a row above the hook button */
+#cards{position:fixed;right:max(22px,env(safe-area-inset-right));bottom:calc(max(22px,env(safe-area-inset-bottom)) + 118px);display:flex;gap:8px;z-index:6}
+.card-btn{width:62px;height:62px;border-radius:18px;border:4px solid #fff;background:var(--cc);color:#fff;box-shadow:0 5px 0 rgba(74,59,85,.22),0 8px 16px rgba(74,59,85,.18);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0;font-family:var(--fun);font-size:13px;font-weight:700;line-height:1;touch-action:none;animation:cardPop .35s cubic-bezier(.3,1.6,.5,1)}
+.card-btn svg{width:26px;height:26px}
+.card-btn b{font-size:22px;line-height:26px}
+.card-btn.used{opacity:.35;transform:scale(.85)}
+@keyframes cardPop{from{transform:scale(.3) rotate(-12deg);opacity:0}}
+#hookBtn .buff{position:absolute;top:-8px;right:-10px;background:#9a7cff;color:#fff;border:3px solid #fff;border-radius:999px;padding:3px 9px;font-size:13px;box-shadow:0 3px 0 rgba(74,59,85,.18)}
+/* Short messages: "拿到「击飞」卡！", "被 Ali 击飞了！" */
+#note{position:fixed;left:50%;top:94px;transform:translate(-50%,-10px);z-index:14;pointer-events:none;opacity:0;white-space:nowrap;
+  background:#fff;color:var(--ink);font-family:var(--fun);font-size:18px;font-weight:600;padding:6px 18px;border-radius:999px;box-shadow:0 4px 0 rgba(74,59,85,.14);transition:opacity .2s,transform .2s}
+#note.show{opacity:1;transform:translate(-50%,0)}
+#note.good{color:#139466}
+#note.bad{color:var(--pink-d)}
+#note.gold{background:#fff6c8;color:#a87600}
+/* Goldfish rush countdown */
+.rush-tag{position:fixed;left:50%;top:54px;transform:translateX(-50%);z-index:7;pointer-events:none;background:linear-gradient(#ffe066,#ffc93c);color:#7a5200;
+  font-family:var(--fun);font-size:17px;font-weight:700;padding:4px 16px;border-radius:999px;border:3px solid #fff;box-shadow:0 4px 0 rgba(168,118,0,.3);animation:glow 1s ease-in-out infinite alternate}
+.host-rush{top:76px;font-size:24px;padding:6px 22px}
+@keyframes glow{to{box-shadow:0 4px 0 rgba(168,118,0,.3),0 0 22px rgba(255,214,80,.9)}}
 #count,.count-big{position:fixed;inset:0;z-index:12;display:flex;align-items:center;justify-content:center;font-family:var(--fun);font-size:140px;font-weight:700;color:var(--pink);pointer-events:none;
   text-shadow:0 6px 0 #fff,6px 0 0 #fff,-6px 0 0 #fff,0 -6px 0 #fff,4px 4px 0 #fff,-4px 4px 0 #fff,4px -4px 0 #fff,-4px -4px 0 #fff,0 14px 0 rgba(226,65,108,.25)}
 .count-big{position:absolute;font-size:190px}
