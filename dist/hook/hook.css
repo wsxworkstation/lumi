@@ -21,6 +21,24 @@ input{font:inherit}
 .screen::before{top:8%;left:5%;animation:cloud 24s ease-in-out infinite alternate}
 .screen::after{top:16%;right:14%;opacity:.8;transform:scale(.7);animation:cloud 30s ease-in-out infinite alternate-reverse}
 @keyframes cloud{to{translate:70px 0}}
+/* Illustrated student entrance; room discovery and joining stay unchanged. */
+.screen.room-cover{background:radial-gradient(ellipse at 15% 5%,#fff5dc,transparent 55%),linear-gradient(155deg,#d9f1e4,#edf8f7 65%,#d9edf5);padding:24px 16px}
+.room-cover::before,.room-cover::after{display:none}
+.room-cover .box{width:min(520px,100%);overflow:hidden;border-radius:30px;background:#fff;box-shadow:0 18px 60px rgba(58,100,83,.14);padding-bottom:24px;border:1px solid rgba(255,255,255,.9)}
+.cover-art{width:100%;aspect-ratio:16/9;background:#c5eade url('./img/cover.webp') center center/cover no-repeat}
+.room-cover .logo{font-size:clamp(30px,7vw,38px);margin:18px 16px 0;letter-spacing:.02em}
+.room-cover .logo-en{font-size:13px;margin:8px 0 18px;letter-spacing:.15em;color:#648f85}
+.room-cover .sheet{margin:0 22px;padding:0;border-radius:0;box-shadow:none}
+.room-cover .sub{font-size:15px;margin:0 0 14px;color:#79847f}
+.room-cover .room{text-align:left;min-height:60px;font-size:21px;border-width:2px;background:#fffafb;box-shadow:0 3px 0 #f4d8e0}
+@media (max-height:500px) and (min-width:600px){
+  .screen.room-cover{padding:16px}
+  .room-cover .box{width:min(800px,100%);display:grid;grid-template-columns:46% 54%;grid-template-rows:1fr auto 1fr;padding-bottom:0;min-height:290px}
+  .room-cover .cover-art{grid-column:1;grid-row:1/4;aspect-ratio:auto;height:100%;background-position:42% center}
+  .room-cover .logo{grid-column:2;align-self:end;font-size:30px;margin-top:20px}
+  .room-cover .logo-en{grid-column:2;margin:8px 0 16px}
+  .room-cover .sheet{grid-column:2;margin:0 22px 24px;align-self:start}
+}
 .box{position:relative;z-index:1;width:min(440px,100%);text-align:center;margin:auto}
 .box.wide{width:min(620px,100%)}
 .logo{font-family:var(--fun);font-weight:700;font-size:40px;line-height:1.1;margin:0;color:var(--pink);letter-spacing:.04em;text-shadow:var(--outline),0 7px 0 rgba(226,65,108,.22)}

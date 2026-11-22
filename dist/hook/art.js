@@ -4,7 +4,7 @@
   const files={};
   for(let i=0;i<10;i++)files['animal-'+i]='animal-'+i+'.png';
   for(const k of ['fish-normal','fish-gold','fish-special','card-mystery','card-up','card-ice','card-shield','card-x2','card-tri'])files[k]=k+'.png';
-  Object.assign(files,{lakeside:'lakeside.webp','rush-glow':'rush-glow.webp'});
+  Object.assign(files,{lakeside:'lakeside.webp','rush-glow':'rush-glow.webp',cover:'cover.webp'});
   const images=new Map();let revision=0;
   const script=typeof document!=='undefined'?document.currentScript:null;
   const base=new URL('./img/',script?.src||(typeof location!=='undefined'?location.href:'http://localhost/hook/'));

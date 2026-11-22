@@ -22,6 +22,8 @@ Integrated over Claude's current code, including 318c434 (students tap a room th
 
 `design-samples/hook-v1/`: prompt sets, original production handoff, new-item-prompts.json, rush-glow-prompt.txt, compression helper, render-qa.cjs, avatars.png, game/rush/fallback snapshots and canvas-performance.json. These are local working artifacts, not all committed. `integration-draft/*.txt` are historical drafts, superseded by the runtime files.
 
-Cover sample `cover-v1.webp` remains a sample; no live cover replaced. The discarded first glow generation looked like a cat; runtime rush-glow.webp uses the corrected texture source exec-070a431f-6cd8-4572-91e7-24b83bfcec35.png.
+Cover update: the user requested the student entrance cover too. `cover-v1.webp` is now copied to `dist/hook/img/cover.webp` (44,744 bytes) and preloaded. The room-selection page has an illustration above its title and room buttons in portrait, and a two-column layout in short landscape windows. Only this entrance uses `.room-cover`; the game, animal picker, audio and room joining logic stay unchanged. Total artwork is now 22 images / 212,538 bytes. Browser preview pipe is still unavailable for Codex; 113 automated tests pass. Claude's concurrent player-disconnect changes are excluded from the cover commit.
+
+The discarded first glow generation looked like a cat; runtime rush-glow.webp uses the corrected texture source exec-070a431f-6cd8-4572-91e7-24b83bfcec35.png.
 
 Prompt direction: original cute matte 2.5D gouache, soft warm lighting, plump simple silhouettes, transparent sprites, consistent scale, no franchise likeness. New assets: pearl-gold star-accented fish; lavender/rose '?' pickup; apricot rising arrow/cloud; pale blue snowflake; mint check shield; gold ×2 coin; lavender three-hook fan; subtle transparent golden lake light. Exact prompts remain in the local files above.

@@ -15,7 +15,7 @@ function preload(mode='ok'){
 test('complete transparent artwork pack stays below the 400KB mobile budget',async()=>{
   const {art}=preload();await art.ready;
   const dir=path.join(__dirname,'../dist/hook/img');let total=0;
-  assert.equal(Object.keys(art.files).length,21);
+  assert.equal(Object.keys(art.files).length,22);
   assert.deepEqual(fs.readdirSync(dir).sort(),Object.values(art.files).sort());
   for(const [key,file] of Object.entries(art.files)){
     const bytes=fs.readFileSync(path.join(dir,file));total+=bytes.length;
@@ -30,7 +30,7 @@ test('complete transparent artwork pack stays below the 400KB mobile budget',asy
 });
 test('preloader waits for decoding and versions every artwork URL',async()=>{
   const {art,made}=preload();assert.equal(art.revision,0);await art.ready;
-  assert.equal(art.revision,21);assert.ok(art.get('animal-9'));assert.ok(art.get('fish-special'));assert.equal(art.get('missing'),null);
+  assert.equal(art.revision,22);assert.ok(art.get('animal-9'));assert.ok(art.get('fish-special'));assert.equal(art.get('missing'),null);
   for(const image of made){assert.ok(image.url.startsWith('https://example.test/lumi/hook/img/'));assert.ok(image.url.endsWith('?v=abc1234'));}
 });
 test('errors, decode failures, timeouts and late loads safely retain procedural fallbacks',async()=>{

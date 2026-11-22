@@ -44,7 +44,7 @@
     if(room)return;
     const list=[...rooms.values()].filter(r=>Date.now()-r.at<6000&&r.ph!=='closed'),down=net.downFor()>4000;
     const key='rooms:'+(down?'down':list.map(r=>r.room+'/'+r.n).join(','));if(ui.dataset.key===key)return;ui.dataset.key=key;
-    ui.innerHTML=`<div class="screen"><div class="box">${head('Hook Rush')}<div class="sheet">
+    ui.innerHTML=`<div class="screen room-cover"><div class="box"><div class="cover-art" aria-hidden="true"></div>${head('Hook Rush')}<div class="sheet">
       ${list.length?`<p class="sub">点老师的房间 Tap your teacher's room</p><div class="room-list">${list.map(r=>`<button class="room" data-room="${esc(r.room)}"><span>房间 ${esc(r.room)}</span><small>${r.n} 人</small></button>`).join('')}</div>`
         :down?`<img class="wait-pet" src="${pet(myAv,96)}" alt=""><p class="sub"><b class="warn">连不上网络</b><br>请检查 Wi-Fi 或流量<br><small>Can't connect. Check your internet.</small></p>`
         :`<img class="wait-pet" src="${pet(myAv,96)}" alt=""><p class="sub dots">等老师开房间 Waiting for the teacher</p>`}</div></div></div>`;
