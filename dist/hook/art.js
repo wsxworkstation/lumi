@@ -3,8 +3,10 @@
   'use strict';
   const files={};
   for(let i=0;i<10;i++)files['animal-'+i]='animal-'+i+'.png';
-  for(const k of ['fish-normal','fish-gold','fish-special','card-mystery','card-up','card-ice','card-shield','card-x2','card-tri','card-slow'])files[k]=k+'.png';
-  for(const k of ['ice-arrow','ice-burst','slime-ball','slime-splash','slime-puddle','shield-bubble','ice-block','dizzy-star','hook-dust'])files['fx-'+k]='fx-'+k+'.webp';
+  for(const k of ['fish-normal','fish-gold','fish-special','card-mystery','card-up','card-ice','card-shield','card-x2','card-tri','card-slow','card-whirl','card-bomb','card-ink'])files[k]=k+'.png';
+  for(const k of ['ice-arrow','ice-burst','slime-ball','slime-splash','slime-puddle','shield-bubble','ice-block','dizzy-star','hook-dust','whirl','bomb'])files['fx-'+k]='fx-'+k+'.webp';
+  // 2026-11-24 (Codex): lake box and bubble, the team's bomb-fish mark, ink blots for phones and the small ink mark for the big screen.
+  for(const k of ['lake-box','lake-bubble','bomb-mark','ink-1','ink-2','ink-3','ink-mark'])files[k]=k+'.webp';
   Object.assign(files,{lakeside:'lakeside.webp','rush-glow':'rush-glow.webp',cover:'cover.webp'});
   const images=new Map();let revision=0;
   const script=typeof document!=='undefined'?document.currentScript:null;

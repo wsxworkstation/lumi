@@ -15,7 +15,7 @@ function preload(mode='ok'){
 test('complete transparent artwork pack stays below the 400KB mobile budget',async()=>{
   const {art}=preload();await art.ready;
   const dir=path.join(__dirname,'../dist/hook/img');let total=0;
-  assert.equal(Object.keys(art.files).length,32);
+  assert.equal(Object.keys(art.files).length,44);
   assert.deepEqual(fs.readdirSync(dir).sort(),Object.values(art.files).sort());
   for(const [key,file] of Object.entries(art.files)){
     const bytes=fs.readFileSync(path.join(dir,file));total+=bytes.length;
@@ -28,7 +28,7 @@ test('complete transparent artwork pack stays below the 400KB mobile budget',asy
       assert.equal(bytes.subarray(8,12).toString(),'WEBP');
       if(key.startsWith('fx-')){
         const at=bytes.indexOf(Buffer.from('VP8X'));assert.ok(at>=12,'effect WebP keeps extended alpha metadata');assert.ok(bytes[at+8]&16,'effect transparency retained');
-        const expected=key==='fx-ice-arrow'?[128,64]:key==='fx-slime-ball'?[64,64]:key==='fx-slime-puddle'?[192,192]:key==='fx-dizzy-star'?[48,48]:key==='fx-hook-dust'?[192,96]:key==='fx-hook-hit'?[160,160]:[128,128];
+        const expected=key==='fx-ice-arrow'?[128,64]:key==='fx-slime-ball'?[64,64]:key==='fx-slime-puddle'?[192,192]:key==='fx-dizzy-star'?[48,48]:key==='fx-hook-dust'?[192,96]:key==='fx-whirl'?[256,256]:key==='fx-bomb'?[160,160]:key==='fx-hook-hit'?[160,160]:[128,128];
         assert.deepEqual([bytes.readUIntLE(at+12,3)+1,bytes.readUIntLE(at+15,3)+1],expected);
       }
     }
@@ -42,7 +42,7 @@ test('complete transparent artwork pack stays below the 400KB mobile budget',asy
 });
 test('preloader waits for decoding and versions every artwork URL',async()=>{
   const {art,made}=preload();assert.equal(art.revision,0);await art.ready;
-  assert.equal(art.revision,32);assert.ok(art.get('animal-9'));assert.ok(art.get('fish-special'));assert.ok(art.get('card-slow'));assert.equal(art.get('missing'),null);
+  assert.equal(art.revision,44);assert.ok(art.get('animal-9'));assert.ok(art.get('fish-special'));assert.ok(art.get('card-slow'));assert.equal(art.get('missing'),null);
   for(const image of made){assert.ok(image.url.startsWith('https://example.test/lumi/hook/img/'));assert.ok(image.url.endsWith('?v=abc1234'));}
 });
 test('errors, decode failures, timeouts and late loads safely retain procedural fallbacks',async()=>{

@@ -705,7 +705,7 @@
     ctx.restore();
   }
   function bombMark(ctx,x,y,now){
-    if(effectSprite(ctx,'bomb-mark',x,y,24,24))return;
+    if(effectSprite(ctx,'bomb-mark',x,y,30,30))return;
     ctx.save();ctx.translate(x,y);ctx.fillStyle='#3b3a45';ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,2,8,0,TAU);ctx.fill();ctx.stroke();
     ctx.strokeStyle='#b07a45';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(4,-5);ctx.quadraticCurveTo(7,-10,11,-9);ctx.stroke();
     const f=0.6+Math.sin(now/90)*0.4;ctx.fillStyle='#ffc93c';sparkle(ctx,12,-10,2+f*2.5);
@@ -1059,7 +1059,7 @@
     ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=k;
     const sprites=[1,2,3].map(i=>globalThis.HookArt?.get('ink-'+i)).filter(Boolean);
     for(let i=0;i<7;i++){
-      const x=cw*(0.16+0.68*r()),y=ch*(0.14+0.72*r()),rad=s*(0.3+0.16*r()),rot=r()*TAU;
+      const x=i?cw*(0.16+0.68*r()):cw*0.5,y=i?ch*(0.14+0.72*r()):ch*0.5,rad=s*(0.3+0.16*r()),rot=r()*TAU;   // the first blot always covers the middle
       if(sprites.length){ctx.save();ctx.translate(x,y);ctx.rotate(rot);ctx.drawImage(sprites[i%sprites.length],-rad*1.2,-rad*1.2,rad*2.4,rad*2.4);ctx.restore();continue;}
       ctx.fillStyle='#2b1d3c';ctx.beginPath();
       for(let j=0;j<=18;j++){const a=j*TAU/18+rot,d=rad*(0.78+0.3*Math.abs(Math.sin(j*2.7+i)));j?ctx.lineTo(x+Math.cos(a)*d,y+Math.sin(a)*d):ctx.moveTo(x+Math.cos(a)*d,y+Math.sin(a)*d);}
