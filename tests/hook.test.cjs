@@ -52,6 +52,7 @@ test('a hook catches an orb, the player answers, right adds points and wrong fre
 test('the last hook wins a contested orb, but not from a teammate', () => {
   const g=game();g.join('a','A');g.join('b','B');g.join('c','C');g.start();run(g,C.COUNT+10);
   const [a,b,c]=['a','b','c'].map(id=>g.players.get(id));assert.equal(a.team,c.team);assert.notEqual(a.team,b.team);
+  for(const p of [a,b,c])p.safe=1e12;   // this test is about fish only: lines pass through players
   const o=g.orbs[0];g.orbs=[o];
   g.hooks.push({o:'a',x:a.x,y:a.y,a:0,t0:g.t,tt:g.t,d:300,orb:o.id,lt:g.t});o.hk='a';
   const tip=H.hookTip(g.hooks[0],g.t+33);
@@ -307,4 +308,38 @@ test('three rooms share the free message limit: updates slow down as the total n
   let prev=0;for(const n of [5,10,20,30,40,60]){const e=H.snapEvery(n);assert.ok(e>=prev,'never faster with more phones');prev=e;}
   // 3 rooms, 30 phones in total: snapshots sent + received stay well under 100 a second.
   assert.ok((30+3)*1000/H.snapEvery(30)<=55);assert.ok((45+3)*1000/H.snapEvery(45)<=55);
+});
+
+test('the line can hook a player of another team: pulled over, can not move or fish until reeled in, then safe for 3 s', () => {
+  const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
+  g.orbs=[];   // nothing else in the way
+  a.x=200;a.y=60;b.x=420;b.y=70;c.x=300;c.y=200;d.x=900;d.y=600;
+  b.dx=1;   // was walking
+  assert.ok(g.input({k:'fire',id:'a',x:a.x,y:a.y,a:Math.atan2(b.y-10-a.y,b.x-a.x),t:g.t}));
+  for(let i=0;i<40&&b.st!==4;i++)g.tick(33);
+  assert.equal(b.st,4,'hooked');const h=g.hooks.find(x=>x.o==='a');assert.equal(h.vic,'b');
+  assert.ok(g.fx.some(f=>f.k==='grab'&&f.by==='a'&&f.to[0]==='b'));
+  const s=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));assert.equal(s.h.find(x=>x.o==='a').vic,'b');assert.equal(s.p.find(p=>p.id==='b').st,4);
+  // While pulled: can't walk or fish, and comes closer every tick.
+  const d0=Math.hypot(b.x-a.x,b.y-a.y);g.input({k:'mv',id:'b',s:99,x:b.x,y:b.y,dx:1,dy:0,t:g.t});assert.equal(g.input({k:'fire',id:'b',x:b.x,y:b.y,a:0,t:g.t})&&g.hooks.some(x=>x.o==='b'),false,'no fishing while hooked');
+  g.tick(100);assert.ok(Math.hypot(b.x-a.x,b.y-a.y)<d0,'pulled closer');
+  for(let i=0;i<60&&b.st===4;i++)g.tick(33);
+  assert.equal(b.st,0,'free once reeled in');assert.ok(Math.hypot(b.x-a.x,b.y-a.y)<C.GRAB.DROP+5,'dropped next to the angler');
+  assert.ok(b.safe>g.t+C.GRAB.SAFE-300,'safe for 3 s');assert.equal(g.sc[0]+g.sc[1],0,'hooking a player gives no points');
+  // Safe: another line passes straight through.
+  c.team=a.team;g.input({k:'fire',id:'a',x:a.x,y:a.y,a:Math.atan2(b.y-10-a.y,b.x-a.x),t:g.t});for(let i=0;i<20;i++)g.tick(33);assert.equal(b.st,0,'not hooked again within 3 s');
+});
+
+test('hooking players: never a teammate or someone answering; a shield stops it; the angler being frozen lets go', () => {
+  const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
+  g.orbs=[];a.x=200;a.y=60;
+  const shoot=(q)=>{g.hooks=g.hooks.filter(h=>h.o!=='a');g.input({k:'fire',id:'a',x:a.x,y:a.y,a:Math.atan2(q.y-10-a.y,q.x-a.x),t:g.t});for(let i=0;i<20;i++)g.tick(33);};
+  c.x=380;c.y=60;shoot(c);assert.equal(c.st,0,'teammate is never hooked');
+  c.x=900;c.y=600;b.x=380;b.y=60;Object.assign(b,{st:1,until:g.t+C.ANSWER});shoot(b);assert.equal(b.st,1,'answering is never interrupted');
+  Object.assign(b,{st:0,until:0});b.sh=g.t+5000;shoot(b);assert.equal(b.st,0,'shield stops the hook');assert.equal(b.sh,0,'shield used up');
+  // Hook d, then a freeze arrow hits the angler: d is let go on the spot and is safe.
+  b.x=900;b.y=600;d.x=380;d.y=60;g.hooks=g.hooks.filter(h=>h.o!=='a');g.input({k:'fire',id:'a',x:a.x,y:a.y,a:Math.atan2(d.y-10-a.y,d.x-a.x),t:g.t});
+  for(let i=0;i<20&&d.st!==4;i++)g.tick(33);assert.equal(d.st,4);
+  b.x=a.x;b.y=a.y+150;b.cards=['ice'];g.useCard('b',0,-Math.PI/2);for(let i=0;i<10;i++)g.tick(33);
+  assert.equal(a.st,2,'angler frozen');assert.equal(d.st,0,'victim let go');assert.ok(d.safe>g.t);
 });

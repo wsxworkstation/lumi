@@ -19,6 +19,7 @@
     SHOT:{RANGE:420,SPEED:950,R:26},                           // freeze arrow: aimed, flies straight, freezes the first enemy it touches
     SLIME:{RANGE:380,FLY:550,R:110,LEN:4000,SLOW:0.4,ROD:0.5},  // slime ball: lands where aimed; sticky puddle 4 s (enemies walk at 40%, rods at half speed)
     SPOT:{EVERY:5000,R:40},                                    // shields wait in the four corners and come back 5 s after being taken
+    GRAB:{SAFE:3000,DROP:44},                                  // a hooked player can't be hooked again for 3 s; dropped 44 in front of the angler
     // A glowing goldfish shows up now and then; answer it right and every fish is worth 2 for a while.
     RUSH:{FIRST:40000,AFTER:40000,LEN:15000},
     TEAMS:[{zh:'草莓队',en:'Strawberry',color:'#ff7096',ink:'#e2416c',soft:'#ffe6ee'},
@@ -96,7 +97,8 @@
       items:opt.items!==false,drops:[],dropN:0,dropAt:0,fx:[],fxN:0,rush:0,glowAt:0,gone:new Map(),
       shots:[],shotN:0,zones:[],spots:[]};   // flying freeze arrows / slime balls, slime puddles, corner shields
     const nameKey=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
-    const fresh=()=>({st:0,until:0,q:-1,orb:0,ok:0,bad:0,rk:0,goal:null,cool:800,botAt:0,cards:[],sh:0,x2:0,tri:0,bag:[],triLeft:0,triBad:false,useAt:0});
+    // st: 0 free, 1 answering, 2 frozen, 3 knocked up, 4 hooked (being pulled by another team's line). safe: can't be hooked until then.
+    const fresh=()=>({st:0,until:0,q:-1,orb:0,ok:0,bad:0,rk:0,goal:null,cool:800,botAt:0,cards:[],sh:0,x2:0,tri:0,bag:[],triLeft:0,triBad:false,useAt:0,safe:0});
     const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
     const seed=()=>Math.floor(rnd()*2**31);
     // Start positions on the team's picnic blanket, rows far enough apart that names don't cover the animal below.
@@ -124,11 +126,19 @@
       g.players.set(id,p);place(p,n[team]);return p;
     };
     function rekey(p,id){const old=p.id;g.players.delete(old);p.id=id;p.seq=-1;g.players.set(id,p);
-      for(const h of g.hooks)if(h.o===old)h.o=id;for(const o of g.orbs){if(o.hk===old)o.hk=id;if(o.by===old)o.by=id;}}
+      for(const h of g.hooks){if(h.o===old)h.o=id;if(h.vic===old)h.vic=id;}for(const o of g.orbs){if(o.hk===old)o.hk=id;if(o.by===old)o.by=id;}}
+    /* Let go of a hooked player: dropped where they are (or at a given spot), free to move, and safe from hooks for 3 s. */
+    function freeVictim(h,at){
+      const q=h.vic&&g.players.get(h.vic);h.vic=0;if(!q||q.st!==4)return;
+      const pos=at||confine(q.x,q.y);q.st=0;q.until=0;q.x=pos.x;q.y=pos.y;q.dx=q.dy=0;q.safe=g.t+C.GRAB.SAFE;
+    }
+    // Take away all of a player's lines: fish go back to the lake, anyone they were pulling is let go.
+    function cutLines(id){g.hooks=g.hooks.filter(h=>{if(h.o!==id)return true;if(h.orb)releaseOrb(h.orb,300);freeVictim(h);return false;});
+      for(const h of g.hooks)if(h.vic===id)h.vic=0;}
     /* A student who left (closed the page, or silent for 10 s) disappears. In a game they are kept aside with their
        team and score, so the same name can come back to them; the team keeps the points it already has. */
     function retire(p){
-      g.hooks=g.hooks.filter(h=>{if(h.o!==p.id)return true;if(h.orb)releaseOrb(h.orb,300);return false;});
+      cutLines(p.id);
       if(p.orb)releaseOrb(p.orb,300);for(const o of p.bag)releaseOrb(o,300);
       g.players.delete(p.id);
       if(g.ph!=='lobby'&&g.ph!=='end'){Object.assign(p,{st:0,until:0,q:-1,orb:0,bag:[],triLeft:0,triBad:false,dx:0,dy:0});g.gone.set(nameKey(p.name),p);}
@@ -136,8 +146,7 @@
     g.leave=id=>{const p=g.players.get(String(id));if(p&&!p.bot)retire(p);};
     g.sweep=(now=Date.now())=>{let n=0;for(const p of [...g.players.values()])if(!p.bot&&now-p.seen>C.AWAY){retire(p);n++;}return n;};
     function releaseOrb(id,delay){const o=g.orbs.find(x=>x.id===id);if(o){o.s=seed();o.b=g.t+delay;o.hk='';o.by='';}}
-    g.kick=id=>{const p=g.players.get(id);if(!p)return;g.players.delete(id);if(!p.bot)g.kicked.set(id,Date.now());
-      g.hooks=g.hooks.filter(h=>{if(h.o!==id)return true;if(h.orb)releaseOrb(h.orb,300);return false;});
+    g.kick=id=>{const p=g.players.get(id);if(!p)return;cutLines(id);g.players.delete(id);if(!p.bot)g.kicked.set(id,Date.now());
       if(p.st===1&&p.orb)releaseOrb(p.orb,300);for(const o of p.bag)releaseOrb(o,300);};
     g.setTeams=n=>{g.teams=n===3?3:2;const list=shuffle([...g.players.values()]);list.forEach((p,i)=>p.team=i%g.teams);placeAll();};
     g.start=()=>{
@@ -177,7 +186,7 @@
 
     /* ── Item cards ── */
     const addFx=(k,p,to=[],extra={})=>{g.fx.push({id:++g.fxN,k,at:g.t,by:p.id,x:Math.round(p.x),y:Math.round(p.y),to,...extra});};
-    function dropHooks(p){g.hooks=g.hooks.filter(h=>{if(h.o!==p.id)return true;if(h.orb)releaseOrb(h.orb,300);return false;});p.triLeft=0;p.triBad=false;}
+    function dropHooks(p){g.hooks=g.hooks.filter(h=>{if(h.o!==p.id)return true;if(h.orb)releaseOrb(h.orb,300);freeVictim(h);return false;});p.triLeft=0;p.triBad=false;}
     // Hit by a card. Someone answering a question is never hit; a shield takes the hit instead (and breaks).
     function hit(q,kind){
       if(q.sh>g.t){q.sh=0;addFx('block',q,[q.id]);return false;}
@@ -320,13 +329,16 @@
       for(const o of g.orbs){if(o.by||(o.hk&&g.players.get(o.hk)?.team===p.team))continue;const at=orbAt(o,g.t);if(!at)continue;
         const d=Math.hypot(at.x-p.x,at.y-p.y);if(d>C.RANGE*0.95)continue;
         const fut=o.hk?at:orbPos(o,g.t+d/C.OUT*1000);if(!best||d<best.d)best={d,x:fut.x,y:fut.y};}
+      // Now and then a bot goes for an enemy player instead of a fish.
+      if(rnd()<0.25)for(const q of g.players.values()){if(q.team===p.team||q.st!==0||q.safe>g.t)continue;
+        const d=Math.hypot(q.x-p.x,q.y-p.y);if(d<C.RANGE*0.85&&(!best||!best.foe||d<best.d))best={d,x:q.x,y:q.y-10,foe:1};}
       if(best){fire(p,p.x,p.y,Math.atan2(best.y-p.y,best.x-p.x)+(rnd()-0.5)*0.25,g.t);p.cool=500+rnd()*1500;}
     }
     function stepHooks(){
       const t=g.t;
       for(const h of [...g.hooks].sort((a,b)=>a.t0-b.t0)){
         const owner=g.players.get(h.o);
-        if(!h.orb&&outgoing(h,h.lt)){
+        if(!h.orb&&!h.vic&&outgoing(h,h.lt)){
           const end=Math.min(t,turnAt(h)),a=hookTip(h,h.lt),b=hookTip(h,end);let hit=null;
           for(const o of g.orbs){
             if(o.by||o.hk===h.o)continue;
@@ -335,14 +347,25 @@
             const at=orbAt(o,t);if(!at)continue;
             const [dist,f]=segDist(a,b,at);if(dist<=C.TIP+C.ORB[o.k].r&&(!hit||f<hit.f))hit={o,f};
           }
+          // Players of another team can be hooked too (not while answering, not when just let go): first thing touched wins.
+          if(owner)for(const q of g.players.values()){
+            if(q.team===owner.team||q.st!==0||q.safe>t)continue;
+            const [dist,f]=segDist(a,b,{x:q.x,y:q.y-10});if(dist<=C.TIP+C.PR&&(!hit||f<hit.f))hit={q,f};
+          }
           if(hit){const when=h.lt+(end-h.lt)*hit.f;h.tt=Math.max(when,h.t0+1);h.d=Math.min(C.RANGE,C.OUT*(h.sp||1)*(h.tt-h.t0)/1000);
-            if(hit.o.hk){const prev=g.hooks.find(x=>x.o===hit.o.hk&&x.orb===hit.o.id);if(prev)prev.orb=0;}
-            hit.o.hk=h.o;h.orb=hit.o.id;}
+            if(hit.q){const q=hit.q;
+              if(q.sh>t){q.sh=0;addFx('block',q,[q.id]);}   // a shield stops the hook; it reels back empty
+              else{dropHooks(q);q.dx=q.dy=0;q.st=4;q.until=0;h.vic=q.id;addFx('grab',owner,[q.id],{tx:Math.round(q.x),ty:Math.round(q.y)});}}
+            else{if(hit.o.hk){const prev=g.hooks.find(x=>x.o===hit.o.hk&&x.orb===hit.o.id);if(prev)prev.orb=0;}
+              hit.o.hk=h.o;h.orb=hit.o.id;}}
         }
         h.lt=t;
       }
+      // A hooked player rides on the end of the line until it is reeled in.
+      for(const h of g.hooks)if(h.vic){const q=g.players.get(h.vic);if(q&&q.st===4){const tip=hookTip(h,t);q.x=tip.x;q.y=tip.y+10;}else h.vic=0;}
       g.hooks=g.hooks.filter(h=>{
         if(!hookDone(h,t))return true;
+        if(h.vic){const ow=g.players.get(h.o);freeVictim(h,ow?confine(ow.x+Math.cos(h.a)*C.GRAB.DROP,ow.y+Math.sin(h.a)*C.GRAB.DROP):null);}
         const p=g.players.get(h.o),o=h.orb&&g.orbs.find(x=>x.id===h.orb&&x.hk===h.o);
         if(p&&h.tri)p.triLeft=Math.max(0,p.triLeft-1);
         if(o){if(p&&p.st===0&&g.qs.length)ask(p,o.id);
@@ -376,7 +399,7 @@
         p:[...g.players.values()].map(p=>[p.id,p.name,p.team,Math.round(p.x),Math.round(p.y),+p.dx.toFixed(2),+p.dy.toFixed(2),p.st,Math.round(p.until),p.q,p.ok,p.rs,p.rk,p.qn,p.av,
           p.cards.join(','),p.sh>g.t?Math.round(p.sh):0,(p.x2?1:0)|(p.tri?2:0)]),
         o:g.orbs.map(o=>[o.id,o.k,o.s,Math.round(o.b),o.hk,o.by]),
-        h:g.hooks.map(h=>[h.o,Math.round(h.x),Math.round(h.y),+h.a.toFixed(4),Math.round(h.t0),Math.round(h.tt),Math.round(h.d),h.orb,h.sp||1]),
+        h:g.hooks.map(h=>[h.o,Math.round(h.x),Math.round(h.y),+h.a.toFixed(4),Math.round(h.t0),Math.round(h.tt),Math.round(h.d),h.orb,h.sp||1,h.vic||0]),
         d:g.drops.map(d=>[d.id,d.x,d.y]),
         s:g.shots.map(s=>s.k==='ice'?[s.id,'i',Math.round(s.x),Math.round(s.y),+s.a.toFixed(4),Math.round(s.t0),s.team]
           :[s.id,'s',Math.round(s.x),Math.round(s.y),s.tx,s.ty,Math.round(s.t0),Math.round(s.land),s.team]),
@@ -402,7 +425,7 @@
       sp:(s.sp||[]).map(a=>({x:a[0],y:a[1],at:a[2]})),
       fx:(s.fx||[]).map(a=>({id:a[0],k:a[1],at:a[2],by:a[3],x:a[4],y:a[5],to:a[6]||[],tx:a[7],ty:a[8]})),ru:s.ru||0,it:s.it??1,md:s.md||'score',
       o:s.o.map(a=>({id:a[0],k:a[1],s:a[2],b:a[3],hk:a[4],by:a[5]})),
-      h:s.h.map(a=>({o:a[0],x:a[1],y:a[2],a:a[3],t0:a[4],tt:a[5],d:a[6],orb:a[7],sp:a[8]||1}))};
+      h:s.h.map(a=>({o:a[0],x:a[1],y:a[2],a:a[3],t0:a[4],tt:a[5],d:a[6],orb:a[7],sp:a[8]||1,vic:a[9]||0}))};
   }
 
   /* ── Network: Supabase Realtime (Phoenix websocket) for listening and the host's pushes; REST broadcast for phones' messages ── */
@@ -669,23 +692,35 @@
     ctx.save();ctx.translate(p.x+shake,p.y);
     ctx.globalAlpha=0.4;ctx.fillStyle=T.color;ctx.beginPath();ctx.ellipse(0,24,22-jump*0.25-air*0.25,7,0,0,TAU);ctx.fill();ctx.globalAlpha=1;
     if(p.slow)goo(ctx,now);
+    if(p.st===4)dragged(ctx,p.pull??0,now);
     if(p.me){ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.setLineDash([5,5]);ctx.lineDashOffset=-now/40;ctx.beginPath();ctx.ellipse(0,24,29,10.5,0,0,TAU);ctx.stroke();ctx.setLineDash([]);}
     if(p.upRange){ctx.strokeStyle='rgba(255,154,60,.55)';ctx.lineWidth=2.5;ctx.setLineDash([8,8]);ctx.beginPath();ctx.ellipse(0,10,C.CARD.R_UP,C.CARD.R_UP,0,0,TAU);ctx.stroke();ctx.setLineDash([]);}
-    ctx.translate(0,bob-jump-air);
+    ctx.translate(0,bob-jump-air-(p.st===4?10:0));
     if(air){ctx.rotate(Math.sin(now/90)*0.35);}
+    if(p.st===4){ctx.rotate(Math.cos(p.pull??0)*0.3+Math.sin(now/70)*0.12);}   // tipped over towards the angler, wobbling
     const ra=hook?Math.atan2(hook.ty-p.y,hook.tx-p.x):Math.atan2(m.fy,m.fx),side=Math.cos(ra)>=0?1:-1,behind=Math.sin(ra)<-0.3;
     const hand={x:side*17,y:6},tip={x:hand.x+Math.cos(ra)*26,y:hand.y+Math.sin(ra)*21-8};
     const rod=()=>{ctx.lineCap='round';ctx.strokeStyle='#b07a45';ctx.lineWidth=3.4;ctx.beginPath();ctx.moveTo(hand.x,hand.y);ctx.lineTo(tip.x,tip.y);ctx.stroke();
       ctx.strokeStyle=INK;ctx.lineWidth=1.8;ctx.beginPath();ctx.arc(hand.x,hand.y,4.8,0,TAU);paint(ctx,A.body);};
-    const holding=p.st!==1&&p.st!==3;
+    const holding=p.st!==1&&p.st!==3&&p.st!==4;
     if(holding&&behind)rod();
-    drawAnimal(ctx,p.av,{team:p.team,ex:m.fx*2.4,ey:p.st===1?-2.2:m.fy*1.6,face:p.st===2||p.st===3?'frozen':jump>0?'happy':'',step:air?Math.sin(now/60)*3:step});
+    drawAnimal(ctx,p.av,{team:p.team,ex:m.fx*2.4,ey:p.st===1?-2.2:m.fy*1.6,face:p.st>=2?'frozen':jump>0?'happy':'',step:air||p.st===4?Math.sin(now/60)*3:step});
     if(holding&&!behind)rod();
     if(p.st===2)ice(ctx,now);
     if(air)dizzy(ctx,now);
     if(p.sh)bubble(ctx,now);
     ctx.restore();
     return {x:p.x+shake+tip.x,y:p.y+bob-jump-air+tip.y};
+  }
+  /* Hooked and being pulled towards the angler (pull = direction to the angler): dust and speed lines trail behind. */
+  function dragged(ctx,pull,now){
+    ctx.save();ctx.rotate(pull);ctx.translate(-44,8);
+    const dust=globalThis.HookArt?.get('fx-hook-dust');
+    if(dust){ctx.globalAlpha=0.85+Math.sin(now/90)*0.1;ctx.drawImage(dust,-58,-29,116,58);}
+    else{ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=3;ctx.lineCap='round';
+      for(let i=0;i<3;i++){const o=(now/60+i*7)%20;ctx.beginPath();ctx.moveTo(-10-o,-14+i*14);ctx.lineTo(-34-o,-14+i*14);ctx.stroke();}
+      ctx.fillStyle='rgba(222,200,170,.6)';for(let i=0;i<4;i++){const k=(now/500+i/4)%1;ctx.globalAlpha=1-k;ctx.beginPath();ctx.arc(-6-k*30,14+Math.sin(i*2)*6,4+k*6,0,TAU);ctx.fill();}}
+    ctx.restore();
   }
   // Stuck in slime: green goo around the feet with little bubbles.
   function goo(ctx,now){
@@ -852,7 +887,7 @@
     ctx.fillStyle='#fff';const tw=Math.max(0,Math.sin(now/300+s.x));if(tw>0.3)sparkle(ctx,16,-16,2+tw*4);
     ctx.restore();
   }
-  const FX_TXT={up:['击飞！','#ff8a1f'],ice:['冻住！','#3c9ad6'],slime:['缓速！','#4f9e2c'],shield:['保护罩','#139466'],x2:['加倍！','#d99a00'],tri:['三连钩！','#7b5cd6'],block:['挡住了！','#139466'],rush:['金鱼潮！','#e0a000']};
+  const FX_TXT={up:['击飞！','#ff8a1f'],ice:['冻住！','#3c9ad6'],slime:['缓速！','#4f9e2c'],shield:['保护罩','#139466'],x2:['加倍！','#d99a00'],tri:['三连钩！','#7b5cd6'],block:['挡住了！','#139466'],rush:['金鱼潮！','#e0a000'],grab:['勾到了！','#e2416c']};
   function popText(ctx,txt,x,y,col,k,size=26){ctx.globalAlpha=Math.min(1,(1-k)*2.5);ctx.font=`700 ${size}px ${FUN}`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.lineJoin='round';ctx.lineWidth=6;ctx.strokeStyle='#fff';ctx.strokeText(txt,x,y);ctx.fillStyle=col;ctx.fillText(txt,x,y);ctx.globalAlpha=1;}
   /* Card effects: a shock ring for knock-up, an icy beam for freeze, a burst for the goldfish rush, and a word that floats up. */
@@ -875,7 +910,12 @@
     }else if(f.k==='slime'&&a<600){const q=a/600;ctx.globalAlpha=1-q;ctx.fillStyle='#8bd65f';for(let i=0;i<9;i++){const r=i*TAU/9;ctx.beginPath();ctx.arc(f.x+Math.cos(r)*C.SLIME.R*q,f.y+Math.sin(r)*C.SLIME.R*q*0.8,7*(1-q)+2,0,TAU);ctx.fill();}ctx.globalAlpha=1;}
     if((f.k==='shield'||f.k==='block')&&a<600){const q=a/600;ctx.globalAlpha=1-q;ctx.strokeStyle='#8eebc8';ctx.lineWidth=5;ctx.beginPath();ctx.arc(f.x,f.y-2,38+q*30,0,TAU);ctx.stroke();ctx.globalAlpha=1;}
     if(f.k==='rush'&&a<900){const q=a/900;ctx.globalAlpha=1-q;ctx.fillStyle='#ffd23f';for(let i=0;i<12;i++){const r=i*TAU/12;sparkle(ctx,f.x+Math.cos(r)*90*q,f.y-20+Math.sin(r)*70*q,8*(1-q)+2);}ctx.globalAlpha=1;}
-    if(txt){const at=f.k==='ice'?{x:f.tx,y:f.ty}:f;popText(ctx,txt,at.x,at.y-(f.k==='slime'?20:78)-k*30,col,k,f.k==='rush'?34:26);}
+    // Hooked a player: a bright burst where the hook caught them (Codex's picture), or a ring without it.
+    if(f.k==='grab'&&a<800){const q=a/800,e=1-(1-q)**3;ctx.save();ctx.globalAlpha=1-q*q;
+      if(globalThis.HookArt?.get('fx-hook-hit'))effectSprite(ctx,'fx-hook-hit',f.tx,f.ty-10,60+e*90,60+e*90,q*0.3);
+      else{ctx.strokeStyle='#ff7096';ctx.lineWidth=6*(1-q)+2;ctx.beginPath();ctx.arc(f.tx,f.ty-10,18+q*42,0,TAU);ctx.stroke();}
+      ctx.restore();}
+    if(txt){const at=f.k==='ice'||f.k==='grab'?{x:f.tx,y:f.ty}:f;popText(ctx,txt,at.x,at.y-(f.k==='slime'?20:78)-k*30,col,k,f.k==='rush'?34:26);}
   }
   /* Goldfish rush: the lake glows warm gold and sparkles drift over it. */
   function rushGlow(ctx,now,left){
@@ -912,7 +952,10 @@
     for(const o of V.orbs)if(!o.held&&!o.hooked)drawFish(ctx,o,now,rush);
     if(V.aim)aimDots(ctx,V.aim,now);
     const hookBy=new Map(V.hooks.map(h=>[h.o,h])),tips=new Map(),mem=new Map(),ps=[...V.players].sort((a,b)=>a.y-b.y);
-    for(const p of ps){const m=pState(p,now);mem.set(p.id,m);tips.set(p.id,drawBody(ctx,p,now,m,hookBy.get(p.id)));}
+    // A hooked player is drawn tipped towards the angler (the start of the line that caught them).
+    const pullBy=new Map(V.hooks.filter(h=>h.vic).map(h=>[h.vic,h]));
+    for(const p of ps){const m=pState(p,now);mem.set(p.id,m);const h=p.st===4&&pullBy.get(p.id);
+      tips.set(p.id,drawBody(ctx,h?{...p,pull:Math.atan2(h.y-p.y,h.x-p.x)}:p,now,m,hookBy.get(p.id)));}
     for(const h of V.hooks)drawLine(ctx,tips.get(h.o)||h,h);
     for(const o of V.orbs)if(o.held||o.hooked)drawFish(ctx,o,now,rush);
     for(const p of ps)drawLabel(ctx,p,now,mem.get(p.id));
@@ -956,7 +999,7 @@
     get muted(){return HA()?.mode==='off';},set muted(v){if(HA())HA().mode=v?'off':'all';},
     fire:fx('fire'),catch:fx('catch'),right:fx('right'),wrong:fx('wrong'),tick:fx('count'),go:fx('go'),pop:fx('tap'),tap:fx('tap'),
     card:fx('card'),power:fx('power'),boom:fx('boom'),freeze:fx('freeze'),shield:fx('shield'),block:fx('block'),glow:fx('glow'),rush:fx('rushStart'),
-    shoot:fx('shoot'),slime:fx('slime'),
+    shoot:fx('shoot'),slime:fx('slime'),grab:fx('grab'),
     win(){HA()?.jingle('win');},lose(){HA()?.jingle('lose');}
   };
 

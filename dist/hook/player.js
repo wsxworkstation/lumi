@@ -102,8 +102,9 @@
     S=s;recvAt=t;
     const m=s.p.find(p=>p.id===myId);
     if(!m){mine=null;return;}
-    const first=!mine;mine=m;
-    if(first||!me.placed||s.ph==='lobby'||s.ph==='count'){me.x=m.x;me.y=m.y;me.placed=true;}
+    const first=!mine,wasHooked=mine?.st===4;mine=m;
+    // Just let go after being hooked: stand where the teacher's computer dropped me.
+    if(first||!me.placed||s.ph==='lobby'||s.ph==='count'||(wasHooked&&m.st!==4)){me.x=m.x;me.y=m.y;me.placed=true;}
     if(first&&lastRs==null)lastRs=m.rs;
     if(m.rs!==lastRs){lastRs=m.rs;result(m.rk);}
     events(s);
@@ -130,6 +131,8 @@
       else if(f.k==='up'&&mineFx)note(f.to.length?`击飞了 ${f.to.length} 人！`:'被保护罩挡住了','good');
       else if(f.k==='ice'&&mineFx){note(f.to.length?`冻住了 ${nameOf(f.to[0])}！`:'被保护罩挡住了','good');G.sfx.freeze();}
       else if(f.k==='slime'){if(mineFx)note('黏液丢中了！','good');G.sfx.slime();}
+      else if(f.k==='grab'&&hitMe){note(`被 ${nameOf(f.by)} 勾住了！`,'bad');G.sfx.grab();buzz(150);}
+      else if(f.k==='grab'&&mineFx){note(`勾到 ${nameOf(f.to[0])}！`,'good');G.sfx.grab();buzz(40);}
       else if(f.k==='shield'&&mineFx){note('拿到保护罩 10 秒！','good');G.sfx.shield();buzz(40);}
       else if(f.k==='rush'){note(mineFx?'你钓到发光金鱼！金鱼潮开始！':`${nameOf(f.by)} 开启金鱼潮！每条鱼 2 分`,'gold');G.sfx.rush();}
     }
@@ -339,6 +342,9 @@
     if(keys.size){dx=(keys.has('d')||keys.has('arrowright'))-(keys.has('a')||keys.has('arrowleft'));dy=(keys.has('s')||keys.has('arrowdown'))-(keys.has('w')||keys.has('arrowup'));}
     const free=canAct()&&!hookActive();let qx=0,qy=0;
     // Standing in an enemy's slime: walk at 40% (the teacher's computer does the same).
+    // Hooked by another team: I ride on the end of their line until it is reeled in.
+    const pullHook=mine.st===4&&S.h.find(h=>h.vic===myId);
+    if(pullHook){const tip=G.hookTip(pullHook,t);me.x=tip.x;me.y=tip.y+10;}
     const slowMe=canAct()&&G.inSlime(S.z,mine.team,me.x,me.y,t),v=C.SPEED*(slowMe?C.SLIME.SLOW:1);
     if(slowMe&&!wasSlow){note('被黏液黏住了，变慢！','bad');buzz(60);}wasSlow=slowMe;
     if(free&&(dx||dy)){const ang=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*(Math.PI/4);qx=+Math.cos(ang).toFixed(2);qy=+Math.sin(ang).toFixed(2);
@@ -361,12 +367,14 @@
       const d=disp.get(p.id)||{x:p.x,y:p.y,fx:1,fy:0};let tx=p.x,ty=p.y;
       const walking=S.ph==='play'&&p.st===0&&(p.dx||p.dy)&&!S.h.some(h=>h.o===p.id),slow=p.st===0&&G.inSlime(S.z,p.team,d.x,d.y,t);
       if(walking){const w=C.SPEED*(slow?C.SLIME.SLOW:1)*Math.min(since,1),q=G.confine(p.x+p.dx*w,p.y+p.dy*w);tx=q.x;ty=q.y;}
-      if(Math.hypot(tx-d.x,ty-d.y)>200){d.x=tx;d.y=ty;}else{d.x+=(tx-d.x)*k;d.y+=(ty-d.y)*k;}
+      // Someone being pulled by a line is drawn exactly at its end (the line moves fast; smoothing would lag behind).
+      const ph=p.st===4&&S.h.find(h=>h.vic===p.id);if(ph){const tip=G.hookTip(ph,t);tx=tip.x;ty=tip.y+10;}
+      if(ph||Math.hypot(tx-d.x,ty-d.y)>200){d.x=tx;d.y=ty;}else{d.x+=(tx-d.x)*k;d.y+=(ty-d.y)*k;}
       if(p.dx||p.dy){d.fx=p.dx;d.fy=p.dy;}disp.set(p.id,d);return {...p,x:d.x,y:d.y,fx:d.fx,fy:d.fy,mv:walking,sh:p.sh>t,slow};
     });
     const hooks=[],teamById=new Map(S.p.map(p=>[p.id,p.team]));
     for(const p of S.p)for(const h of hooksFor(p.id)){if(G.hookDone(h,t))continue;const tip=G.hookTip(h,t);
-      const o=p.id===myId?me:disp.get(p.id)||h;hooks.push({o:p.id,x:o.x,y:o.y,tx:tip.x,ty:tip.y,team:teamById.get(p.id),caught:!!h.orb});}
+      const o=p.id===myId?me:disp.get(p.id)||h;hooks.push({o:p.id,x:o.x,y:o.y,tx:tip.x,ty:tip.y,team:teamById.get(p.id),caught:!!(h.orb||h.vic),vic:h.vic||0});}
     const orbs=[];for(const o of S.o){const at=orbXY(o,t);if(at)orbs.push({id:o.id,k:o.k,x:at.x,y:at.y,alpha:at.alpha,held:!!at.held,hooked:!!at.hooked});}
     const aimA=aim.id!=null?aim.a:null,rush=S.ru?Math.max(0,S.ru-t):0;
     // Aiming: a skill card being held shows its path (freeze) or landing circle (slime); otherwise the fishing line.
@@ -394,8 +402,8 @@
     const sc=S.sc.map((v,i)=>{const T=teamOf(i);return `<div class="score${i===mine.team?' mine':''}" style="--tc:${T.color};--ti:${T.ink}">${v}<small>${T.zh}${i===mine.team?' · 我':''}</small></div>`;}).join('');
     if($('#scores').innerHTML!==sc)$('#scores').innerHTML=sc;
     hookBtn.classList.toggle('cool',!canAct()||hookActive());
-    const secs=Math.max(0,Math.ceil((mine.until-t)/1000)),fz=mine.st===2?`<b>冻住啦 ${secs}</b>`:mine.st===3?`<b>飞起来啦 ${secs}</b>`:'',frost=$('#frost');
-    if(fz!==lastFrost){lastFrost=fz;frost.innerHTML=fz;frost.classList.toggle('hidden',!fz);frost.classList.toggle('air',mine.st===3);}
+    const secs=Math.max(0,Math.ceil((mine.until-t)/1000)),fz=mine.st===2?`<b>冻住啦 ${secs}</b>`:mine.st===3?`<b>飞起来啦 ${secs}</b>`:mine.st===4?'<b>被勾住啦！</b>':'',frost=$('#frost');
+    if(fz!==lastFrost){lastFrost=fz;frost.innerHTML=fz;frost.classList.toggle('hidden',!fz);frost.classList.toggle('air',mine.st===3||mine.st===4);}
     const cnt=$('#count');
     if(S.ph==='count'){const n=Math.max(1,Math.ceil((S.cd-(now()-recvAt))/1000));
       if(n!==lastCount){lastCount=n;cnt.textContent=n;cnt.classList.remove('bump');void cnt.offsetWidth;cnt.classList.add('bump');G.sfx.tick();}cnt.classList.remove('hidden');}
