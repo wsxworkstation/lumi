@@ -13,7 +13,7 @@
   // The teacher's choice on sound.html (2026-11-22).
   const PICK={main:'C',rush:'B',win:'A',lose:'B',tick:'B',
     tap:'B',fire:'A',catch:'B',right:'A',wrong:'B',freeze:'B',count:'B',go:'A',card:'B',boom:'B',shield:'B',block:'B',power:'A',glow:'B',rushStart:'A',
-    shoot:'A',slime:'A',grab:'A'};
+    shoot:'A',slime:'A',whirl:'A',bomb:'A',ink:'A'};
   const LABEL={
     main:['背景音乐（平常）',{A:'木琴野餐',B:'泡泡 pop',C:'小游戏 chiptune'}],
     rush:['金鱼潮音乐',{A:'电吉他摇滚',B:'chiptune 摇滚',C:'电子冲刺'}],
@@ -21,8 +21,8 @@
     lose:['输了（辛苦了）',{A:'温柔木琴',B:'八音盒',C:'轻松吉他'}],
     tick:['最后 10 秒',{A:'时钟滴答',B:'心跳'}],
     tap:['按钮'],fire:['甩竿'],catch:['钓到鱼'],right:['答对'],wrong:['答错'],freeze:['冻住／冷冻'],count:['倒数 3-2-1'],go:['开始！'],
-    card:['拿到卡'],boom:['击飞'],shield:['保护罩'],block:['保护罩挡住'],power:['加倍／三连钩'],glow:['发光金鱼出现'],rushStart:['金鱼潮开始'],
-    shoot:['冰箭射出'],slime:['黏液落地'],grab:['勾到人']};
+    card:['拿到卡'],boom:['击飞'],shield:['保护罩'],block:['保护罩挡住'],power:['加倍／放炸弹鱼'],glow:['发光金鱼出现'],rushStart:['金鱼潮开始'],
+    shoot:['冰箭射出'],slime:['黏液落地'],whirl:['漩涡'],bomb:['炸弹鱼爆炸'],ink:['喷墨水']};
 
   /* ── Notes and chords ── */
   const mtof=m=>440*Math.pow(2,(m-69)/12);
@@ -282,9 +282,16 @@
            B:(t,d)=>{sweep('square',1800,400,0.12,0.25,t,d);INST.bell(t+0.03,nm('B6'),0.2,0.35,d);}},
     slime:{A:(t,d)=>{hiss(t,d,'lowpass',900,1.2,0.9,0.22);sweep('sine',420,120,0.22,0.6,t,d);sweep('sine',300,520,0.08,0.35,t+0.12,d);},
            B:(t,d)=>{for(const [k,f] of [[0,260],[0.08,340],[0.16,220]])sweep('sine',f,f*0.5,0.1,0.5,t+k,d);hiss(t,d,'lowpass',1200,0.7,0.6,0.2);}},
-    // Hooked a player: a quick rope "zip" and a soft cartoon thud (A), or a whip crack and a boing (B).
-    grab:{A:(t,d)=>{hiss(t,d,'bandpass',700,1.4,0.9,0.2,3200);DRUM.kick(t+0.12,0.7,d);sweep('triangle',260,620,0.18,0.35,t+0.12,d);},
-          B:(t,d)=>{hiss(t,d,'highpass',2500,0.7,0.7,0.06);sweep('sine',180,700,0.3,0.45,t+0.05,d);INST.pluck(t+0.05,nm('C4'),0.2,0.4,d);}},
+    // Whirlpool: water swirling down — a falling, wobbling "whoosh" (A), or bubbly plucks spiralling down (B).
+    whirl:{A:(t,d)=>{const n=noiseSrc(),b=filt('bandpass',1800,3),lfo=osc('sine',9,t),lg=gain(500),g=gain();b.frequency.exponentialRampToValueAtTime(300,t+0.7);
+             lfo.connect(lg);lg.connect(b.frequency);n.connect(b);b.connect(g);g.connect(d);run([n,lfo],t,hold(g,t,0.9,0.55,0.05,0.25,0.7));sweep('sine',700,180,0.6,0.25,t,d);},
+           B:(t,d)=>{notes('pluck',['G6','E6','C6','A5','F5','D5','B4'],t,0.06,0.4,d,0.12);hiss(t,d,'lowpass',1400,0.7,0.35,0.5,400);}},
+    // Bomb fish: a cartoon "kaboom" with a splash — a deep thump and crackle (A), or a pop and a fizzle (B). Never harsh.
+    bomb:{A:(t,d)=>{DRUM.kick(t,1,d);sweep('sine',160,40,0.45,0.8,t,d);hiss(t,d,'lowpass',2400,0.7,1.1,0.5,300);hiss(t+0.08,d,'highpass',3500,0.7,0.25,0.35);},
+          B:(t,d)=>{sweep('square',900,120,0.18,0.3,t,d);DRUM.kick(t+0.02,0.8,d);hiss(t+0.05,d,'bandpass',1200,0.8,0.8,0.45,250);INST.bell(t+0.25,nm('C5'),0.2,0.2,d);}},
+    // Ink: a wet "splat" — a squelchy noise burst with a bend down (A), or a blobby "bloop" (B).
+    ink:{A:(t,d)=>{hiss(t,d,'lowpass',1100,1.5,1.2,0.18,250);sweep('sine',520,90,0.2,0.6,t,d);sweep('triangle',300,150,0.12,0.3,t+0.1,d);},
+         B:(t,d)=>{sweep('sine',200,600,0.08,0.55,t,d);sweep('sine',600,120,0.25,0.5,t+0.08,d);hiss(t+0.05,d,'bandpass',600,2,0.6,0.2);}},
     rushStart:{A:(t,d)=>{[['E3',0],['G3',0.18],['A3',0.36]].forEach(([s,k],i)=>{INST.guitar(t+k,nm(s),i===2?0.7:0.15,0.9,d);DRUM.kick(t+k,0.9,d);});DRUM.crash(t+0.36,0.6,d);DRUM.snare(t+0.36,0.6,d);},
                B:(t,d)=>{[[0,0.12],[0.18,0.12],[0.36,0.6]].forEach(([k,l])=>{for(const s of ['D5','F#5','A5'])INST.brass(t+k,nm(s),l,0.55,d);});DRUM.crash(t+0.36,0.55,d);DRUM.kick(t+0.36,0.8,d);}}
   };

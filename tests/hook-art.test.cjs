@@ -15,7 +15,7 @@ function preload(mode='ok'){
 test('complete transparent artwork pack stays below the 400KB mobile budget',async()=>{
   const {art}=preload();await art.ready;
   const dir=path.join(__dirname,'../dist/hook/img');let total=0;
-  assert.equal(Object.keys(art.files).length,33);
+  assert.equal(Object.keys(art.files).length,32);
   assert.deepEqual(fs.readdirSync(dir).sort(),Object.values(art.files).sort());
   for(const [key,file] of Object.entries(art.files)){
     const bytes=fs.readFileSync(path.join(dir,file));total+=bytes.length;
@@ -35,14 +35,14 @@ test('complete transparent artwork pack stays below the 400KB mobile budget',asy
   }
   assert.ok(total<=400000,`pack is ${total} bytes`);
   const added=Object.entries(art.files).filter(([key])=>key.startsWith('fx-')||key==='card-slow').reduce((n,[,file])=>n+fs.statSync(path.join(dir,file)).size,0);
-  // Dust and hit pictures are now live (fx-hook-dust / fx-hook-hit); the kitten pose is still only a reference.
-  const samples=['hook-caught-sample'];let futureBytes=0;
+  // The dust picture is live (knock-back flight trail); the hook burst and kitten pose stay only as references.
+  const samples=['hook-caught-sample','hook-hit-sample'];let futureBytes=0;
   for(const key of samples){const file=path.join(__dirname,'../design-samples/hook-animation-2026-11-23',key+'.webp');futureBytes+=fs.statSync(file).size;assert.ok(!(key in art.files),'the kitten-only pose is not used as a sprite');}
   assert.ok(added+futureBytes<=200000,`new animation and future images are ${added+futureBytes} bytes`);
 });
 test('preloader waits for decoding and versions every artwork URL',async()=>{
   const {art,made}=preload();assert.equal(art.revision,0);await art.ready;
-  assert.equal(art.revision,33);assert.ok(art.get('animal-9'));assert.ok(art.get('fish-special'));assert.ok(art.get('card-slow'));assert.equal(art.get('missing'),null);
+  assert.equal(art.revision,32);assert.ok(art.get('animal-9'));assert.ok(art.get('fish-special'));assert.ok(art.get('card-slow'));assert.equal(art.get('missing'),null);
   for(const image of made){assert.ok(image.url.startsWith('https://example.test/lumi/hook/img/'));assert.ok(image.url.endsWith('?v=abc1234'));}
 });
 test('errors, decode failures, timeouts and late loads safely retain procedural fallbacks',async()=>{
@@ -67,7 +67,7 @@ function renderer(){
   return {game:ctx.HookGame,calls,images,context,add:k=>{images.set(k,{key:k});revision++;},get offscreen(){return offscreen;}};
 }
 test('renderer switches assets independently and rebuilds cached scenery only on changes',()=>{
-  const r=renderer(),canvas={width:1280,height:720},ctx=r.context(canvas),V={tc:2,players:[],hooks:[],orbs:[{id:1,k:'n',x:600,y:337}],drops:[{id:1,x:200,y:500}],rush:5000};
+  const r=renderer(),canvas={width:1280,height:720},ctx=r.context(canvas),V={tc:2,players:[],hooks:[],orbs:[{id:1,k:'n',x:600,y:337}],loot:[{id:1,k:'c',x:500,y:300}],rush:5000};
   r.game.render(ctx,1280,720,1,V,1000);const fallback=r.offscreen;r.game.render(ctx,1280,720,1,V,1016);assert.equal(r.offscreen,fallback);
   for(const key of ['lakeside','fish-normal','fish-gold','fish-special','card-mystery','rush-glow','animal-0'])r.add(key);
   r.game.render(ctx,1280,720,1,V,1032);assert.equal(r.offscreen,fallback+1);r.game.render(ctx,1280,720,1,V,1048);assert.equal(r.offscreen,fallback+1);
@@ -79,7 +79,7 @@ test('renderer switches assets independently and rebuilds cached scenery only on
 });
 
 test('skill animations follow snapshots, keep team rims and fall back independently',()=>{
-  const r=renderer(),ctx=r.context({width:844,height:390}),base={tc:3,t:1000,players:[{id:'a',name:'A',av:0,team:0,x:180,y:200,st:2,sh:true,slow:true},{id:'b',name:'B',av:1,team:1,x:1000,y:400,st:3}],hooks:[],orbs:[],drops:[],shots:[{k:'ice',x:200,y:200,a:0,t0:900,d:420},{k:'slime',x:180,y:400,tx:350,ty:450,t0:800,land:1350}],zones:[{id:1,x:350,y:450,team:2,from:500,until:4500}],spots:[{x:80,y:80,at:0},{x:1120,y:80,at:3000}],fx:[{k:'ice',tx:1000,ty:400,age:200},{k:'slime',x:350,y:450,age:200}],aim:{kind:'ice',x:180,y:200,a:0}};
+  const r=renderer(),ctx=r.context({width:844,height:390}),base={tc:3,t:1000,players:[{id:'a',name:'A',av:0,team:0,x:180,y:200,st:2,sh:true,slow:true},{id:'b',name:'B',av:1,team:1,x:1000,y:400,st:3,kb:{x0:900,y0:400,x1:1170,y1:400,t0:800,t1:1400}},{id:'c',name:'C',av:2,team:1,x:300,y:600,st:0,daze:1800,ink:3000}],hooks:[],orbs:[],drops:[],shots:[{k:'ice',x:200,y:200,a:0,t0:900,d:420},{k:'slime',x:180,y:400,tx:350,ty:450,t0:800,land:1350}],zones:[{id:1,x:350,y:450,team:2,from:500,until:4500}],loot:[{id:1,k:'b',x:500,y:300},{id:2,k:'c',x:700,y:330,hooked:true}],fx:[{k:'ice',tx:1000,ty:400,age:200},{k:'slime',x:350,y:450,age:200}],aim:{kind:'ice',x:180,y:200,a:0}};
   const untouched=JSON.stringify(base);
   r.game.render(ctx,844,390,1,base,1000);
   for(const key of ['fx-ice-arrow','fx-ice-burst','fx-slime-ball','fx-slime-splash','fx-slime-puddle','fx-shield-bubble','fx-ice-block','fx-dizzy-star','card-shield'])r.add(key);
@@ -96,4 +96,26 @@ test('skill animations follow snapshots, keep team rims and fall back independen
   base.zones[0].until=999;const end=r.calls.length;r.game.render(ctx,844,390,1,{...base,players:[],shots:[],fx:[],aim:null},1400);
   assert.ok(!r.calls.slice(end).some(c=>c[0]==='fx-slime-puddle'),'expired zone disappears');
   assert.equal(JSON.parse(untouched).zones[0].team,2);
+});
+
+test('new card visuals draw with or without pictures and never change the game data',()=>{
+  const r=renderer(),ctx=r.context({width:844,height:390});
+  const V={tc:2,t:2000,hooks:[{o:'a',x:200,y:150,tx:400,ty:250,team:0,caught:true}],
+    players:[{id:'a',name:'A',av:0,team:0,x:200,y:150,st:0,me:true},{id:'b',name:'B',av:3,team:1,x:500,y:60,st:3,kb:{x0:450,y0:60,x1:1170,y1:60,t0:1800,t1:2300}},
+      {id:'c',name:'C',av:4,team:1,x:900,y:600,st:5,until:3000},{id:'d',name:'D',av:5,team:1,x:1000,y:120,st:0,daze:2500,ink:4000}],
+    orbs:[{id:101,k:'n',x:620,y:330,mark:true},{id:2,k:'n',x:520,y:300}],loot:[{id:1,k:'c',x:500,y:350},{id:2,k:'b',x:700,y:300},{id:3,k:'c',x:400,y:250,hooked:true}],
+    zones:[{id:9,k:'w',team:0,x:600,y:337,from:1000,until:6000},{id:8,k:'s',team:1,x:300,y:600,from:1500,until:5000}],
+    shots:[{k:'whirl',x:600,y:60,tx:600,ty:300,t0:1800,land:2250,team:0}],
+    fx:[{k:'bomb',x:600,y:300,tx:620,ty:330,age:200},{k:'ink',x:200,y:150,age:200},{k:'whirl',x:600,y:337,age:100},{k:'box',x:200,y:150,age:300}],
+    aim:{kind:'whirl',x:200,y:150,tx:500,ty:300},rush:0};
+  const before=JSON.stringify(V);
+  r.game.render(ctx,844,390,1,V,1000);r.game.inkCover(ctx,844,390,0.8,12345);
+  for(const k of ['fx-whirl','bomb-mark','fx-bomb','lake-box','lake-bubble','ink-1','ink-2','ink-3','ink-mark','fx-hook-dust'])r.add(k);
+  const at=r.calls.length;r.game.render(ctx,844,390,1,V,1100);r.game.inkCover(ctx,844,390,1,12345);
+  const used=new Set(r.calls.slice(at).map(c=>c[0]));
+  for(const k of ['fx-whirl','bomb-mark','fx-bomb','lake-box','lake-bubble','ink-1','ink-mark','fx-hook-dust'])assert.ok(used.has(k),k+' drawn when the picture exists');
+  assert.equal(JSON.stringify(V),before,'rendering must not mutate game data');
+  // Ink blots keep their shape (same seed → same drawing).
+  const a1=r.calls.length;r.game.inkCover(ctx,844,390,1,777);const one=JSON.stringify(r.calls.slice(a1));const a2=r.calls.length;r.game.inkCover(ctx,844,390,1,777);
+  assert.equal(JSON.stringify(r.calls.slice(a2)),one);
 });

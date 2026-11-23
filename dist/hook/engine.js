@@ -13,13 +13,16 @@
     ORB:{n:{r:24,val:1,w:[0.32,0.55]},f:{r:18,val:2,w:[0.95,1.35]},g:{r:24,val:2,w:[0.7,0.95]}},
     ANSWER:15000,FREEZE:3000,TARGET:20,LIMIT:300000,RESPAWN:1200,COUNT:3000,SNAP:250,
     AWAY:10000,TAKEOVER:7000,   // silent this long = left (phones say "hi" every 4 s); the same name may take over a player silent 7 s
-    // Item cards: lie on the shore, walk over one to pick it up (hold up to 2), tap to use.
-    // Item cards (teacher's choice): 2 on the shore at the start, one more every 5 s, at most 4 lying around; hold up to 2.
-    CARD:{UP:2000,ICE:2500,SHIELD:10000,R_UP:160,PICK:38,MAX:2,START:2,EVERY:5000,ON_MAP:4,SPREAD:0.34},
+    // Item cards: hold up to 2, tap (or hold and aim) to use. Knock-up throws nearby enemies to the edge of the map
+    // (then they walk at half speed for 1 s); freeze 3 s; bomb fish stuns 2 s; ink covers enemy phones 2.5 s.
+    CARD:{ICE:3000,SHIELD:10000,R_UP:160,MAX:2,FLY:1600,DAZE:1000,DAZE_K:0.5,STUN:2000,INK:2500},
+    // Things floating in the lake, caught with the rod like fish (no question): "?" boxes give a card,
+    // the bubble gives 10 s of shield. 1 box at the start, at most 2; a new one 6 s after one is taken; the bubble returns 15 s after.
+    LOOT:{R:22,BOXES:2,BOX_EVERY:6000,BUB_EVERY:15000},
     SHOT:{RANGE:420,SPEED:950,R:26},                           // freeze arrow: aimed, flies straight, freezes the first enemy it touches
     SLIME:{RANGE:380,FLY:550,R:110,LEN:4000,SLOW:0.4,ROD:0.5},  // slime ball: lands where aimed; sticky puddle 4 s (enemies walk at 40%, rods at half speed)
-    SPOT:{EVERY:5000,R:40},                                    // shields wait in the four corners and come back 5 s after being taken
-    GRAB:{SAFE:3000,DROP:44},                                  // a hooked player can't be hooked again for 3 s; dropped 44 in front of the angler
+    WHIRL:{RANGE:380,FLY:450,R:130,BAND:1.7,LEN:5000,PULL:0.75},// whirlpool: thrown into the lake; for 5 s nearby fish are pulled into a bunch
+    BOMB:{LEN:15000,AX:90,AY:55},                              // bomb fish: looks like any fish to the other team; gone after 15 s
     // A glowing goldfish shows up now and then; answer it right and every fish is worth 2 for a while.
     RUSH:{FIRST:40000,AFTER:40000,LEN:15000},
     TEAMS:[{zh:'草莓队',en:'Strawberry',color:'#ff7096',ink:'#e2416c',soft:'#ffe6ee'},
@@ -39,12 +42,11 @@
     {zh:'狐狸',en:'Fox',kind:'fox',body:'#ffab6b',dark:'#e07e40',ear:'tri',inner:'#fff2e3'},
     {zh:'小猪',en:'Piggy',kind:'pig',body:'#ffc6d2',dark:'#f39ab0',ear:'pig',inner:'#ff9fb6'}
   ];
-  /* The five item cards. */
-  const CARDS={up:{zh:'击飞',en:'Knock up',color:'#ff9a3c'},ice:{zh:'冷冻',en:'Freeze',color:'#4fb3f2'},slow:{zh:'缓速',en:'Slow',color:'#6cc24a'},shield:{zh:'保护罩',en:'Shield',color:'#3cc895'},
-    x2:{zh:'加倍',en:'Double',color:'#f2b000'},tri:{zh:'三连钩',en:'Triple',color:'#9a7cff'}};
-  // Card odds. A team that is behind gets the strong ones more often, a team far ahead gets more defence.
-  // (The shield is no longer a card: it waits in the four corners.)
-  const ODDS={even:{up:3,ice:3,slow:3,x2:2,tri:1},behind:{up:2,ice:2,slow:2,x2:3,tri:3},ahead:{up:3,ice:3,slow:3,x2:1,tri:0.5}};
+  /* The seven item cards. Every card is equally likely, whichever team is ahead (the teacher's choice).
+     (The shield is not a card: it is a bubble floating in the lake.) */
+  const CARDS={up:{zh:'击飞',en:'Knock back',color:'#ff9a3c'},ice:{zh:'冷冻',en:'Freeze',color:'#4fb3f2'},slow:{zh:'缓速',en:'Slow',color:'#6cc24a'},
+    x2:{zh:'加倍',en:'Double',color:'#f2b000'},whirl:{zh:'漩涡',en:'Whirlpool',color:'#2fb3c9'},bomb:{zh:'炸弹鱼',en:'Bomb fish',color:'#ff6b5b'},ink:{zh:'墨水',en:'Ink',color:'#6a4c93'}};
+  const CARD_KINDS=Object.keys(CARDS);
   /* Room numbers count up from 0001: the smallest one nobody is using. */
   function pickRoom(used){for(let n=1;n<10000;n++){const c=String(n).padStart(4,'0');if(!used.has(c))return c;}return '0001';}
   const avOf=id=>{let h=0;for(const c of String(id))h=(h*31+c.charCodeAt(0))>>>0;return h%ANIMALS.length;};
@@ -60,16 +62,48 @@
     if(e<1){const k=e<1e-6?1:1/Math.sqrt(e);if(e<1e-6){x=s.x-s.rx-C.PR;}else{x=s.x+(x-s.x)*k;y=s.y+(y-s.y)*k;}}
     return {x,y};
   }
-  /* An orb's path: a slow Lissajous loop inside the sea, fixed by its seed. */
+  /* An orb's path: a slow Lissajous loop inside the sea, fixed by its seed. A bomb fish (o.c = [x,y]) swims a
+     smaller loop around the spot where it was put. */
   const pathCache=new Map();
   function orbPos(o,t){
     const key=o.id+':'+o.s;let p=pathCache.get(key);
-    if(!p){const r=rng(o.s),w=C.ORB[o.k].w,sp=()=>w[0]+(w[1]-w[0])*r();
-      p={ax:C.SEA.rx*0.6*(0.55+0.45*r()),ay:C.SEA.ry*0.6*(0.55+0.45*r()),w1:sp(),w2:sp()*(0.8+0.4*r()),p1:r()*6.283,p2:r()*6.283};
+    if(!p){const r=rng(o.s),w=(C.ORB[o.k]||C.ORB.n).w,sp=()=>w[0]+(w[1]-w[0])*r();
+      p=o.c?{cx:o.c[0],cy:o.c[1],ax:C.BOMB.AX*(0.7+0.3*r()),ay:C.BOMB.AY*(0.7+0.3*r())}:{cx:C.SEA.x,cy:C.SEA.y,ax:C.SEA.rx*0.6*(0.55+0.45*r()),ay:C.SEA.ry*0.6*(0.55+0.45*r())};
+      Object.assign(p,{w1:sp(),w2:sp()*(0.8+0.4*r()),p1:r()*6.283,p2:r()*6.283});
       if(pathCache.size>400)pathCache.clear();pathCache.set(key,p);}
     const s=(t-o.b)/1000;
+    return {x:p.cx+p.ax*Math.sin(p.w1*s+p.p1),y:p.cy+p.ay*Math.sin(p.w2*s+p.p2)};
+  }
+  /* Where a fish really is: its path, pulled towards any whirlpool that is turning nearby (zones of kind 'w').
+     The pull fades in and out and weakens with distance, so fish never jump. Phones and the teacher's computer
+     work it out the same way from the snapshot, so it costs no messages. */
+  function fishPos(o,t,zones){
+    let p=orbPos(o,t);if(!zones||!zones.length)return p;
+    for(const z of zones){if(z.k!=='w'||t<z.from||t>=z.until)continue;
+      const ramp=Math.min(1,(t-z.from)/800,(z.until-t)/800),d=Math.hypot(p.x-z.x,p.y-z.y),R=C.WHIRL.R,far=R*C.WHIRL.BAND;
+      const w=d<=R?1:d>=far?0:(far-d)/(far-R),e=w*w*(3-2*w),k=1-C.WHIRL.PULL*ramp*e;
+      if(k<1)p={x:z.x+(p.x-z.x)*k,y:z.y+(p.y-z.y)*k};}
+    return p;
+  }
+  /* Floating "?" boxes and the shield bubble drift slowly around the lake. */
+  function lootPos(l,t){
+    const key='L'+l.id+':'+l.s;let p=pathCache.get(key);
+    if(!p){const r=rng(l.s);p={ax:C.SEA.rx*0.55*(0.4+0.6*r()),ay:C.SEA.ry*0.55*(0.4+0.6*r()),w1:0.12+0.1*r(),w2:0.1+0.1*r(),p1:r()*6.283,p2:r()*6.283};
+      if(pathCache.size>400)pathCache.clear();pathCache.set(key,p);}
+    const s=(t-l.b)/1000;
     return {x:C.SEA.x+p.ax*Math.sin(p.w1*s+p.p1),y:C.SEA.y+p.ay*Math.sin(p.w2*s+p.p2)};
   }
+  /* A point inside the lake: pulled in towards the middle if it is near the edge or outside (e = ellipse fraction). */
+  function intoLake(x,y,e=0.8){const s=C.SEA,f=Math.hypot((x-s.x)/s.rx,(y-s.y)/s.ry);return f<=e?{x,y}:{x:s.x+(x-s.x)*e/f,y:s.y+(y-s.y)*e/f};}
+  /* Knock-back: from (x,y), fly in direction (dx,dy) as far as the edge of the map. */
+  function edgeFrom(x,y,dx,dy){
+    let s=Infinity;const lo=C.PR+4,hiX=C.W-C.PR-4,hiY=C.H-C.PR-4;
+    if(dx>1e-6)s=Math.min(s,(hiX-x)/dx);else if(dx<-1e-6)s=Math.min(s,(lo-x)/dx);
+    if(dy>1e-6)s=Math.min(s,(hiY-y)/dy);else if(dy<-1e-6)s=Math.min(s,(lo-y)/dy);
+    if(!Number.isFinite(s)||s<0)s=0;return confine(x+dx*s,y+dy*s);
+  }
+  /* Where a knocked-back player is during the flight (kb = {x0,y0,x1,y1,t0,t1}). */
+  function flyPos(kb,t){const k=clamp((t-kb.t0)/Math.max(1,kb.t1-kb.t0),0,1),e=1-(1-k)*(1-k);return {x:kb.x0+(kb.x1-kb.x0)*e,y:kb.y0+(kb.y1-kb.y0)*e,k};}
   /* A hook flies out until it catches something or reaches its range, then reels back. */
   // h.sp: speed of this line (1 normal; slower when cast from inside an enemy's slime puddle).
   const turnAt=h=>h.t0+C.RANGE/(C.OUT*(h.sp||1))*1000;
@@ -78,12 +112,12 @@
     return t<turn?Math.min(C.RANGE,C.OUT*sp*(t-h.t0)/1000):d-C.BACK*sp*(t-turn)/1000;
   }
   const outgoing=(h,t)=>!h.tt&&t<turnAt(h);
-  /* Is someone of this team standing in an enemy's slime puddle at time t? (zones: [{team,x,y,from,until}]) */
-  const inSlime=(zones,team,x,y,t)=>!!zones&&zones.some(z=>z.team!==team&&t>=z.from&&t<z.until&&Math.hypot(x-z.x,y-z.y)<=C.SLIME.R);
+  /* Is someone of this team standing in an enemy's slime puddle at time t? (zones: [{k,team,x,y,from,until}]; k 'w' = whirlpool) */
+  const inSlime=(zones,team,x,y,t)=>!!zones&&zones.some(z=>z.k!=='w'&&z.team!==team&&t>=z.from&&t<z.until&&Math.hypot(x-z.x,y-z.y)<=C.SLIME.R);
+  /* Walking speed factor: an enemy's slime (40%), or still dizzy after landing from a knock-back (50%). */
+  const walkK=(zones,team,x,y,t,daze)=>Math.min(inSlime(zones,team,x,y,t)?C.SLIME.SLOW:1,daze>t?C.CARD.DAZE_K:1);
   /* Where a freeze arrow is at time t (null before it starts or once it has flown its full range). */
   function shotAt(s,t){const d=C.SHOT.SPEED*(t-s.t0)/1000;if(d<0||d>=C.SHOT.RANGE)return null;return {x:s.x+Math.cos(s.a)*d,y:s.y+Math.sin(s.a)*d,d};}
-  /* The four shield corners (with 3 teams the top two corners are picnic blankets, so those move inwards). */
-  const spotsFor=teams=>(teams===3?[[262,46],[938,46]]:[[54,46],[1146,46]]).concat([[54,630],[1146,630]]).map(([x,y])=>({x,y,at:0}));
   function hookTip(h,t){const d=clamp(hookDist(h,t),0,C.RANGE);return {x:h.x+Math.cos(h.a)*d,y:h.y+Math.sin(h.a)*d,d};}
   const hookDone=(h,t)=>!outgoing(h,t)&&hookDist(h,t)<=0;
   /* Closest point on segment a→b to point p: returns [distance, fraction]. */
@@ -94,11 +128,13 @@
     const rnd=opt.rng||Math.random,check=opt.check||((q,v)=>JSON.stringify(v)===JSON.stringify(q.answer));
     const g={ph:'lobby',t:0,cd:0,teams:2,sc:[0,0,0],players:new Map(),orbs:[],hooks:[],qs:[],qStats:[],deck:[],kicked:new Map(),end:null,target:opt.target||C.TARGET,limit:opt.limit||C.LIMIT,log:[],
       mode:opt.mode==='time'?'time':'score',   // score: first team to the target wins (time limit as a backstop); time: highest score when time runs out
-      items:opt.items!==false,drops:[],dropN:0,dropAt:0,fx:[],fxN:0,rush:0,glowAt:0,gone:new Map(),
-      shots:[],shotN:0,zones:[],spots:[]};   // flying freeze arrows / slime balls, slime puddles, corner shields
+      items:opt.items!==false,fx:[],fxN:0,rush:0,glowAt:0,gone:new Map(),
+      loot:[],lootN:0,boxAt:0,bubAt:0,orbN:100,   // boxes and the shield bubble in the lake; bomb fish get ids from 101
+      shots:[],shotN:0,zones:[]};   // flying freeze arrows / slime balls / whirlpools, slime puddles and whirlpools
     const nameKey=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
-    // st: 0 free, 1 answering, 2 frozen, 3 knocked up, 4 hooked (being pulled by another team's line). safe: can't be hooked until then.
-    const fresh=()=>({st:0,until:0,q:-1,orb:0,ok:0,bad:0,rk:0,goal:null,cool:800,botAt:0,cards:[],sh:0,x2:0,tri:0,bag:[],triLeft:0,triBad:false,useAt:0,safe:0});
+    // st: 0 free, 1 answering, 2 frozen, 3 knocked back (flying, kb = the flight), 5 stunned by a bomb fish.
+    // daze: walks at half speed until then (just landed); ink: phone covered in ink until then.
+    const fresh=()=>({st:0,until:0,q:-1,orb:0,ok:0,bad:0,rk:0,goal:null,cool:800,botAt:0,cards:[],sh:0,x2:0,useAt:0,kb:null,daze:0,ink:0});
     const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
     const seed=()=>Math.floor(rnd()*2**31);
     // Start positions on the team's picnic blanket, rows far enough apart that names don't cover the animal below.
@@ -126,109 +162,127 @@
       g.players.set(id,p);place(p,n[team]);return p;
     };
     function rekey(p,id){const old=p.id;g.players.delete(old);p.id=id;p.seq=-1;g.players.set(id,p);
-      for(const h of g.hooks){if(h.o===old)h.o=id;if(h.vic===old)h.vic=id;}for(const o of g.orbs){if(o.hk===old)o.hk=id;if(o.by===old)o.by=id;}}
-    /* Let go of a hooked player: dropped where they are (or at a given spot), free to move, and safe from hooks for 3 s. */
-    function freeVictim(h,at){
-      const q=h.vic&&g.players.get(h.vic);h.vic=0;if(!q||q.st!==4)return;
-      const pos=at||confine(q.x,q.y);q.st=0;q.until=0;q.x=pos.x;q.y=pos.y;q.dx=q.dy=0;q.safe=g.t+C.GRAB.SAFE;
-    }
-    // Take away all of a player's lines: fish go back to the lake, anyone they were pulling is let go.
-    function cutLines(id){g.hooks=g.hooks.filter(h=>{if(h.o!==id)return true;if(h.orb)releaseOrb(h.orb,300);freeVictim(h);return false;});
-      for(const h of g.hooks)if(h.vic===id)h.vic=0;}
+      for(const h of g.hooks)if(h.o===old)h.o=id;for(const o of g.orbs){if(o.hk===old)o.hk=id;if(o.by===old)o.by=id;if(o.owner===old)o.owner=id;}
+      for(const l of g.loot)if(l.hk===old)l.hk=id;}
+    // A line is let go: its fish (or box / bubble) goes back into the lake.
+    function letGo(h){if(h.orb)releaseOrb(h.orb,300);if(h.loot)releaseLoot(h.loot);}
+    // Take away all of a player's lines.
+    function cutLines(id){g.hooks=g.hooks.filter(h=>{if(h.o!==id)return true;letGo(h);return false;});}
     /* A student who left (closed the page, or silent for 10 s) disappears. In a game they are kept aside with their
        team and score, so the same name can come back to them; the team keeps the points it already has. */
     function retire(p){
       cutLines(p.id);
-      if(p.orb)releaseOrb(p.orb,300);for(const o of p.bag)releaseOrb(o,300);
+      if(p.orb)releaseOrb(p.orb,300);
       g.players.delete(p.id);
-      if(g.ph!=='lobby'&&g.ph!=='end'){Object.assign(p,{st:0,until:0,q:-1,orb:0,bag:[],triLeft:0,triBad:false,dx:0,dy:0});g.gone.set(nameKey(p.name),p);}
+      if(g.ph!=='lobby'&&g.ph!=='end'){Object.assign(p,{st:0,until:0,q:-1,orb:0,dx:0,dy:0,kb:null});g.gone.set(nameKey(p.name),p);}
     }
     g.leave=id=>{const p=g.players.get(String(id));if(p&&!p.bot)retire(p);};
     g.sweep=(now=Date.now())=>{let n=0;for(const p of [...g.players.values()])if(!p.bot&&now-p.seen>C.AWAY){retire(p);n++;}return n;};
     function releaseOrb(id,delay){const o=g.orbs.find(x=>x.id===id);if(o){o.s=seed();o.b=g.t+delay;o.hk='';o.by='';}}
+    function releaseLoot(id){const l=g.loot.find(x=>x.id===id);if(l){l.s=seed();l.b=g.t+300;l.hk='';}}
     g.kick=id=>{const p=g.players.get(id);if(!p)return;cutLines(id);g.players.delete(id);if(!p.bot)g.kicked.set(id,Date.now());
-      if(p.st===1&&p.orb)releaseOrb(p.orb,300);for(const o of p.bag)releaseOrb(o,300);};
+      if(p.st===1&&p.orb)releaseOrb(p.orb,300);};
     g.setTeams=n=>{g.teams=n===3?3:2;const list=shuffle([...g.players.values()]);list.forEach((p,i)=>p.team=i%g.teams);placeAll();};
     g.start=()=>{
       g.ph='count';g.cd=C.COUNT;g.t=0;g.sc=[0,0,0];g.hooks=[];g.end=null;g.deck=[];g.qStats=g.qs.map(()=>({right:0,wrong:0}));
-      g.drops=[];g.dropAt=C.CARD.EVERY;g.fx=[];g.rush=0;g.glowAt=C.RUSH.FIRST;g.gone.clear();
-      g.shots=[];g.zones=[];g.spots=g.items?spotsFor(g.teams):[];
+      g.fx=[];g.rush=0;g.glowAt=C.RUSH.FIRST;g.gone.clear();g.shots=[];g.zones=[];g.loot=[];
       for(const p of g.players.values())Object.assign(p,fresh());
       placeAll();
-      if(g.items)for(let i=0;i<C.CARD.START;i++)spawnDrop();   // cards are there from the very start
       const n=clamp(Math.round(g.players.size*0.5)+3,5,13),fast=Math.max(1,Math.round(n/4));
       g.orbs=Array.from({length:n},(_,i)=>({id:i+1,k:i<fast?'f':'n',s:seed(),b:0,hk:'',by:''}));
+      // In the lake from the start: one "?" box and the shield bubble; the second box comes 6 s later.
+      if(g.items){spawnLoot('c');spawnLoot('b');}g.boxAt=C.LOOT.BOX_EVERY;g.bubAt=Infinity;
     };
     g.pause=()=>{if(g.ph==='play')g.ph='pause';};
     g.resume=()=>{if(g.ph==='pause')g.ph='play';};
-    g.toLobby=()=>{g.ph='lobby';g.end=null;g.hooks=[];g.orbs=[];g.drops=[];g.fx=[];g.rush=0;g.gone.clear();g.shots=[];g.zones=[];g.spots=[];placeAll();for(const p of g.players.values())Object.assign(p,{st:0,q:-1,orb:0,cards:[],sh:0,x2:0,tri:0,bag:[],triLeft:0,triBad:false});};
+    g.toLobby=()=>{g.ph='lobby';g.end=null;g.hooks=[];g.orbs=[];g.loot=[];g.fx=[];g.rush=0;g.gone.clear();g.shots=[];g.zones=[];placeAll();for(const p of g.players.values())Object.assign(p,{st:0,q:-1,orb:0,cards:[],sh:0,x2:0,kb:null,daze:0,ink:0});};
     function draw(){if(!g.deck.length)g.deck=shuffle(g.qs.map((_,i)=>i));return g.deck.pop();}
     function orbAt(o,t){
       if(o.by){const p=g.players.get(o.by);if(!p)return null;const held=g.orbs.filter(x=>x.by===o.by),i=held.indexOf(o);return {x:p.x+(i-(held.length-1)/2)*30,y:p.y-54};}
       if(o.hk){const h=g.hooks.find(x=>x.o===o.hk&&x.orb===o.id);return h?hookTip(h,t):null;}
-      return t<o.b?null:orbPos(o,t);
+      return t<o.b?null:fishPos(o,t,g.zones);
     }
     g.orbAt=o=>orbAt(o,g.t);
+    function lootAt(l,t){
+      if(l.hk){const h=g.hooks.find(x=>x.o===l.hk&&x.loot===l.id);return h?hookTip(h,t):null;}
+      return t<l.b?null:lootPos(l,t);
+    }
+    g.lootAt=l=>lootAt(l,g.t);
+    function spawnLoot(k){g.loot.push({id:++g.lootN,k,s:seed(),b:g.t,hk:''});}
     function fire(p,x,y,a,t0){
       if(g.ph!=='play'||p.st!==0||g.hooks.some(h=>h.o===p.id)||!Number.isFinite(a))return false;
       const pos=confine(Number(x)||p.x,Number(y)||p.y);p.x=pos.x;p.y=pos.y;p.dx=p.dy=0;
       t0=clamp(Number(t0)||g.t,g.t-400,g.t);
       const sp=slowed(p)?C.SLIME.ROD:1;   // casting from inside an enemy's slime: the line flies and reels at half speed
-      // Triple-hook card: three lines in a fan; every fish caught is answered one after another.
-      if(p.tri){p.tri=0;p.triLeft=3;for(const d of [-C.CARD.SPREAD,0,C.CARD.SPREAD])g.hooks.push({o:p.id,x:p.x,y:p.y,a:a+d,t0,tt:0,d:0,orb:0,lt:t0,tri:1,sp});}
-      else g.hooks.push({o:p.id,x:p.x,y:p.y,a,t0,tt:0,d:0,orb:0,lt:t0,sp});
+      g.hooks.push({o:p.id,x:p.x,y:p.y,a,t0,tt:0,d:0,orb:0,loot:0,lt:t0,sp});
       return true;
     }
     /* Start answering a caught fish. */
     function ask(p,oid){const o=g.orbs.find(x=>x.id===oid);if(!o)return;o.hk='';o.by=p.id;p.st=1;p.orb=o.id;p.q=draw();p.qn++;p.until=g.t+C.ANSWER;}
-    // A wrong answer freezes — but after a triple cast, only once all three fish are done.
-    function endTurn(p){if(p.triBad){p.st=2;p.until=g.t+C.FREEZE;}p.triBad=false;}
 
     /* ── Item cards ── */
     const addFx=(k,p,to=[],extra={})=>{g.fx.push({id:++g.fxN,k,at:g.t,by:p.id,x:Math.round(p.x),y:Math.round(p.y),to,...extra});};
-    function dropHooks(p){g.hooks=g.hooks.filter(h=>{if(h.o!==p.id)return true;if(h.orb)releaseOrb(h.orb,300);freeVictim(h);return false;});p.triLeft=0;p.triBad=false;}
-    // Hit by a card. Someone answering a question is never hit; a shield takes the hit instead (and breaks).
-    function hit(q,kind){
+    function dropHooks(p){g.hooks=g.hooks.filter(h=>{if(h.o!==p.id)return true;letGo(h);return false;});}
+    /* Hit by a card (or a bomb fish). Someone answering a question is never hit; a shield takes the hit instead (and breaks).
+       up: thrown away from `from` to the edge of the map; ice: frozen 3 s; bomb: dizzy 2 s; ink: the phone is covered 2.5 s. */
+    function hit(q,kind,from){
       if(q.sh>g.t){q.sh=0;addFx('block',q,[q.id]);return false;}
-      dropHooks(q);q.dx=q.dy=0;q.st=kind==='up'?3:2;q.until=g.t+(kind==='up'?C.CARD.UP:C.CARD.ICE);return true;
+      if(kind==='ink'){q.ink=g.t+C.CARD.INK;return true;}
+      dropHooks(q);q.dx=q.dy=0;
+      if(kind==='up'){
+        let dx=q.x-from.x,dy=q.y-from.y,l=Math.hypot(dx,dy);
+        if(l<1){dx=q.x-C.SEA.x;dy=q.y-C.SEA.y;l=Math.hypot(dx,dy)||1;}   // standing on top of each other: away from the lake
+        const end=edgeFrom(q.x,q.y,dx/l,dy/l),ms=clamp(Math.hypot(end.x-q.x,end.y-q.y)/C.CARD.FLY*1000,400,900);
+        q.st=3;q.until=g.t+ms;q.kb={x0:q.x,y0:q.y,x1:end.x,y1:end.y,t0:g.t,t1:g.t+ms};return true;}
+      q.st=kind==='bomb'?5:2;q.until=g.t+(kind==='bomb'?C.CARD.STUN:C.CARD.ICE);return true;
     }
     const foes=p=>[...g.players.values()].filter(q=>q.team!==p.team&&q.st===0);
     const slowed=p=>inSlime(g.zones,p.team,p.x,p.y,g.t);
+    const speedOf=p=>C.SPEED*walkK(g.zones,p.team,p.x,p.y,g.t,p.daze);
     function nearestFoe(p,range){let best=null;for(const q of foes(p)){const d=Math.hypot(q.x-p.x,q.y-p.y);if(d<=range&&(!best||d<best.d))best={q,d};}return best;}
-    /* Use card i. Freeze and slime are aimed like a skill (angle a, slime also distance d); without an aim they go at the
-       nearest enemy in reach. Knock-up needs an enemy close by, otherwise the card is kept. */
+    /* Use card i. Freeze, slime and whirlpool are aimed like a skill (angle a, slime and whirlpool also distance d);
+       without an aim, freeze and slime go at the nearest enemy in reach and the whirlpool into the lake in front.
+       Knock-back needs an enemy close by, otherwise the card is kept. */
     function useCard(p,i,a,d){
       i=Number(i)||0;const k=p.cards[i];
       if(g.ph!=='play'||p.st!==0||!k)return false;
       if(k==='up'){const tg=foes(p).filter(q=>Math.hypot(q.x-p.x,q.y-p.y)<=C.CARD.R_UP);if(!tg.length)return false;
-        addFx('up',p,tg.filter(q=>hit(q,'up')).map(q=>q.id));}
-      else if(k==='ice'||k==='slow'){
-        a=Number(a);d=Number(d);
-        if(!Number.isFinite(a)){const n=nearestFoe(p,k==='ice'?C.SHOT.RANGE:C.SLIME.RANGE);
+        addFx('up',p,tg.filter(q=>hit(q,'up',p)).map(q=>q.id));}
+      else if(k==='ice'||k==='slow'||k==='whirl'){
+        a=Number(a);d=Number(d);const range=k==='ice'?C.SHOT.RANGE:k==='slow'?C.SLIME.RANGE:C.WHIRL.RANGE;
+        if(!Number.isFinite(a)){const n=k==='whirl'?null:nearestFoe(p,range);
           a=n?Math.atan2(n.q.y-p.y,n.q.x-p.x):Math.atan2(C.SEA.y-p.y,C.SEA.x-p.x);if(n&&!Number.isFinite(d))d=n.d;}
         if(k==='ice'){g.shots.push({id:++g.shotN,k:'ice',o:p.id,team:p.team,x:p.x,y:p.y-10,a,t0:g.t,lt:g.t});addFx('shoot',p);}
-        else{const dist=clamp(Number.isFinite(d)?d:C.SLIME.RANGE*0.7,40,C.SLIME.RANGE);
-          const tx=clamp(p.x+Math.cos(a)*dist,0,C.W),ty=clamp(p.y+Math.sin(a)*dist,0,C.H);
-          g.shots.push({id:++g.shotN,k:'slime',o:p.id,team:p.team,x:p.x,y:p.y,tx:Math.round(tx),ty:Math.round(ty),t0:g.t,land:g.t+C.SLIME.FLY});addFx('throw',p);}
+        else{const dist=clamp(Number.isFinite(d)?d:range*0.7,40,range);
+          let tx=clamp(p.x+Math.cos(a)*dist,0,C.W),ty=clamp(p.y+Math.sin(a)*dist,0,C.H);
+          if(k==='whirl')({x:tx,y:ty}=intoLake(tx,ty,0.78));   // a whirlpool always lands in the water
+          g.shots.push({id:++g.shotN,k:k==='slow'?'slime':'whirl',o:p.id,team:p.team,x:p.x,y:p.y,tx:Math.round(tx),ty:Math.round(ty),t0:g.t,land:g.t+(k==='slow'?C.SLIME.FLY:C.WHIRL.FLY)});addFx('throw',p);}
       }
       else if(k==='x2'){p.x2=1;addFx('x2',p);}
-      else if(k==='tri'){p.tri=1;addFx('tri',p);}
+      else if(k==='bomb'){
+        // A fake fish in the lake on this player's side. To the other team it looks and swims like any fish.
+        const s=C.SEA,f=Math.hypot((p.x-s.x)/s.rx,(p.y-s.y)/s.ry)||1,c=[Math.round(s.x+(p.x-s.x)*0.3/f),Math.round(s.y+(p.y-s.y)*0.3/f)];
+        g.orbs.push({id:++g.orbN,k:'n',s:seed(),b:g.t,hk:'',by:'',bomb:p.team,owner:p.id,c,until:g.t+C.BOMB.LEN});addFx('trap',p);}
+      else if(k==='ink'){
+        const tg=[...g.players.values()].filter(q=>q.team!==p.team&&q.st!==1);
+        addFx('ink',p,tg.filter(q=>hit(q,'ink',p)).map(q=>q.id));}
       else{p.cards.splice(i,1);return false;}   // an old card type: just drop it
       p.cards.splice(i,1);return true;
     }
-    /* Freeze arrows fly on; slime balls land and leave a puddle. */
+    /* Freeze arrows fly on; slime balls land and leave a puddle; whirlpools land in the lake. */
     function stepShots(){
       const t=g.t;
       g.shots=g.shots.filter(s=>{
-        if(s.k==='slime'){
+        if(s.k==='slime'||s.k==='whirl'){
           if(t<s.land)return true;
-          g.zones.push({id:s.id,team:s.team,x:s.tx,y:s.ty,from:s.land,until:s.land+C.SLIME.LEN});
-          addFx('slime',{id:s.o,x:s.tx,y:s.ty});return false;}
+          const w=s.k==='whirl';
+          g.zones.push({id:s.id,k:w?'w':'s',team:s.team,x:s.tx,y:s.ty,from:s.land,until:s.land+(w?C.WHIRL.LEN:C.SLIME.LEN)});
+          addFx(w?'whirl':'slime',{id:s.o,x:s.tx,y:s.ty});return false;}
         // The arrow's path since the last tick: the first enemy on it (not answering, not in the air) is frozen.
         const d0=Math.min(C.SHOT.RANGE,C.SHOT.SPEED*(s.lt-s.t0)/1000),d1=Math.min(C.SHOT.RANGE,C.SHOT.SPEED*(t-s.t0)/1000);s.lt=t;
         const A={x:s.x+Math.cos(s.a)*d0,y:s.y+Math.sin(s.a)*d0},B={x:s.x+Math.cos(s.a)*d1,y:s.y+Math.sin(s.a)*d1};
         let best=null;
-        for(const q of g.players.values()){if(q.team===s.team||(q.st!==0&&q.st!==2))continue;
+        for(const q of g.players.values()){if(q.team===s.team||(q.st!==0&&q.st!==2&&q.st!==5))continue;
           const [dist,f]=segDist(A,B,{x:q.x,y:q.y-10});if(dist<=C.SHOT.R&&(!best||f<best.f))best={q,f};}
         if(best){const q=best.q,by=g.players.get(s.o)||{id:s.o,x:s.x,y:s.y};
           addFx('ice',by,hit(q,'ice')?[q.id]:[],{tx:Math.round(q.x),ty:Math.round(q.y)});return false;}
@@ -236,37 +290,26 @@
       });
       if(g.zones.length)g.zones=g.zones.filter(z=>t<z.until);
     }
-    /* Corner shields: walk onto one for 10 s of protection; it comes back 5 s later. */
-    function stepSpots(){
-      for(const s of g.spots){if(g.t<s.at)continue;
-        for(const p of g.players.values())if(p.st===0&&p.sh<=g.t&&Math.hypot(p.x-s.x,p.y-s.y)<=C.SPOT.R){
-          p.sh=g.t+C.CARD.SHIELD;s.at=g.t+C.SPOT.EVERY;addFx('shield',p);break;}}
+    const cardFor=()=>CARD_KINDS[Math.floor(rnd()*CARD_KINDS.length)];
+    /* The lake's boxes and bubble: a new box 6 s after one is taken (at most 2); the bubble 15 s after it is taken.
+       Bomb fish that nobody caught swim away after 15 s. */
+    function stepLoot(){
+      const t=g.t,boxes=g.loot.filter(l=>l.k==='c').length;
+      if(boxes<C.LOOT.BOXES&&t>=g.boxAt){spawnLoot('c');g.boxAt=t+C.LOOT.BOX_EVERY;}
+      if(!g.loot.some(l=>l.k==='b')&&t>=g.bubAt){spawnLoot('b');g.bubAt=Infinity;}
+      if(g.orbs.some(o=>o.bomb!=null&&t>=o.until))g.orbs=g.orbs.filter(o=>!(o.bomb!=null&&t>=o.until&&!o.hk&&!o.by));
     }
-    function cardFor(p){
-      const sc=g.sc.slice(0,g.teams),gap=sc[p.team]-Math.max(...sc.filter((_,i)=>i!==p.team));
-      const w=gap<=-3?ODDS.behind:gap>=3?ODDS.ahead:ODDS.even;let r=rnd()*Object.values(w).reduce((a,b)=>a+b,0);
-      for(const [k,v] of Object.entries(w)){r-=v;if(r<0)return k;}return 'up';
-    }
-    // A new card on the shore. If a team is behind, it tends to land on their side.
-    function spawnDrop(){
-      const sc=g.sc.slice(0,g.teams),lo=Math.min(...sc),behind=Math.max(...sc)-lo>=2?sc.indexOf(lo):-1,B=bases(g.teams);let best=null;
-      for(let i=0;i<8;i++){
-        const a=rnd()*Math.PI*2,k=1.2+rnd()*0.3,s=confine(clamp(C.SEA.x+C.SEA.rx*k*Math.cos(a),60,C.W-60),clamp(C.SEA.y+C.SEA.ry*k*Math.sin(a),50,C.H-50));
-        if(g.drops.some(d=>Math.hypot(d.x-s.x,d.y-s.y)<160))continue;
-        const score=behind>=0?Math.hypot(s.x-B[behind].x,s.y-B[behind].y):rnd();if(!best||score<best.score)best={x:s.x,y:s.y,score};
-      }
-      if(best)g.drops.push({id:++g.dropN,x:Math.round(best.x),y:Math.round(best.y)});
-    }
-    function stepItems(){
-      if(g.t>=g.dropAt){if(g.drops.length<C.CARD.ON_MAP)spawnDrop();g.dropAt=g.t+C.CARD.EVERY;}
-      for(const d of [...g.drops])for(const p of g.players.values())
-        if(p.st===0&&p.cards.length<C.CARD.MAX&&Math.hypot(p.x-d.x,p.y-d.y)<=C.CARD.PICK){p.cards.push(cardFor(p));g.drops.splice(g.drops.indexOf(d),1);break;}
+    // A box or bubble has been reeled in.
+    function landLoot(p,l){
+      g.loot.splice(g.loot.indexOf(l),1);
+      if(l.k==='c'){if(g.boxAt<=g.t)g.boxAt=g.t+C.LOOT.BOX_EVERY;if(p.cards.length<C.CARD.MAX){p.cards.push(cardFor());addFx('box',p);}}
+      else{g.bubAt=g.t+C.LOOT.BUB_EVERY;p.sh=g.t+C.CARD.SHIELD;addFx('shield',p);}
     }
     // The glowing goldfish: one at a time, then a pause after each rush.
     function stepRush(){
       if(g.rush&&g.t>=g.rush){g.rush=0;g.glowAt=g.t+C.RUSH.AFTER;}
       if(!g.rush&&g.t>=g.glowAt&&!g.orbs.some(o=>o.k==='g')){
-        const free=g.orbs.filter(o=>o.k==='n'&&!o.hk&&!o.by);
+        const free=g.orbs.filter(o=>o.k==='n'&&!o.hk&&!o.by&&o.bomb==null);
         if(free.length){const o=free[Math.floor(rnd()*free.length)];o.k='g';o.s=seed();o.b=g.t;}
         g.glowAt=g.t+C.RUSH.AFTER;
       }
@@ -287,9 +330,9 @@
       g.log.push({t:g.t,id:p.id,q:p.q,ok,timeout:!!timeout});
       if(ok){if(p.x2){val*=2;p.x2=0;}g.sc[p.team]+=val;p.ok++;p.rk=val;
         if(o){if(o.k==='g'){o.k='n';g.rush=g.t+C.RUSH.LEN;addFx('rush',p);}releaseOrb(o.id,C.RESPAWN);}}
-      else{p.bad++;p.rk=-1;p.triBad=true;g.deck.splice(Math.floor(rnd()*(g.deck.length+1)),0,p.q);if(o)releaseOrb(o.id,300);}
+      else{p.bad++;p.rk=-1;g.deck.splice(Math.floor(rnd()*(g.deck.length+1)),0,p.q);if(o)releaseOrb(o.id,300);}
       p.rs++;p.orb=0;p.botAt=0;p.st=0;
-      if(p.bag.length)ask(p,p.bag.shift());else if(!p.triLeft)endTurn(p);
+      if(!ok){p.st=2;p.until=g.t+C.FREEZE;}   // a wrong answer (or no answer in time) freezes for 3 s
       if(g.mode!=='time'&&g.sc[p.team]>=g.target)finish('target');
     }
     g.answer=(id,qn,v)=>{const p=g.players.get(id);if(!p||g.ph!=='play'||p.st!==1||qn!==p.qn)return false;settle(p,!!check(g.qs[p.q],v));return true;};
@@ -299,7 +342,7 @@
       if(!p)return null;p.seen=Date.now();
       if(m.k==='mv'){if(m.s<=p.seq)return;p.seq=m.s;if(p.st!==0||g.hooks.some(h=>h.o===p.id)||g.ph!=='play')return;
         // The phone stamps its message with the game time, so the walk it did while the message travelled is added back.
-        const l=Math.hypot(m.dx||0,m.dy||0),dx=l?m.dx/l:0,dy=l?m.dy/l:0,lag=clamp(g.t-(Number(m.t)||g.t),0,600)/1000,v=C.SPEED*(slowed(p)?C.SLIME.SLOW:1);
+        const l=Math.hypot(m.dx||0,m.dy||0),dx=l?m.dx/l:0,dy=l?m.dy/l:0,lag=clamp(g.t-(Number(m.t)||g.t),0,600)/1000,v=speedOf(p);
         const pos=confine((Number(m.x)||p.x)+dx*v*lag,(Number(m.y)||p.y)+dy*v*lag);p.x=pos.x;p.y=pos.y;p.dx=dx;p.dy=dy;}
       else if(m.k==='fire')fire(p,m.x,m.y,Number(m.a),m.t);
       else if(m.k==='ans')g.answer(p.id,m.qn,m.v);
@@ -319,59 +362,55 @@
       // Bots use their cards a little while after picking them up (and keep a card if nobody is in reach).
       if(p.cards.length){if(!p.useAt)p.useAt=g.t+1500+rnd()*3000;if(g.t>=p.useAt){p.useAt=0;useCard(p,0);}}
       if(g.hooks.some(h=>h.o===p.id))return;
-      const near=p.cards.length<C.CARD.MAX&&g.drops.find(d=>Math.hypot(d.x-p.x,d.y-p.y)<320);
-      const shield=p.sh<=g.t&&g.spots.find(s=>g.t>=s.at&&Math.hypot(s.x-p.x,s.y-p.y)<300);
-      if(near)p.goal={x:near.x,y:near.y};else if(shield)p.goal={x:shield.x,y:shield.y};
       if(!p.goal||Math.hypot(p.goal.x-p.x,p.goal.y-p.y)<12){const a=rnd()*6.283;p.goal=confine(C.SEA.x+(C.SEA.rx+30)*Math.cos(a),C.SEA.y+(C.SEA.ry+30)*Math.sin(a));}
       const gx=p.goal.x-p.x,gy=p.goal.y-p.y,l=Math.hypot(gx,gy)||1;p.dx=gx/l;p.dy=gy/l;
       p.cool-=dt;if(p.cool>0)return;
       let best=null;
-      for(const o of g.orbs){if(o.by||(o.hk&&g.players.get(o.hk)?.team===p.team))continue;const at=orbAt(o,g.t);if(!at)continue;
+      for(const o of g.orbs){if(o.by||o.bomb===p.team||(o.hk&&g.players.get(o.hk)?.team===p.team))continue;const at=orbAt(o,g.t);if(!at)continue;
         const d=Math.hypot(at.x-p.x,at.y-p.y);if(d>C.RANGE*0.95)continue;
-        const fut=o.hk?at:orbPos(o,g.t+d/C.OUT*1000);if(!best||d<best.d)best={d,x:fut.x,y:fut.y};}
-      // Now and then a bot goes for an enemy player instead of a fish.
-      if(rnd()<0.25)for(const q of g.players.values()){if(q.team===p.team||q.st!==0||q.safe>g.t)continue;
-        const d=Math.hypot(q.x-p.x,q.y-p.y);if(d<C.RANGE*0.85&&(!best||!best.foe||d<best.d))best={d,x:q.x,y:q.y-10,foe:1};}
+        const fut=o.hk?at:fishPos(o,g.t+d/C.OUT*1000,g.zones);if(!best||d<best.d)best={d,x:fut.x,y:fut.y};}
+      // Boxes (when a card slot is free) and the bubble (when not shielded) are worth going for too.
+      for(const it of g.loot){if(it.hk||(it.k==='c'&&p.cards.length>=C.CARD.MAX)||(it.k==='b'&&p.sh>g.t))continue;const at=lootAt(it,g.t);if(!at)continue;
+        const d=Math.hypot(at.x-p.x,at.y-p.y);if(d>C.RANGE*0.95)continue;if(!best||d*0.8<best.d)best={d:d*0.8,x:at.x,y:at.y};}
       if(best){fire(p,p.x,p.y,Math.atan2(best.y-p.y,best.x-p.x)+(rnd()-0.5)*0.25,g.t);p.cool=500+rnd()*1500;}
     }
     function stepHooks(){
       const t=g.t;
       for(const h of [...g.hooks].sort((a,b)=>a.t0-b.t0)){
         const owner=g.players.get(h.o);
-        if(!h.orb&&!h.vic&&outgoing(h,h.lt)){
-          const end=Math.min(t,turnAt(h)),a=hookTip(h,h.lt),b=hookTip(h,end);let hit=null;
+        if(!h.orb&&!h.loot&&outgoing(h,h.lt)){
+          const end=Math.min(t,turnAt(h)),a=hookTip(h,h.lt),b=hookTip(h,end);let got=null;
+          // Can't take from a teammate, or from someone behind a shield. Lines pass straight through players.
+          const guarded=who=>{if(!who)return false;const from=g.players.get(who);return from?.team===owner?.team||from?.sh>t;};
           for(const o of g.orbs){
-            if(o.by||o.hk===h.o)continue;
-            // Can't steal from a teammate, or from someone behind a shield.
-            if(o.hk){const from=g.players.get(o.hk);if(from?.team===owner?.team||from?.sh>t)continue;}
+            if(o.by||o.hk===h.o||(owner&&o.bomb===owner.team)||guarded(o.hk))continue;   // a team's own bomb fish: its lines pass through
             const at=orbAt(o,t);if(!at)continue;
-            const [dist,f]=segDist(a,b,at);if(dist<=C.TIP+C.ORB[o.k].r&&(!hit||f<hit.f))hit={o,f};
+            const [dist,f]=segDist(a,b,at);if(dist<=C.TIP+C.ORB[o.k].r&&(!got||f<got.f))got={o,f};
           }
-          // Players of another team can be hooked too (not while answering, not when just let go): first thing touched wins.
-          if(owner)for(const q of g.players.values()){
-            if(q.team===owner.team||q.st!==0||q.safe>t)continue;
-            const [dist,f]=segDist(a,b,{x:q.x,y:q.y-10});if(dist<=C.TIP+C.PR&&(!hit||f<hit.f))hit={q,f};
+          for(const l of g.loot){
+            if(l.hk===h.o||guarded(l.hk))continue;
+            const at=lootAt(l,t);if(!at)continue;
+            const [dist,f]=segDist(a,b,at);if(dist>C.TIP+C.LOOT.R)continue;
+            // Hands full (2 cards): the line passes through boxes, and the phone says so.
+            if(l.k==='c'&&owner&&owner.cards.length>=C.CARD.MAX){if(!h.full){h.full=1;addFx('full',owner);}continue;}
+            if(!got||f<got.f)got={l,f};
           }
-          if(hit){const when=h.lt+(end-h.lt)*hit.f;h.tt=Math.max(when,h.t0+1);h.d=Math.min(C.RANGE,C.OUT*(h.sp||1)*(h.tt-h.t0)/1000);
-            if(hit.q){const q=hit.q;
-              if(q.sh>t){q.sh=0;addFx('block',q,[q.id]);}   // a shield stops the hook; it reels back empty
-              else{dropHooks(q);q.dx=q.dy=0;q.st=4;q.until=0;h.vic=q.id;addFx('grab',owner,[q.id],{tx:Math.round(q.x),ty:Math.round(q.y)});}}
-            else{if(hit.o.hk){const prev=g.hooks.find(x=>x.o===hit.o.hk&&x.orb===hit.o.id);if(prev)prev.orb=0;}
-              hit.o.hk=h.o;h.orb=hit.o.id;}}
+          if(got){const when=h.lt+(end-h.lt)*got.f;h.tt=Math.max(when,h.t0+1);h.d=Math.min(C.RANGE,C.OUT*(h.sp||1)*(h.tt-h.t0)/1000);
+            if(got.l){const l=got.l;if(l.hk){const prev=g.hooks.find(x=>x.o===l.hk&&x.loot===l.id);if(prev)prev.loot=0;}l.hk=h.o;h.loot=l.id;}
+            else if(got.o.bomb!=null){
+              // The other team's bomb fish: it blows up and the angler is dizzy for 2 s (a shield takes it instead).
+              const o=got.o,at=orbAt(o,t);g.orbs.splice(g.orbs.indexOf(o),1);
+              if(owner){const by=g.players.get(o.owner)||{id:o.owner,x:at.x,y:at.y};addFx('bomb',by,hit(owner,'bomb')?[owner.id]:[],{tx:Math.round(at.x),ty:Math.round(at.y)});}}
+            else{if(got.o.hk){const prev=g.hooks.find(x=>x.o===got.o.hk&&x.orb===got.o.id);if(prev)prev.orb=0;}
+              got.o.hk=h.o;h.orb=got.o.id;}}
         }
         h.lt=t;
       }
-      // A hooked player rides on the end of the line until it is reeled in.
-      for(const h of g.hooks)if(h.vic){const q=g.players.get(h.vic);if(q&&q.st===4){const tip=hookTip(h,t);q.x=tip.x;q.y=tip.y+10;}else h.vic=0;}
       g.hooks=g.hooks.filter(h=>{
         if(!hookDone(h,t))return true;
-        if(h.vic){const ow=g.players.get(h.o);freeVictim(h,ow?confine(ow.x+Math.cos(h.a)*C.GRAB.DROP,ow.y+Math.sin(h.a)*C.GRAB.DROP):null);}
-        const p=g.players.get(h.o),o=h.orb&&g.orbs.find(x=>x.id===h.orb&&x.hk===h.o);
-        if(p&&h.tri)p.triLeft=Math.max(0,p.triLeft-1);
-        if(o){if(p&&p.st===0&&g.qs.length)ask(p,o.id);
-          else if(p&&p.st===1&&h.tri){o.hk='';o.by=p.id;p.bag.push(o.id);}   // wait in line behind the fish being answered
-          else releaseOrb(o.id,300);}
-        else if(p&&h.tri&&!p.triLeft&&p.st===0&&!p.bag.length)endTurn(p);
+        const p=g.players.get(h.o),o=h.orb&&g.orbs.find(x=>x.id===h.orb&&x.hk===h.o),l=h.loot&&g.loot.find(x=>x.id===h.loot&&x.hk===h.o);
+        if(o){if(p&&p.st===0&&g.qs.length)ask(p,o.id);else releaseOrb(o.id,300);}
+        if(l){if(p&&p.st===0)landLoot(p,l);else releaseLoot(l.id);}   // boxes and bubbles need no question
         return false;
       });
     }
@@ -383,12 +422,14 @@
         if(p.bot)botThink(p,dt);
         if(g.ph!=='play')return;
         if(p.st===1&&g.t>=p.until){settle(p,false,true);if(g.ph!=='play')return;}
-        if((p.st===2||p.st===3)&&g.t>=p.until)p.st=0;
-        if(p.st===0&&(p.dx||p.dy)&&!g.hooks.some(h=>h.o===p.id)){const v=C.SPEED*(slowed(p)?C.SLIME.SLOW:1)*dt/1000,pos=confine(p.x+p.dx*v,p.y+p.dy*v);p.x=pos.x;p.y=pos.y;}
+        // Knocked back: flying to the edge of the map; on landing, half speed for 1 s.
+        if(p.st===3&&p.kb){const f=flyPos(p.kb,g.t);p.x=f.x;p.y=f.y;if(g.t>=p.until){p.x=p.kb.x1;p.y=p.kb.y1;p.kb=null;p.daze=g.t+C.CARD.DAZE;}}
+        if((p.st===2||p.st===3||p.st===5)&&g.t>=p.until){p.st=0;p.kb=null;}
+        if(p.st===0&&(p.dx||p.dy)&&!g.hooks.some(h=>h.o===p.id)){const v=speedOf(p)*dt/1000,pos=confine(p.x+p.dx*v,p.y+p.dy*v);p.x=pos.x;p.y=pos.y;}
       }
       stepHooks();
       stepShots();
-      if(g.items){stepItems();stepSpots();}
+      if(g.items)stepLoot();
       stepRush();
       if(g.fx.length&&g.t-g.fx[0].at>3000)g.fx=g.fx.filter(f=>g.t-f.at<=3000);
       if(g.t>=g.limit)finish('time');
@@ -397,14 +438,17 @@
       const now=Date.now();for(const [id,at] of g.kicked)if(now-at>15000)g.kicked.delete(id);
       return {ph:g.ph,t:Math.round(g.t),cd:Math.ceil(g.cd),tc:g.teams,sc:g.sc.slice(0,g.teams),tg:g.target,tl:g.limit,nq:g.qs.length,
         p:[...g.players.values()].map(p=>[p.id,p.name,p.team,Math.round(p.x),Math.round(p.y),+p.dx.toFixed(2),+p.dy.toFixed(2),p.st,Math.round(p.until),p.q,p.ok,p.rs,p.rk,p.qn,p.av,
-          p.cards.join(','),p.sh>g.t?Math.round(p.sh):0,(p.x2?1:0)|(p.tri?2:0)]),
-        o:g.orbs.map(o=>[o.id,o.k,o.s,Math.round(o.b),o.hk,o.by]),
-        h:g.hooks.map(h=>[h.o,Math.round(h.x),Math.round(h.y),+h.a.toFixed(4),Math.round(h.t0),Math.round(h.tt),Math.round(h.d),h.orb,h.sp||1,h.vic||0]),
-        d:g.drops.map(d=>[d.id,d.x,d.y]),
+          p.cards.join(','),p.sh>g.t?Math.round(p.sh):0,p.x2?1:0,
+          p.kb?[Math.round(p.kb.x0),Math.round(p.kb.y0),Math.round(p.kb.x1),Math.round(p.kb.y1),Math.round(p.kb.t0),Math.round(p.kb.t1)]:0,
+          p.daze>g.t?Math.round(p.daze):0,p.ink>g.t?Math.round(p.ink):0]),
+        // A bomb fish also carries its team and the spot it swims around (the other team's phones draw it as a plain fish).
+        o:g.orbs.map(o=>{const a=[o.id,o.k,o.s,Math.round(o.b),o.hk,o.by];if(o.bomb!=null)a.push(o.bomb,o.c[0],o.c[1]);return a;}),
+        h:g.hooks.map(h=>[h.o,Math.round(h.x),Math.round(h.y),+h.a.toFixed(4),Math.round(h.t0),Math.round(h.tt),Math.round(h.d),h.orb,h.sp||1,h.loot||0]),
+        l:g.loot.map(l=>[l.id,l.k,l.s,Math.round(l.b),l.hk]),
         s:g.shots.map(s=>s.k==='ice'?[s.id,'i',Math.round(s.x),Math.round(s.y),+s.a.toFixed(4),Math.round(s.t0),s.team]
-          :[s.id,'s',Math.round(s.x),Math.round(s.y),s.tx,s.ty,Math.round(s.t0),Math.round(s.land),s.team]),
-        z:g.zones.map(z=>[z.id,z.team,z.x,z.y,Math.round(z.from),Math.round(z.until)]),
-        sp:g.spots.map(s=>[s.x,s.y,Math.round(s.at)]),fx:g.fx.map(f=>[f.id,f.k,Math.round(f.at),f.by,f.x,f.y,f.to,f.tx||0,f.ty||0]),
+          :[s.id,s.k==='whirl'?'w':'s',Math.round(s.x),Math.round(s.y),s.tx,s.ty,Math.round(s.t0),Math.round(s.land),s.team]),
+        z:g.zones.map(z=>[z.id,z.team,z.x,z.y,Math.round(z.from),Math.round(z.until),z.k]),
+        fx:g.fx.map(f=>[f.id,f.k,Math.round(f.at),f.by,f.x,f.y,f.to,f.tx||0,f.ty||0]),
         ru:g.rush?Math.round(g.rush):0,it:g.items?1:0,md:g.mode,
         k:[...g.kicked.keys()],end:g.end};
     };
@@ -418,14 +462,14 @@
   function unpack(s){
     return {...s,
       p:s.p.map(a=>({id:a[0],name:a[1],team:a[2],x:a[3],y:a[4],dx:a[5],dy:a[6],st:a[7],until:a[8],q:a[9],ok:a[10],rs:a[11],rk:a[12],qn:a[13],av:a[14]??avOf(a[0]),
-        cards:a[15]?String(a[15]).split(','):[],sh:a[16]||0,x2:!!(a[17]&1),tri:!!(a[17]&2)})),
-      d:(s.d||[]).map(a=>({id:a[0],x:a[1],y:a[2]})),
-      s:(s.s||[]).map(a=>a[1]==='i'?{id:a[0],k:'ice',x:a[2],y:a[3],a:a[4],t0:a[5],team:a[6]}:{id:a[0],k:'slime',x:a[2],y:a[3],tx:a[4],ty:a[5],t0:a[6],land:a[7],team:a[8]}),
-      z:(s.z||[]).map(a=>({id:a[0],team:a[1],x:a[2],y:a[3],from:a[4],until:a[5]})),
-      sp:(s.sp||[]).map(a=>({x:a[0],y:a[1],at:a[2]})),
+        cards:a[15]?String(a[15]).split(','):[],sh:a[16]||0,x2:!!(a[17]&1),
+        kb:Array.isArray(a[18])?{x0:a[18][0],y0:a[18][1],x1:a[18][2],y1:a[18][3],t0:a[18][4],t1:a[18][5]}:null,daze:a[19]||0,ink:a[20]||0})),
+      l:(s.l||[]).map(a=>({id:a[0],k:a[1],s:a[2],b:a[3],hk:a[4]})),
+      s:(s.s||[]).map(a=>a[1]==='i'?{id:a[0],k:'ice',x:a[2],y:a[3],a:a[4],t0:a[5],team:a[6]}:{id:a[0],k:a[1]==='w'?'whirl':'slime',x:a[2],y:a[3],tx:a[4],ty:a[5],t0:a[6],land:a[7],team:a[8]}),
+      z:(s.z||[]).map(a=>({id:a[0],team:a[1],x:a[2],y:a[3],from:a[4],until:a[5],k:a[6]||'s'})),
       fx:(s.fx||[]).map(a=>({id:a[0],k:a[1],at:a[2],by:a[3],x:a[4],y:a[5],to:a[6]||[],tx:a[7],ty:a[8]})),ru:s.ru||0,it:s.it??1,md:s.md||'score',
-      o:s.o.map(a=>({id:a[0],k:a[1],s:a[2],b:a[3],hk:a[4],by:a[5]})),
-      h:s.h.map(a=>({o:a[0],x:a[1],y:a[2],a:a[3],t0:a[4],tt:a[5],d:a[6],orb:a[7],sp:a[8]||1,vic:a[9]||0}))};
+      o:s.o.map(a=>{const o={id:a[0],k:a[1],s:a[2],b:a[3],hk:a[4],by:a[5]};if(a.length>6){o.bomb=a[6];o.c=[a[7],a[8]];}return o;}),
+      h:s.h.map(a=>({o:a[0],x:a[1],y:a[2],a:a[3],t0:a[4],tt:a[5],d:a[6],orb:a[7],sp:a[8]||1,loot:a[9]||0}))};
   }
 
   /* ── Network: Supabase Realtime (Phoenix websocket) for listening and the host's pushes; REST broadcast for phones' messages ── */
@@ -657,7 +701,15 @@
     ctx.scale(face,1);const mark=kind==='f'||kind==='r'?'×2':'?';
     ctx.font=`700 ${mark==='×2'?14:18}px ${FUN}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=3.5;ctx.strokeStyle=F.fin;ctx.fillStyle='#fff';
     ctx.strokeText(mark,-4*face,0);ctx.fillText(mark,-4*face,0);
+    if(o.mark)bombMark(ctx,18,-20,now);   // my team's bomb fish: only my team sees the little bomb
     ctx.restore();
+  }
+  function bombMark(ctx,x,y,now){
+    if(effectSprite(ctx,'bomb-mark',x,y,24,24))return;
+    ctx.save();ctx.translate(x,y);ctx.fillStyle='#3b3a45';ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,2,8,0,TAU);ctx.fill();ctx.stroke();
+    ctx.strokeStyle='#b07a45';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(4,-5);ctx.quadraticCurveTo(7,-10,11,-9);ctx.stroke();
+    const f=0.6+Math.sin(now/90)*0.4;ctx.fillStyle='#ffc93c';sparkle(ctx,12,-10,2+f*2.5);
+    ctx.fillStyle='rgba(255,255,255,.6)';ctx.beginPath();ctx.arc(-3,-1,2.2,0,TAU);ctx.fill();ctx.restore();
   }
 
   /* Each player: little animations remembered between frames (hop when right, shake when wrong, which way they face). */
@@ -687,34 +739,42 @@
     const T=C.TEAMS[p.team]||C.TEAMS[0],A=ANIMALS[p.av]||ANIMALS[0],since=now-m.at;
     const jump=m.rk>0&&since<650?Math.sin(since/650*Math.PI)*22:0,shake=m.rk<0&&since<450?Math.sin(since/28)*3.5:0;
     const bob=p.mv?-Math.abs(Math.sin(now/90))*3.5:Math.sin(now/520+p.x*0.05)*0.8,step=p.mv?Math.sin(now/90)*2.4:0;
-    // Knocked up by a card: tossed into the air, spinning stars over the head.
-    const air=p.st===3?34+Math.sin(now/110)*5:0;
+    // Knocked back by a card: flying in an arc to the edge of the map (p.lift = height, p.fly = direction), dust behind.
+    const air=p.st===3?(p.lift??34+Math.sin(now/110)*5):0;
     ctx.save();ctx.translate(p.x+shake,p.y);
-    ctx.globalAlpha=0.4;ctx.fillStyle=T.color;ctx.beginPath();ctx.ellipse(0,24,22-jump*0.25-air*0.25,7,0,0,TAU);ctx.fill();ctx.globalAlpha=1;
+    ctx.globalAlpha=0.4;ctx.fillStyle=T.color;ctx.beginPath();ctx.ellipse(0,24,Math.max(8,22-jump*0.25-air*0.25),7,0,0,TAU);ctx.fill();ctx.globalAlpha=1;
     if(p.slow)goo(ctx,now);
-    if(p.st===4)dragged(ctx,p.pull??0,now);
+    if(p.st===3&&p.fly!=null){ctx.save();ctx.translate(0,-air);trail(ctx,p.fly,now);ctx.restore();}
     if(p.me){ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.setLineDash([5,5]);ctx.lineDashOffset=-now/40;ctx.beginPath();ctx.ellipse(0,24,29,10.5,0,0,TAU);ctx.stroke();ctx.setLineDash([]);}
     if(p.upRange){ctx.strokeStyle='rgba(255,154,60,.55)';ctx.lineWidth=2.5;ctx.setLineDash([8,8]);ctx.beginPath();ctx.ellipse(0,10,C.CARD.R_UP,C.CARD.R_UP,0,0,TAU);ctx.stroke();ctx.setLineDash([]);}
-    ctx.translate(0,bob-jump-air-(p.st===4?10:0));
-    if(air){ctx.rotate(Math.sin(now/90)*0.35);}
-    if(p.st===4){ctx.rotate(Math.cos(p.pull??0)*0.3+Math.sin(now/70)*0.12);}   // tipped over towards the angler, wobbling
+    ctx.translate(0,bob-jump-air);
+    if(air){ctx.rotate(p.spin??Math.sin(now/90)*0.35);}   // one somersault through the air
     const ra=hook?Math.atan2(hook.ty-p.y,hook.tx-p.x):Math.atan2(m.fy,m.fx),side=Math.cos(ra)>=0?1:-1,behind=Math.sin(ra)<-0.3;
     const hand={x:side*17,y:6},tip={x:hand.x+Math.cos(ra)*26,y:hand.y+Math.sin(ra)*21-8};
     const rod=()=>{ctx.lineCap='round';ctx.strokeStyle='#b07a45';ctx.lineWidth=3.4;ctx.beginPath();ctx.moveTo(hand.x,hand.y);ctx.lineTo(tip.x,tip.y);ctx.stroke();
       ctx.strokeStyle=INK;ctx.lineWidth=1.8;ctx.beginPath();ctx.arc(hand.x,hand.y,4.8,0,TAU);paint(ctx,A.body);};
-    const holding=p.st!==1&&p.st!==3&&p.st!==4;
+    const holding=p.st!==1&&p.st!==3&&p.st!==5;
     if(holding&&behind)rod();
-    drawAnimal(ctx,p.av,{team:p.team,ex:m.fx*2.4,ey:p.st===1?-2.2:m.fy*1.6,face:p.st>=2?'frozen':jump>0?'happy':'',step:air||p.st===4?Math.sin(now/60)*3:step});
+    drawAnimal(ctx,p.av,{team:p.team,ex:m.fx*2.4,ey:p.st===1?-2.2:m.fy*1.6,face:p.st>=2?'frozen':jump>0?'happy':'',step:air?Math.sin(now/60)*3:step});
     if(holding&&!behind)rod();
     if(p.st===2)ice(ctx,now);
-    if(air)dizzy(ctx,now);
+    if(p.st===5||p.dazed)dizzy(ctx,now);   // stunned by a bomb fish, or just landed from a knock-back
+    if(p.inked)inkMark(ctx,now);
     if(p.sh)bubble(ctx,now);
     ctx.restore();
     return {x:p.x+shake+tip.x,y:p.y+bob-jump-air+tip.y};
   }
-  /* Hooked and being pulled towards the angler (pull = direction to the angler): dust and speed lines trail behind. */
-  function dragged(ctx,pull,now){
-    ctx.save();ctx.rotate(pull);ctx.translate(-44,8);
+  /* Ink on someone's phone: a drippy blot over their head on the big screen. */
+  function inkMark(ctx,now){
+    if(effectSprite(ctx,'ink-mark',0,-46+Math.sin(now/300)*1.5,30,30))return;
+    ctx.save();ctx.translate(0,-46+Math.sin(now/300)*1.5);ctx.fillStyle='#3b2a4f';
+    ctx.beginPath();for(let i=0;i<=12;i++){const a=i*TAU/12,r=11+(i%2?3:-1);i?ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r):ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r);}ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.ellipse(-4,15,2.4,4,0,0,TAU);ctx.ellipse(5,16,2,3.2,0,0,TAU);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.55)';ctx.beginPath();ctx.arc(-4,-4,3,0,TAU);ctx.fill();ctx.restore();
+  }
+  /* Flying (dir = the way they are going): dust and speed lines trail behind. */
+  function trail(ctx,dir,now){
+    ctx.save();ctx.rotate(dir);ctx.translate(-44,8);
     const dust=globalThis.HookArt?.get('fx-hook-dust');
     if(dust){ctx.globalAlpha=0.85+Math.sin(now/90)*0.1;ctx.drawImage(dust,-58,-29,116,58);}
     else{ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=3;ctx.lineCap='round';
@@ -750,9 +810,9 @@
     const w=Math.min(150,ctx.measureText(p.name).width)+18,y=p.y+44;
     rr(ctx,p.x-w/2,y-11,w,22,11);ctx.fillStyle=p.me?T.color:'rgba(255,255,255,.94)';ctx.fill();ctx.strokeStyle=p.me?'#fff':T.color;ctx.lineWidth=2;ctx.stroke();
     ctx.fillStyle=p.me?'#fff':T.ink;ctx.fillText(p.name,p.x,y+1,150);
-    // Waiting power-ups: ×2 (double) and 三连 (triple hook), as little tags after the name.
+    // A waiting power-up: ×2 (double), as a little tag after the name.
     let bx=p.x+w/2+4;
-    for(const [on,txt,col] of [[p.x2,'×2','#f2b000'],[p.tri,'三连','#9a7cff']]){if(!on)continue;
+    for(const [on,txt,col] of [[p.x2,'×2','#f2b000']]){if(!on)continue;
       ctx.font=`700 13px ${FUN}`;const bw=ctx.measureText(txt).width+12;rr(ctx,bx,y-10,bw,20,10);ctx.fillStyle=col;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
       ctx.fillStyle='#fff';ctx.textAlign='left';ctx.fillText(txt,bx+6,y+1);ctx.textAlign='center';bx+=bw+3;}
     ctx.font=`600 16px ${FUN}`;
@@ -802,32 +862,66 @@
     if(A.kind==='slime'){ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=2.5;ctx.setLineDash([10,9]);ctx.beginPath();ctx.arc(A.x,A.y,C.SLIME.RANGE,0,TAU);ctx.stroke();ctx.setLineDash([]);
       ctx.fillStyle='rgba(108,194,74,.3)';ctx.beginPath();ctx.arc(A.tx,A.ty,C.SLIME.R,0,TAU);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
       ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=2;ctx.setLineDash([4,7]);ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(A.tx,A.ty);ctx.stroke();ctx.setLineDash([]);return;}
+    // Whirlpool: its reach, a dotted throw and the circle in the lake where the fish will be pulled together.
+    if(A.kind==='whirl'){ctx.save();ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=2.5;ctx.setLineDash([10,9]);ctx.lineDashOffset=-now/70;ctx.beginPath();ctx.arc(A.x,A.y,C.WHIRL.RANGE,0,TAU);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle='rgba(47,179,201,.22)';ctx.beginPath();ctx.arc(A.tx,A.ty,C.WHIRL.R,0,TAU);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
+      ctx.strokeStyle='rgba(47,179,201,.9)';ctx.lineWidth=2.5;for(let i=0;i<3;i++){const r0=C.WHIRL.R*(0.25+i*0.22),a0=-now/300+i*2.1;ctx.beginPath();ctx.arc(A.tx,A.ty,r0,a0,a0+3.4);ctx.stroke();}
+      for(let i=1;i<12;i++){const k=(i+(now/500)%1)/12;ctx.globalAlpha=0.4+0.5*k;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(A.x+(A.tx-A.x)*k,A.y+(A.ty-A.y)*k-Math.sin(Math.PI*k)*45,2.5,0,TAU);ctx.fill();}
+      ctx.restore();return;}
     ctx.fillStyle='#fff';ctx.strokeStyle='#fff';ctx.lineWidth=3;
-    for(const s of A.fan?[-C.CARD.SPREAD,0,C.CARD.SPREAD]:[0]){const a=A.a+s;
-      for(let d=34;d<=C.RANGE;d+=24){ctx.globalAlpha=0.95-d/C.RANGE*0.55;ctx.beginPath();ctx.arc(A.x+Math.cos(a)*d,A.y+Math.sin(a)*d,3.6,0,TAU);ctx.fill();}
-      ctx.globalAlpha=0.9;ctx.beginPath();ctx.arc(A.x+Math.cos(a)*C.RANGE,A.y+Math.sin(a)*C.RANGE,11,0,TAU);ctx.stroke();}
+    for(let d=34;d<=C.RANGE;d+=24){ctx.globalAlpha=0.95-d/C.RANGE*0.55;ctx.beginPath();ctx.arc(A.x+Math.cos(A.a)*d,A.y+Math.sin(A.a)*d,3.6,0,TAU);ctx.fill();}
+    ctx.globalAlpha=0.9;ctx.beginPath();ctx.arc(A.x+Math.cos(A.a)*C.RANGE,A.y+Math.sin(A.a)*C.RANGE,11,0,TAU);ctx.stroke();
     ctx.globalAlpha=1;
   }
-  /* A mystery card lying on the grass (what's inside is decided when someone picks it up). */
-  function drawDrop(ctx,d,now){
-    const b=Math.sin(now/300+d.id)*3,r=Math.sin(now/700+d.id)*0.12;
-    ctx.save();ctx.translate(d.x,d.y);
-    ctx.fillStyle='rgba(74,52,64,.16)';ctx.beginPath();ctx.ellipse(0,20,17-b,5,0,0,TAU);ctx.fill();
+  /* Floating in the lake: a "?" box (a card inside, decided when it is reeled in) or the shield bubble.
+     l = {id, k: 'c' box | 'b' bubble, x, y, alpha, hooked} */
+  function drawLoot(ctx,l,now){
+    const a=l.alpha??1;if(a<=0)return;
+    const b=l.hooked?0:Math.sin(now/420+l.id)*2.5,r=l.hooked?Math.sin(now/70)*0.3:Math.sin(now/800+l.id)*0.1;
+    ctx.save();ctx.globalAlpha=a;ctx.translate(l.x,l.y);
+    if(!l.hooked){ctx.strokeStyle='rgba(255,255,255,.65)';ctx.lineWidth=2;const w=(now/1400+l.id*0.37)%1;
+      ctx.beginPath();ctx.ellipse(0,12,18+w*14,5+w*4,0,0,TAU);ctx.globalAlpha=a*(1-w);ctx.stroke();ctx.globalAlpha=a;
+      ctx.fillStyle='rgba(255,255,255,.28)';ctx.beginPath();ctx.ellipse(0,12,19,5.5,0,0,TAU);ctx.fill();}
     ctx.translate(0,b-4);ctx.rotate(r);
-    const sprite=globalThis.HookArt?.get('card-mystery');
-    if(sprite)ctx.drawImage(sprite,-25,-30,50,60);
-    else{
-    const gr=ctx.createLinearGradient(0,-22,0,22);gr.addColorStop(0,'#c6a8ff');gr.addColorStop(1,'#ff8fb5');
-    rr(ctx,-16,-21,32,42,8);ctx.fillStyle=gr;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
-    rr(ctx,-10,-15,20,30,5);ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=1.5;ctx.stroke();
-    ctx.font=`700 22px ${FUN}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff';ctx.fillText('?',0,1);
+    if(l.k==='b'){
+      const pu=0.8+Math.sin(now/260+l.id)*0.2;
+      if(!effectSprite(ctx,'lake-bubble',0,0,50,50)){
+        if(!effectSprite(ctx,'fx-shield-bubble',0,0,50,50)){const gr=ctx.createRadialGradient(-7,-9,3,0,0,23);
+          gr.addColorStop(0,'rgba(255,255,255,.55)');gr.addColorStop(0.7,'rgba(150,240,210,.25)');gr.addColorStop(1,'rgba(60,200,149,.45)');
+          ctx.fillStyle=gr;ctx.beginPath();ctx.arc(0,0,22,0,TAU);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.95)';ctx.lineWidth=2.5;ctx.stroke();}
+        if(!effectSprite(ctx,'card-shield',0,1,24,24)){ctx.fillStyle='#3cc895';ctx.strokeStyle='#fff';ctx.lineWidth=2;
+          ctx.beginPath();ctx.moveTo(0,-10);ctx.lineTo(8,-6);ctx.lineTo(8,1);ctx.quadraticCurveTo(7,8,0,11);ctx.quadraticCurveTo(-7,8,-8,1);ctx.lineTo(-8,-6);ctx.closePath();ctx.fill();ctx.stroke();}}
+      ctx.fillStyle='#edfff8';sparkle(ctx,17,-15,2+pu*2.5);
+    }else{
+      if(!effectSprite(ctx,'lake-box',0,0,48,48)){
+        const sprite=globalThis.HookArt?.get('card-mystery');
+        if(sprite)ctx.drawImage(sprite,-17,-21,34,42);
+        else{const gr=ctx.createLinearGradient(0,-17,0,17);gr.addColorStop(0,'#c6a8ff');gr.addColorStop(1,'#ff8fb5');
+          rr(ctx,-13,-17,26,34,7);ctx.fillStyle=gr;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.stroke();}}
+      ctx.font=`700 18px ${FUN}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=3.5;ctx.strokeStyle='#8a5fd6';ctx.fillStyle='#fff';
+      if(!globalThis.HookArt?.get('card-mystery')||globalThis.HookArt?.get('lake-box')){ctx.strokeText('?',0,1);ctx.fillText('?',0,1);}
+      ctx.fillStyle='#fff';const tw=Math.max(0,Math.sin(now/260+l.id*2));if(tw>0.2)sparkle(ctx,14,-18,2+tw*4);
     }
-    ctx.fillStyle='#fff';const tw=Math.max(0,Math.sin(now/260+d.id*2));if(tw>0.2)sparkle(ctx,15,-22,2+tw*4);
     ctx.restore();
   }
   /* A slime puddle on the ground: owner-coloured rim, softly moving jelly and bubbles. */
+  /* A whirlpool in the lake: turning rings of water, the thrower's colour on the rim. */
+  function drawWhirl(ctx,z,t,now){
+    const T=C.TEAMS[z.team]||C.TEAMS[0],R=C.WHIRL.R,fade=Math.min(1,(t-z.from)/300,(z.until-t)/500),spin=(t-z.from)/260;
+    ctx.save();ctx.globalAlpha=fade;ctx.translate(z.x,z.y);
+    ctx.beginPath();ctx.ellipse(-z.x+C.SEA.x,-z.y+C.SEA.y,C.SEA.rx-4,C.SEA.ry-4,0,0,TAU);ctx.clip();   // only on the water
+    if(!effectSprite(ctx,'fx-whirl',0,0,R*2.1,R*2.1,-spin)){
+      const gr=ctx.createRadialGradient(0,0,6,0,0,R);gr.addColorStop(0,'rgba(20,90,140,.55)');gr.addColorStop(0.55,'rgba(60,170,210,.3)');gr.addColorStop(1,'rgba(120,220,240,0)');
+      ctx.fillStyle=gr;ctx.beginPath();ctx.arc(0,0,R,0,TAU);ctx.fill();
+      ctx.lineCap='round';
+      for(let i=0;i<4;i++){const r0=R*(0.22+i*0.2),a0=-spin*(1.6-i*0.25)+i*1.7;ctx.strokeStyle=`rgba(255,255,255,${0.85-i*0.15})`;ctx.lineWidth=5-i;
+        ctx.beginPath();ctx.arc(0,0,r0,a0,a0+3.6);ctx.stroke();ctx.beginPath();ctx.arc(0,0,r0,a0+Math.PI,a0+Math.PI+2);ctx.stroke();}}
+    ctx.strokeStyle=T.color;ctx.lineWidth=4;ctx.setLineDash([14,10]);ctx.lineDashOffset=now/40;ctx.beginPath();ctx.arc(0,0,R,0,TAU);ctx.stroke();ctx.setLineDash([]);
+    ctx.restore();
+  }
   function drawZone(ctx,z,t,now){
-    if(t<z.from||t>=z.until)return;const T=C.TEAMS[z.team]||C.TEAMS[0],R=C.SLIME.R,fade=Math.min(1,(t-z.from)/200,(z.until-t)/400);
+    if(t<z.from||t>=z.until)return;if(z.k==='w')return drawWhirl(ctx,z,t,now);
+    const T=C.TEAMS[z.team]||C.TEAMS[0],R=C.SLIME.R,fade=Math.min(1,(t-z.from)/200,(z.until-t)/400);
     ctx.save();ctx.globalAlpha=fade;ctx.translate(z.x,z.y);
     const sprite=globalThis.HookArt?.get('fx-slime-puddle');
     if(sprite){
@@ -859,6 +953,10 @@
     const k=clamp((t-s.t0)/(s.land-s.t0),0,1),x=s.x+(s.tx-s.x)*k,y=s.y+(s.ty-s.y)*k,h=Math.sin(Math.PI*k)*80;
     ctx.fillStyle='rgba(74,52,64,.18)';ctx.beginPath();ctx.ellipse(x,y+10,16*(1-k*0.3),6,0,0,TAU);ctx.fill();
     ctx.save();ctx.translate(x,y-h-10);ctx.rotate(now/150);
+    if(s.k==='whirl'){   // a little ball of turning water
+      ctx.fillStyle='#5cc8e0';ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(0,0,14,0,TAU);ctx.fill();ctx.stroke();
+      ctx.strokeStyle='rgba(255,255,255,.9)';ctx.lineWidth=2.5;ctx.lineCap='round';ctx.beginPath();ctx.arc(0,0,8,0,3.6);ctx.stroke();ctx.beginPath();ctx.arc(0,0,3.5,1,4.4);ctx.stroke();
+      ctx.restore();return;}
     if(globalThis.HookArt?.get('fx-slime-ball')){
       const squash=Math.sin(Math.PI*k)*0.12;ctx.scale(1-squash,1+squash);effectSprite(ctx,'fx-slime-ball',0,0,38,38);ctx.restore();return;
     }
@@ -866,28 +964,8 @@
     for(let i=0;i<=10;i++){const a=i*TAU/10,r=15+Math.sin(a*3+now/90)*2.5;i?ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r):ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r);}
     ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='rgba(255,255,255,.75)';ctx.beginPath();ctx.arc(-5,-5,4,0,TAU);ctx.fill();ctx.restore();
   }
-  /* A shield waiting in a corner (glowing and bobbing), or the countdown ring until it comes back. */
-  function drawSpot(ctx,s,t,now){
-    ctx.save();ctx.translate(s.x,s.y);
-    if(t<s.at){
-      if(globalThis.HookArt?.get('card-shield')){ctx.save();ctx.globalAlpha=0.18;effectSprite(ctx,'card-shield',0,0,28,28);ctx.restore();}
-      const k=1-(s.at-t)/C.SPOT.EVERY;ctx.strokeStyle='rgba(60,200,149,.35)';ctx.lineWidth=3;ctx.setLineDash([5,6]);ctx.beginPath();ctx.arc(0,0,22,0,TAU);ctx.stroke();ctx.setLineDash([]);
-      ctx.strokeStyle='rgba(60,200,149,.8)';ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,22,-Math.PI/2,-Math.PI/2+TAU*k);ctx.stroke();ctx.restore();return;}
-    const b=Math.sin(now/280)*3,pu=0.75+Math.sin(now/220)*0.25;
-    if(globalThis.HookArt?.get('card-shield')&&globalThis.HookArt?.get('fx-shield-bubble')){
-      ctx.save();ctx.globalAlpha=0.2+pu*0.3;effectSprite(ctx,'fx-shield-bubble',0,b,72,72);ctx.restore();
-      ctx.strokeStyle='rgba(60,200,149,.35)';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,24,23+pu*3,6,0,0,TAU);ctx.stroke();
-      effectSprite(ctx,'card-shield',0,b,42,46);ctx.fillStyle='#edfff8';
-      sparkle(ctx,23,-14+b,3+pu*2);sparkle(ctx,-21,10-b,2+pu);ctx.restore();return;
-    }
-    const glow=ctx.createRadialGradient(0,b,4,0,b,40);glow.addColorStop(0,`rgba(140,240,200,${0.55*pu})`);glow.addColorStop(1,'rgba(60,200,149,0)');ctx.fillStyle=glow;ctx.beginPath();ctx.arc(0,b,40,0,TAU);ctx.fill();
-    ctx.translate(0,b);ctx.fillStyle='#3cc895';ctx.strokeStyle='#fff';ctx.lineWidth=3;
-    ctx.beginPath();ctx.moveTo(0,-17);ctx.lineTo(14,-11);ctx.lineTo(14,1);ctx.quadraticCurveTo(13,13,0,19);ctx.quadraticCurveTo(-13,13,-14,1);ctx.lineTo(-14,-11);ctx.closePath();ctx.fill();ctx.stroke();
-    ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-6,0);ctx.lineTo(-1,5);ctx.lineTo(7,-5);ctx.stroke();
-    ctx.fillStyle='#fff';const tw=Math.max(0,Math.sin(now/300+s.x));if(tw>0.3)sparkle(ctx,16,-16,2+tw*4);
-    ctx.restore();
-  }
-  const FX_TXT={up:['击飞！','#ff8a1f'],ice:['冻住！','#3c9ad6'],slime:['缓速！','#4f9e2c'],shield:['保护罩','#139466'],x2:['加倍！','#d99a00'],tri:['三连钩！','#7b5cd6'],block:['挡住了！','#139466'],rush:['金鱼潮！','#e0a000'],grab:['勾到了！','#e2416c']};
+  const FX_TXT={up:['击飞！','#ff8a1f'],ice:['冻住！','#3c9ad6'],slime:['缓速！','#4f9e2c'],shield:['保护罩','#139466'],x2:['加倍！','#d99a00'],block:['挡住了！','#139466'],rush:['金鱼潮！','#e0a000'],
+    whirl:['漩涡！','#1f95ab'],bomb:['炸弹鱼！','#e2412c'],ink:['墨水！','#5b3f86'],box:['拿到卡！','#8a5fd6']};
   function popText(ctx,txt,x,y,col,k,size=26){ctx.globalAlpha=Math.min(1,(1-k)*2.5);ctx.font=`700 ${size}px ${FUN}`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.lineJoin='round';ctx.lineWidth=6;ctx.strokeStyle='#fff';ctx.strokeText(txt,x,y);ctx.fillStyle=col;ctx.fillText(txt,x,y);ctx.globalAlpha=1;}
   /* Card effects: a shock ring for knock-up, an icy beam for freeze, a burst for the goldfish rush, and a word that floats up. */
@@ -910,12 +988,20 @@
     }else if(f.k==='slime'&&a<600){const q=a/600;ctx.globalAlpha=1-q;ctx.fillStyle='#8bd65f';for(let i=0;i<9;i++){const r=i*TAU/9;ctx.beginPath();ctx.arc(f.x+Math.cos(r)*C.SLIME.R*q,f.y+Math.sin(r)*C.SLIME.R*q*0.8,7*(1-q)+2,0,TAU);ctx.fill();}ctx.globalAlpha=1;}
     if((f.k==='shield'||f.k==='block')&&a<600){const q=a/600;ctx.globalAlpha=1-q;ctx.strokeStyle='#8eebc8';ctx.lineWidth=5;ctx.beginPath();ctx.arc(f.x,f.y-2,38+q*30,0,TAU);ctx.stroke();ctx.globalAlpha=1;}
     if(f.k==='rush'&&a<900){const q=a/900;ctx.globalAlpha=1-q;ctx.fillStyle='#ffd23f';for(let i=0;i<12;i++){const r=i*TAU/12;sparkle(ctx,f.x+Math.cos(r)*90*q,f.y-20+Math.sin(r)*70*q,8*(1-q)+2);}ctx.globalAlpha=1;}
-    // Hooked a player: a bright burst where the hook caught them (Codex's picture), or a ring without it.
-    if(f.k==='grab'&&a<800){const q=a/800,e=1-(1-q)**3;ctx.save();ctx.globalAlpha=1-q*q;
-      if(globalThis.HookArt?.get('fx-hook-hit'))effectSprite(ctx,'fx-hook-hit',f.tx,f.ty-10,60+e*90,60+e*90,q*0.3);
-      else{ctx.strokeStyle='#ff7096';ctx.lineWidth=6*(1-q)+2;ctx.beginPath();ctx.arc(f.tx,f.ty-10,18+q*42,0,TAU);ctx.stroke();}
+    // Bomb fish: a cartoon blast of water, smoke puffs and stars where it was caught.
+    if(f.k==='bomb'&&a<800){const q=a/800,e=1-(1-q)**3;ctx.save();ctx.globalAlpha=1-q*q;
+      if(!effectSprite(ctx,'fx-bomb',f.tx,f.ty,60+e*100,60+e*100,q*0.2)){
+        ctx.fillStyle='#ffd23f';ctx.beginPath();for(let i=0;i<=16;i++){const r=i*TAU/16,d=(i%2?22:44)*(0.5+e);i?ctx.lineTo(f.tx+Math.cos(r)*d,f.ty+Math.sin(r)*d):ctx.moveTo(f.tx+Math.cos(r)*d,f.ty+Math.sin(r)*d);}ctx.closePath();ctx.fill();
+        ctx.fillStyle='#ff7a4d';ctx.beginPath();ctx.arc(f.tx,f.ty,16*(0.5+e),0,TAU);ctx.fill();
+        ctx.fillStyle='rgba(235,235,245,.9)';for(let i=0;i<6;i++){const r=i*TAU/6+0.4;ctx.beginPath();ctx.arc(f.tx+Math.cos(r)*(30+e*40),f.ty+Math.sin(r)*(22+e*30),9*(1-q)+3,0,TAU);ctx.fill();}}
+      ctx.fillStyle='#fff';for(let i=0;i<5;i++){const r=i*TAU/5;sparkle(ctx,f.tx+Math.cos(r)*(20+e*60),f.ty+Math.sin(r)*(14+e*44),6*(1-q)+2);}
       ctx.restore();}
-    if(txt){const at=f.k==='ice'||f.k==='grab'?{x:f.tx,y:f.ty}:f;popText(ctx,txt,at.x,at.y-(f.k==='slime'?20:78)-k*30,col,k,f.k==='rush'?34:26);}
+    // Ink: a dark splash bursting from whoever used it.
+    if(f.k==='ink'&&a<700){const q=a/700,e=1-(1-q)**3;ctx.save();ctx.globalAlpha=1-q;ctx.fillStyle='#3b2a4f';
+      for(let i=0;i<9;i++){const r=i*TAU/9+0.2,d=20+e*90;ctx.beginPath();ctx.arc(f.x+Math.cos(r)*d,f.y-20+Math.sin(r)*d*0.7,7*(1-q)+3,0,TAU);ctx.fill();}ctx.restore();}
+    // Whirlpool lands: a ring of spray.
+    if(f.k==='whirl'&&a<600){const q=a/600;ctx.save();ctx.globalAlpha=1-q;ctx.strokeStyle='#fff';ctx.lineWidth=5*(1-q)+2;ctx.beginPath();ctx.arc(f.x,f.y,C.WHIRL.R*(0.3+q*0.7),0,TAU);ctx.stroke();ctx.restore();}
+    if(txt){const at=f.k==='ice'||f.k==='bomb'?{x:f.tx,y:f.ty}:f;popText(ctx,txt,at.x,at.y-(f.k==='slime'||f.k==='whirl'?20:f.k==='bomb'?40:78)-k*30,col,k,f.k==='rush'?34:26);}
   }
   /* Goldfish rush: the lake glows warm gold and sparkles drift over it. */
   function rushGlow(ctx,now,left){
@@ -934,9 +1020,9 @@
     ctx.restore();
   }
   let sceneKey='',sceneCv=null;
-  /* V = {tc, t (game time), players:[{id,x,y,team,av,name,st,me,fx,fy,mv,rs,rk,sh,x2,tri,upRange,slow}], orbs:[{id,k,x,y,alpha,held,hooked}],
-         hooks:[{o,x,y,tx,ty,team,caught}], aim:{x,y,a} | {kind:'ice',x,y,a} | {kind:'slime',x,y,tx,ty}, drops:[{id,x,y}],
-         shots (unpacked snapshot s), zones (z), spots (sp), fx:[{k,x,y,tx,ty,age}], rush: ms of goldfish rush left (0 = none)} */
+  /* V = {tc, t (game time), players:[{id,x,y,team,av,name,st,me,fx,fy,mv,rs,rk,sh,x2,upRange,slow,kb,daze,ink}], orbs:[{id,k,x,y,alpha,held,hooked,mark}],
+         hooks:[{o,x,y,tx,ty,team,caught}], aim:{x,y,a} | {kind:'ice',x,y,a} | {kind:'slime'|'whirl',x,y,tx,ty}, loot:[{id,k,x,y,alpha,hooked}],
+         shots (unpacked snapshot s), zones (z), fx:[{k,x,y,tx,ty,age}], rush: ms of goldfish rush left (0 = none)} */
   function render(ctx,cw,ch,dpr,V,now,top=0){
     const vp=viewport(cw,ch-top);vp.oy+=top;const sc=vp.k*dpr,key=sc.toFixed(4)+'|'+(V.tc||2)+'|'+(globalThis.HookArt?.revision||0),rush=V.rush>0;
     ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=GRASS;ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
@@ -947,22 +1033,42 @@
     if(rush)rushGlow(ctx,now,V.rush);
     const gt=V.t||0;
     for(const z of V.zones||[])drawZone(ctx,z,gt,now);
-    for(const s of V.spots||[])drawSpot(ctx,s,gt,now);
-    for(const d of V.drops||[])drawDrop(ctx,d,now);
+    for(const l of V.loot||[])if(!l.hooked)drawLoot(ctx,l,now);
     for(const o of V.orbs)if(!o.held&&!o.hooked)drawFish(ctx,o,now,rush);
     if(V.aim)aimDots(ctx,V.aim,now);
     const hookBy=new Map(V.hooks.map(h=>[h.o,h])),tips=new Map(),mem=new Map(),ps=[...V.players].sort((a,b)=>a.y-b.y);
-    // A hooked player is drawn tipped towards the angler (the start of the line that caught them).
-    const pullBy=new Map(V.hooks.filter(h=>h.vic).map(h=>[h.vic,h]));
-    for(const p of ps){const m=pState(p,now);mem.set(p.id,m);const h=p.st===4&&pullBy.get(p.id);
-      tips.set(p.id,drawBody(ctx,h?{...p,pull:Math.atan2(h.y-p.y,h.x-p.x)}:p,now,m,hookBy.get(p.id)));}
+    for(const p of ps){const m=pState(p,now);mem.set(p.id,m);
+      // Knocked back: an arc to the edge of the map with one somersault; dizzy for a moment after landing; ink over the head.
+      const q={...p,dazed:p.daze>gt,inked:p.ink>gt};
+      if(p.st===3&&p.kb){const k=clamp((gt-p.kb.t0)/Math.max(1,p.kb.t1-p.kb.t0),0,1),dir=Math.atan2(p.kb.y1-p.kb.y0,p.kb.x1-p.kb.x0);
+        Object.assign(q,{lift:Math.sin(Math.PI*k)*(36+Math.min(60,Math.hypot(p.kb.x1-p.kb.x0,p.kb.y1-p.kb.y0)*0.08)),fly:dir,spin:(Math.cos(dir)>=0?1:-1)*k*TAU});}
+      tips.set(p.id,drawBody(ctx,q,now,m,hookBy.get(p.id)));}
     for(const h of V.hooks)drawLine(ctx,tips.get(h.o)||h,h);
+    for(const l of V.loot||[])if(l.hooked)drawLoot(ctx,l,now);
     for(const o of V.orbs)if(o.held||o.hooked)drawFish(ctx,o,now,rush);
     for(const p of ps)drawLabel(ctx,p,now,mem.get(p.id));
     for(const s of V.shots||[])drawShot(ctx,s,gt,now);
     for(const f of V.fx||[])drawFx(ctx,f);
     if(pMem.size>80)pMem.clear();if(fishMem.size>80)fishMem.clear();
     ctx.setTransform(1,0,0,1,0,0);return vp;
+  }
+  /* Ink card: big blots over most of a phone's screen (the edges stay a little visible). k = how strong (fades in and out),
+     seed = when the ink hit, so the blots keep their shape. Drawn in screen pixels, on top of the game. */
+  function inkCover(ctx,cw,ch,k,seed){
+    if(k<=0)return;const r=rng(seed>>>0),s=Math.min(cw,ch);
+    ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=k;
+    const sprites=[1,2,3].map(i=>globalThis.HookArt?.get('ink-'+i)).filter(Boolean);
+    for(let i=0;i<7;i++){
+      const x=cw*(0.16+0.68*r()),y=ch*(0.14+0.72*r()),rad=s*(0.3+0.16*r()),rot=r()*TAU;
+      if(sprites.length){ctx.save();ctx.translate(x,y);ctx.rotate(rot);ctx.drawImage(sprites[i%sprites.length],-rad*1.2,-rad*1.2,rad*2.4,rad*2.4);ctx.restore();continue;}
+      ctx.fillStyle='#2b1d3c';ctx.beginPath();
+      for(let j=0;j<=18;j++){const a=j*TAU/18+rot,d=rad*(0.78+0.3*Math.abs(Math.sin(j*2.7+i)));j?ctx.lineTo(x+Math.cos(a)*d,y+Math.sin(a)*d):ctx.moveTo(x+Math.cos(a)*d,y+Math.sin(a)*d);}
+      ctx.closePath();ctx.fill();
+      for(let j=0;j<3;j++){const a=r()*TAU,d=rad*(1.05+0.35*r());ctx.beginPath();ctx.arc(x+Math.cos(a)*d,y+Math.sin(a)*d,s*(0.012+0.025*r()),0,TAU);ctx.fill();}   // splatter
+      ctx.beginPath();ctx.ellipse(x+rad*0.2,y+rad*0.95,s*0.02,s*0.07,0,0,TAU);ctx.fill();   // a drip
+      ctx.fillStyle='rgba(255,255,255,.14)';ctx.beginPath();ctx.ellipse(x-rad*0.35,y-rad*0.4,rad*0.28,rad*0.13,-0.6,0,TAU);ctx.fill();   // shine
+    }
+    ctx.restore();
   }
   /* Paper confetti for the winners' screen. */
   function confetti(el,n=40){
@@ -999,7 +1105,7 @@
     get muted(){return HA()?.mode==='off';},set muted(v){if(HA())HA().mode=v?'off':'all';},
     fire:fx('fire'),catch:fx('catch'),right:fx('right'),wrong:fx('wrong'),tick:fx('count'),go:fx('go'),pop:fx('tap'),tap:fx('tap'),
     card:fx('card'),power:fx('power'),boom:fx('boom'),freeze:fx('freeze'),shield:fx('shield'),block:fx('block'),glow:fx('glow'),rush:fx('rushStart'),
-    shoot:fx('shoot'),slime:fx('slime'),grab:fx('grab'),
+    shoot:fx('shoot'),slime:fx('slime'),whirl:fx('whirl'),bomb:fx('bomb'),ink:fx('ink'),
     win(){HA()?.jingle('win');},lose(){HA()?.jingle('lose');}
   };
 
@@ -1016,7 +1122,8 @@
     document.addEventListener('touchstart',()=>{},{passive:true});
   }
 
-  const api={C,CARDS,ANIMALS,TURN,clamp,rng,bases,confine,orbPos,hookDist,hookTip,hookDone,outgoing,segDist,inSlime,shotAt,spotsFor,createGame,snapEvery,unpack,pickRoom,createNet,createLocalNet,viewport,render,drawAnimal,animalIcon,confetti,freshen,pressFeedback,sfx};
+  const api={C,CARDS,ANIMALS,TURN,clamp,rng,bases,confine,orbPos,fishPos,lootPos,intoLake,edgeFrom,flyPos,hookDist,hookTip,hookDone,outgoing,segDist,inSlime,walkK,shotAt,
+    createGame,snapEvery,unpack,pickRoom,createNet,createLocalNet,viewport,render,inkCover,drawAnimal,animalIcon,confetti,freshen,pressFeedback,sfx};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.HookGame=api;
 })(globalThis);

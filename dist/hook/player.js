@@ -14,6 +14,7 @@
   let myAv=Number(store('lumi-hook-av'));if(!(Number.isInteger(myAv)&&myAv>=0&&myAv<N)){myAv=Math.floor(Math.random()*N);store('lumi-hook-av',String(myAv));}
   let room=null,up='',S=null,recvAt=0,off=null,lastPh='',mine=null,joinedAt=0,kicked=false,lastSnapAt=0;
   const qs=[],disp=new Map(),me={x:0,y:0,fx:1,fy:0,placed:false};
+  if(local)window.__phoneMe=me;   // test scripts (?local only) can place this student
   let myHooks=[],shownQn=-1,lastRs=null,answerSent=0,lastNeed=0,lastFx=-1,lastCards='',usedAt=0;
   G.pressFeedback();
 
@@ -102,9 +103,9 @@
     S=s;recvAt=t;
     const m=s.p.find(p=>p.id===myId);
     if(!m){mine=null;return;}
-    const first=!mine,wasHooked=mine?.st===4;mine=m;
-    // Just let go after being hooked: stand where the teacher's computer dropped me.
-    if(first||!me.placed||s.ph==='lobby'||s.ph==='count'||(wasHooked&&m.st!==4)){me.x=m.x;me.y=m.y;me.placed=true;}
+    const first=!mine,wasFlying=mine?.st===3;mine=m;
+    // Just landed after a knock-back: stand where the teacher's computer put me.
+    if(first||!me.placed||s.ph==='lobby'||s.ph==='count'||(wasFlying&&m.st!==3)){me.x=m.x;me.y=m.y;me.placed=true;}
     if(first&&lastRs==null)lastRs=m.rs;
     if(m.rs!==lastRs){lastRs=m.rs;result(m.rk);}
     events(s);
@@ -127,12 +128,18 @@
       if(f.id<=lastFx)continue;const hitMe=f.to.includes(myId),mineFx=f.by===myId;
       if(f.k==='up'&&hitMe){note(`被 ${nameOf(f.by)} 击飞了！`,'bad');G.sfx.boom();buzz(120);}
       else if(f.k==='ice'&&hitMe){note(`被 ${nameOf(f.by)} 冻住了！`,'bad');G.sfx.freeze();buzz(120);}
+      else if(f.k==='bomb'&&hitMe){note('钓到炸弹鱼！晕 2 秒','bad');G.sfx.bomb();buzz(200);}
+      else if(f.k==='ink'&&hitMe){note(`被 ${nameOf(f.by)} 喷墨水了！`,'bad');G.sfx.ink();buzz(80);}
       else if(f.k==='block'&&mineFx){note('保护罩挡住了！','good');G.sfx.block();}
       else if(f.k==='up'&&mineFx)note(f.to.length?`击飞了 ${f.to.length} 人！`:'被保护罩挡住了','good');
       else if(f.k==='ice'&&mineFx){note(f.to.length?`冻住了 ${nameOf(f.to[0])}！`:'被保护罩挡住了','good');G.sfx.freeze();}
+      else if(f.k==='ink'&&mineFx){note(f.to.length?`墨水喷中 ${f.to.length} 人！`:'都被保护罩挡住了','good');G.sfx.ink();}
+      else if(f.k==='bomb'&&mineFx){note(f.to.length?`${nameOf(f.to[0])} 钓到你的炸弹鱼！`:'炸弹鱼被保护罩挡住了','good');G.sfx.bomb();}
+      else if(f.k==='bomb'){const p=S.p.find(x=>x.id===f.by);if(p&&mine&&p.team===mine.team)note(`${nameOf(f.to[0])||'敌人'} 钓到我们的炸弹鱼！`,'good');G.sfx.bomb();}
+      else if(f.k==='trap'&&mineFx)note('炸弹鱼放好了！敌人看起来是普通的鱼','good');
       else if(f.k==='slime'){if(mineFx)note('黏液丢中了！','good');G.sfx.slime();}
-      else if(f.k==='grab'&&hitMe){note(`被 ${nameOf(f.by)} 勾住了！`,'bad');G.sfx.grab();buzz(150);}
-      else if(f.k==='grab'&&mineFx){note(`勾到 ${nameOf(f.to[0])}！`,'good');G.sfx.grab();buzz(40);}
+      else if(f.k==='whirl'){if(mineFx)note('漩涡把鱼吸过去了！快钓！','good');G.sfx.whirl();}
+      else if(f.k==='full'&&mineFx){note('卡满了，先用掉一张','bad');buzz(30);}
       else if(f.k==='shield'&&mineFx){note('拿到保护罩 10 秒！','good');G.sfx.shield();buzz(40);}
       else if(f.k==='rush'){note(mineFx?'你钓到发光金鱼！金鱼潮开始！':`${nameOf(f.by)} 开启金鱼潮！每条鱼 2 分`,'gold');G.sfx.rush();}
     }
@@ -143,15 +150,17 @@
   const buzz=ms=>{if(navigator.vibrate)try{navigator.vibrate(ms);}catch{}};
 
   /* ── Item cards: up to two buttons above the hook button ── */
-  const SHORT={up:'击飞',ice:'冷冻',slow:'缓速',shield:'保护',x2:'加倍',tri:'三连'};
-  const AIMED={ice:1,slow:1};   // hold and drag to aim (like a hero skill); a quick tap aims at the nearest enemy
+  const SHORT={up:'击飞',ice:'冷冻',slow:'缓速',x2:'加倍',whirl:'漩涡',bomb:'炸弹鱼',ink:'墨水'};
+  const AIMED={ice:1,slow:1,whirl:1};   // hold and drag to aim (like a hero skill); a quick tap aims at the nearest enemy (whirlpool: the lake in front)
+  const RANGE={ice:C.SHOT.RANGE,slow:C.SLIME.RANGE,whirl:C.WHIRL.RANGE};
   const ICON={
     up:'<svg viewBox="0 0 24 24"><path d="M12 3l6.5 7H15v6H9v-6H5.5z" fill="currentColor"/><path d="M5 20h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>',
     ice:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 2.5v19M3.8 7.2l16.4 9.6M3.8 16.8l16.4-9.6M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/></svg>',
-    shield:'<svg viewBox="0 0 24 24"><path d="M12 2.5 20 6v5.5c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6z" fill="currentColor"/><path d="m8.5 12 2.4 2.4 4.6-4.8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     slow:'<svg viewBox="0 0 24 24"><path d="M12 3c3.5 4 6.5 7.3 6.5 11a6.5 6.5 0 0 1-13 0C5.5 10.3 8.5 7 12 3z" fill="currentColor"/><circle cx="9.5" cy="14" r="1.6" fill="#fff"/><circle cx="14" cy="16.5" r="1.1" fill="#fff"/></svg>',
     x2:'<b>×2</b>',
-    tri:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 21V4M12 21 4.5 6.5M12 21l7.5-14.5"/><circle cx="12" cy="4" r="1.8" fill="currentColor"/><circle cx="4.5" cy="6.5" r="1.8" fill="currentColor"/><circle cx="19.5" cy="6.5" r="1.8" fill="currentColor"/></svg>'};
+    whirl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 12.5a1.5 1.5 0 1 1 1.6-1.9M12 12.5c3 0 4.8-2.2 4.5-4.6C16.2 5.4 13.8 4 11.5 4.2 7.6 4.5 5 7.8 5.2 11.6c.3 4.4 4 7.5 8.2 7.2 4.5-.3 6.9-3.2 7.3-6"/></svg>',
+    bomb:'<svg viewBox="0 0 24 24"><circle cx="10.5" cy="14" r="7" fill="currentColor"/><path d="M14.5 8.5l2-2M16.5 6.5c1-1 2.8-.8 3.2.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="20" cy="5" r="1.7" fill="#ffc93c"/><circle cx="8" cy="11.5" r="1.8" fill="#fff" opacity=".6"/></svg>',
+    ink:'<svg viewBox="0 0 24 24"><path d="M12 3.5c3.3 0 5.4 2 6.6 4.2 1.6.2 2.6 1.4 2.2 2.6-.3.9-1.2 1.2-2 1 .2 2.4-.6 4.8-2.7 6 .5 1 .4 2.3-.6 2.7-1 .4-1.9-.3-2.1-1.3-.9.1-1.9.1-2.9-.1-.4 1.1-1.5 1.7-2.4 1.2-.8-.5-.9-1.6-.4-2.5C5 16 4 13.6 4.3 11c-1 .1-1.9-.4-2-1.3-.1-1.2 1.1-2 2.4-1.8C6.3 5.4 8.8 3.5 12 3.5z" fill="currentColor"/><circle cx="9.5" cy="9.5" r="1.8" fill="#fff" opacity=".5"/></svg>'};
   function drawCards(){
     const box=$('#cards'),cards=mine?.cards||[];
     const icon=k=>{const image=globalThis.HookArt?.get('card-'+k);return image?`<img class="item-art" src="${esc(image.src)}" alt="" width="32" height="32">`:ICON[k];};
@@ -163,28 +172,31 @@
         if(!canAct()){note(mine.st===1?'先答题':'现在不能用','bad');return;}
         cardAim={id:e.pointerId,i,k,sx:e.clientX,sy:e.clientY,a:null,d:null};b.setPointerCapture?.(e.pointerId);});
       b.addEventListener('pointermove',e=>{if(cardAim?.id!==e.pointerId)return;const x=e.clientX-cardAim.sx,y=e.clientY-cardAim.sy,l=Math.hypot(x,y);
-        if(l>18){cardAim.a=Math.atan2(y,x);cardAim.d=Math.min(1,l/80)*(cardAim.k==='slow'?C.SLIME.RANGE:C.SHOT.RANGE);}else cardAim.a=cardAim.d=null;});
+        if(l>18){cardAim.a=Math.atan2(y,x);cardAim.d=Math.min(1,l/80)*RANGE[cardAim.k];}else cardAim.a=cardAim.d=null;});
       const done=e=>{if(cardAim?.id!==e.pointerId)return;const c=cardAim;cardAim=null;if(e.type==='pointerup')useCard(c.i,c.a,c.d);};
       b.addEventListener('pointerup',done);b.addEventListener('pointercancel',done);
     });
   }
-  let cardAim=null;   // {id,i,k,sx,sy,a,d} while a freeze / slime card is being aimed
-  // Where my aimed card would go if released now (no drag yet: the nearest enemy in reach, like the teacher's computer does).
+  let cardAim=null;   // {id,i,k,sx,sy,a,d} while a freeze / slime / whirlpool card is being aimed
+  // Where my aimed card would go if released now (no drag yet: the nearest enemy in reach, like the teacher's computer does;
+  // a whirlpool goes into the lake in front).
   function cardTarget(c){
     if(c.a!=null)return {a:c.a,d:c.d};
-    const range=c.k==='slow'?C.SLIME.RANGE:C.SHOT.RANGE;let best=null;
-    for(const p of S.p){if(p.team===mine.team||p.st!==0)continue;const q=disp.get(p.id)||p,d=Math.hypot(q.x-me.x,q.y-me.y);if(d<=range&&(!best||d<best.d))best={d,a:Math.atan2(q.y-me.y,q.x-me.x)};}
+    const range=RANGE[c.k];let best=null;
+    if(c.k!=='whirl')for(const p of S.p){if(p.team===mine.team||p.st!==0)continue;const q=disp.get(p.id)||p,d=Math.hypot(q.x-me.x,q.y-me.y);if(d<=range&&(!best||d<best.d))best={d,a:Math.atan2(q.y-me.y,q.x-me.x)};}
     return best||{a:Math.atan2(C.SEA.y-me.y,C.SEA.x-me.x),d:range*0.7};
   }
+  // Where a thrown slime ball / whirlpool lands (the teacher's computer works it out the same way).
+  function landAt(k,tg){const d=G.clamp(tg.d,40,RANGE[k]),x=G.clamp(me.x+Math.cos(tg.a)*d,0,C.W),y=G.clamp(me.y+Math.sin(tg.a)*d,0,C.H);return k==='whirl'?G.intoLake(x,y,0.78):{x,y};}
   function useCard(i,a,d){
     const k=mine?.cards[i];if(!k||usedAt)return;G.sfx.unlock();
     if(!canAct()){note(mine.st===1?'先答题':'现在不能用','bad');return;}
     const foes=S.p.filter(p=>p.team!==mine.team&&p.st===0);
     if(k==='up'&&!foes.some(p=>{const q=disp.get(p.id)||p;return Math.hypot(q.x-me.x,q.y-me.y)<=C.CARD.R_UP;})){note('身边没有敌人，走近一点','bad');return;}
     const msg={k:'use',i};
-    if(AIMED[k]){const tg=cardTarget({k,a:a??null,d:d??null});msg.a=+tg.a.toFixed(4);if(k==='slow')msg.d=Math.round(tg.d);}
+    if(AIMED[k]){const tg=cardTarget({k,a:a??null,d:d??null});msg.a=+tg.a.toFixed(4);if(k!=='ice')msg.d=Math.round(tg.d);}
     usedAt=now();send(msg);buzz(25);
-    ({up:G.sfx.boom,ice:G.sfx.shoot,slow:G.sfx.fire}[k]||G.sfx.power)();
+    ({up:G.sfx.boom,ice:G.sfx.shoot,slow:G.sfx.fire,whirl:G.sfx.fire,ink:G.sfx.ink}[k]||G.sfx.power)();
     $(`#cards [data-i="${i}"]`)?.classList.add('used');
   }
 
@@ -213,7 +225,7 @@
       ${mates.length?`<div class="mates">${mates.map(p=>`<span><img src="${pet(p.av,30,p.team)}" alt="">${esc(p.name)}</span>`).join('')}</div>`:''}
       <p class="rule">${rule}</p>
       <p class="sub dots">等老师开始 Waiting for the teacher</p>
-      <p class="how">左手走路，右手「甩竿」钓鱼，钓到就答题，答错冻住 3 秒。${S.it?'<br>岸上的「?」卡走过去就拿，点卡片使用。':''}<br>发光金鱼答对 → 金鱼潮，每条鱼都 2 分！</p></div></div></div></div>`;
+      <p class="how">左手走路，右手「甩竿」钓鱼，钓到就答题，答错冻住 3 秒。${S.it?'<br>湖里的「?」宝箱钓回来是技能卡，泡泡是保护罩（不用答题）。':''}<br>发光金鱼答对 → 金鱼潮，每条鱼都 2 分！</p></div></div></div></div>`;
     $('#mePet').onclick=()=>{G.sfx.unlock();G.sfx.pop();myAv=(myAv+1)%N;store('lumi-hook-av',String(myAv));send({k:'join',name:myName,av:myAv});ui.dataset.key='';lobby();};
   }
   function ending(){
@@ -299,17 +311,22 @@
   const guarded=(o,t)=>{if(!o.hk)return false;const w=S.p.find(p=>p.id===o.hk);return !!w&&(w.team===mine?.team||w.sh>t);};
   function fire(a){
     if(!canAct()||hookActive()||a==null||!Number.isFinite(a))return;
-    // Triple-hook card: three lines in a fan (the teacher's computer does the same).
-    const t0=gameNow(),fan=mine.tri?[-C.CARD.SPREAD,0,C.CARD.SPREAD]:[0],sp=G.inSlime(S.z,mine.team,me.x,me.y,t0)?C.SLIME.ROD:1;
-    myHooks=fan.map(d=>({o:myId,x:me.x,y:me.y,a:a+d,t0,tt:0,d:0,orb:0,sp}));me.fx=Math.cos(a);me.fy=Math.sin(a);
+    const t0=gameNow(),sp=G.inSlime(S.z,mine.team,me.x,me.y,t0)?C.SLIME.ROD:1;
+    myHooks=[{o:myId,x:me.x,y:me.y,a,t0,tt:0,d:0,orb:0,loot:0,sp}];me.fx=Math.cos(a);me.fy=Math.sin(a);
     send({k:'fire',x:Math.round(me.x),y:Math.round(me.y),a:+a.toFixed(4),t:Math.round(t0)});G.sfx.fire();
     buzz(15);
   }
+  // My team's own bomb fish: my line passes through it. A box when my hands are full: also passes through.
+  const ownBomb=o=>o.bomb!=null&&o.bomb===mine?.team;
+  const lootOk=l=>!(l.k==='c'&&(mine?.cards.length||0)>=C.CARD.MAX);
   function autoAim(){
     const t=gameNow();let best=null;
-    for(const o of S?.o||[]){if(o.by||guarded(o,t))continue;
+    for(const o of S?.o||[]){if(o.by||ownBomb(o)||guarded(o,t))continue;
       const at=orbXY(o,t);if(!at||at.alpha<1)continue;const d=Math.hypot(at.x-me.x,at.y-me.y);if(d>C.RANGE*1.1)continue;
-      const fut=o.hk?at:G.orbPos(o,t+d/C.OUT*1000);if(!best||d<best.d)best={d,a:Math.atan2(fut.y-me.y,fut.x-me.x)};}
+      const fut=o.hk?at:G.fishPos(o,t+d/C.OUT*1000,S.z);if(!best||d<best.d)best={d,a:Math.atan2(fut.y-me.y,fut.x-me.x)};}
+    for(const l of S?.l||[]){if(!lootOk(l)||guarded(l,t))continue;
+      const at=lootXY(l,t);if(!at||at.alpha<1)continue;const d=Math.hypot(at.x-me.x,at.y-me.y);if(d>C.RANGE*1.1)continue;
+      if(!best||d<best.d)best={d,a:Math.atan2(at.y-me.y,at.x-me.x)};}
     return best?best.a:Math.atan2(me.fy,me.fx);
   }
 
@@ -325,7 +342,13 @@
       return {x:p.x+(i-(held.length-1)/2)*30,y:p.y-54,alpha:1,held:true};}
     if(o.hk){for(const h of hooksFor(o.hk))if(h.orb===o.id){const p=G.hookTip(h,t);return {...p,alpha:1,hooked:true};}}
     if(t<o.b)return null;
-    const p=G.orbPos(o,t);return {...p,alpha:Math.min(1,(t-o.b)/300)};
+    const p=G.fishPos(o,t,S.z);return {...p,alpha:Math.min(1,(t-o.b)/300)};
+  }
+  function lootXY(l,t){
+    for(const h of myHooks)if(h.loot===l.id&&(l.hk===myId||now()-h.caughtAt<600)&&!G.hookDone(h,t)){const p=G.hookTip(h,t);return {...p,alpha:1,hooked:true};}
+    if(l.hk){for(const h of hooksFor(l.hk))if(h.loot===l.id){const p=G.hookTip(h,t);return {...p,alpha:1,hooked:true};}}
+    if(t<l.b)return null;
+    const p=G.lootPos(l,t);return {...p,alpha:Math.min(1,(t-l.b)/300)};
   }
 
   /* ── Every frame ── */
@@ -341,11 +364,10 @@
     let dx=joy.dx,dy=joy.dy;
     if(keys.size){dx=(keys.has('d')||keys.has('arrowright'))-(keys.has('a')||keys.has('arrowleft'));dy=(keys.has('s')||keys.has('arrowdown'))-(keys.has('w')||keys.has('arrowup'));}
     const free=canAct()&&!hookActive();let qx=0,qy=0;
-    // Standing in an enemy's slime: walk at 40% (the teacher's computer does the same).
-    // Hooked by another team: I ride on the end of their line until it is reeled in.
-    const pullHook=mine.st===4&&S.h.find(h=>h.vic===myId);
-    if(pullHook){const tip=G.hookTip(pullHook,t);me.x=tip.x;me.y=tip.y+10;}
-    const slowMe=canAct()&&G.inSlime(S.z,mine.team,me.x,me.y,t),v=C.SPEED*(slowMe?C.SLIME.SLOW:1);
+    // Knocked back: I fly along the path the teacher's computer worked out.
+    if(mine.st===3&&mine.kb){const f=G.flyPos(mine.kb,t);me.x=f.x;me.y=f.y;}
+    // Standing in an enemy's slime: walk at 40%; just landed from a knock-back: 50% for 1 s (the teacher's computer does the same).
+    const slowMe=canAct()&&G.inSlime(S.z,mine.team,me.x,me.y,t),v=C.SPEED*G.walkK(S.z,mine.team,me.x,me.y,t,mine.daze);
     if(slowMe&&!wasSlow){note('被黏液黏住了，变慢！','bad');buzz(60);}wasSlow=slowMe;
     if(free&&(dx||dy)){const ang=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*(Math.PI/4);qx=+Math.cos(ang).toFixed(2);qy=+Math.sin(ang).toFixed(2);
       const p=G.confine(me.x+qx*v*dt,me.y+qy*v*dt);me.x=p.x;me.y=p.y;me.fx=qx;me.fy=qy;}
@@ -356,9 +378,12 @@
     // My hooks: predict a catch so it feels instant (the teacher's computer still decides).
     myHooks=myHooks.filter(h=>!G.hookDone(h,t));
     for(const h of myHooks){
-      if(h.orb||!G.outgoing(h,t))continue;const tip=G.hookTip(h,t);
-      for(const o of S.o){if(o.by||o.hk===myId||guarded(o,t)||myHooks.some(x=>x.orb===o.id))continue;const at=orbXY(o,t);if(!at||at.alpha<1)continue;
+      if(h.orb||h.loot||!G.outgoing(h,t))continue;const tip=G.hookTip(h,t);
+      for(const o of S.o){if(o.by||o.hk===myId||ownBomb(o)||guarded(o,t)||myHooks.some(x=>x.orb===o.id))continue;const at=orbXY(o,t);if(!at||at.alpha<1)continue;
         if(Math.hypot(at.x-tip.x,at.y-tip.y)<=C.TIP+(C.ORB[o.k]||C.ORB.n).r){h.tt=t;h.d=tip.d;h.orb=o.id;h.caughtAt=now();G.sfx.catch();break;}}
+      if(h.orb)continue;
+      for(const l of S.l){if(l.hk===myId||!lootOk(l)||guarded(l,t))continue;const at=lootXY(l,t);if(!at||at.alpha<1)continue;
+        if(Math.hypot(at.x-tip.x,at.y-tip.y)<=C.TIP+C.LOOT.R){h.tt=t;h.d=tip.d;h.loot=l.id;h.caughtAt=now();G.sfx.catch();break;}}
     }
     // Everyone else, smoothed toward where the teacher's computer says they are heading.
     const since=(tn-recvAt)/1000,k=Math.min(1,dt*10);
@@ -366,24 +391,28 @@
       if(p.id===myId)return {...p,av:myAv,x:me.x,y:me.y,fx:me.fx,fy:me.fy,me:true,mv:moving,sh:p.sh>t,upRange:p.cards.includes('up')&&canAct(),slow:slowMe};
       const d=disp.get(p.id)||{x:p.x,y:p.y,fx:1,fy:0};let tx=p.x,ty=p.y;
       const walking=S.ph==='play'&&p.st===0&&(p.dx||p.dy)&&!S.h.some(h=>h.o===p.id),slow=p.st===0&&G.inSlime(S.z,p.team,d.x,d.y,t);
-      if(walking){const w=C.SPEED*(slow?C.SLIME.SLOW:1)*Math.min(since,1),q=G.confine(p.x+p.dx*w,p.y+p.dy*w);tx=q.x;ty=q.y;}
-      // Someone being pulled by a line is drawn exactly at its end (the line moves fast; smoothing would lag behind).
-      const ph=p.st===4&&S.h.find(h=>h.vic===p.id);if(ph){const tip=G.hookTip(ph,t);tx=tip.x;ty=tip.y+10;}
-      if(ph||Math.hypot(tx-d.x,ty-d.y)>200){d.x=tx;d.y=ty;}else{d.x+=(tx-d.x)*k;d.y+=(ty-d.y)*k;}
+      if(walking){const w=C.SPEED*G.walkK(S.z,p.team,d.x,d.y,t,p.daze)*Math.min(since,1),q=G.confine(p.x+p.dx*w,p.y+p.dy*w);tx=q.x;ty=q.y;}
+      // Someone flying from a knock-back is drawn exactly on their flight path (fast; smoothing would lag behind).
+      const fl=p.st===3&&p.kb;if(fl){const f=G.flyPos(p.kb,t);tx=f.x;ty=f.y;}
+      if(fl||Math.hypot(tx-d.x,ty-d.y)>200){d.x=tx;d.y=ty;}else{d.x+=(tx-d.x)*k;d.y+=(ty-d.y)*k;}
       if(p.dx||p.dy){d.fx=p.dx;d.fy=p.dy;}disp.set(p.id,d);return {...p,x:d.x,y:d.y,fx:d.fx,fy:d.fy,mv:walking,sh:p.sh>t,slow};
     });
     const hooks=[],teamById=new Map(S.p.map(p=>[p.id,p.team]));
     for(const p of S.p)for(const h of hooksFor(p.id)){if(G.hookDone(h,t))continue;const tip=G.hookTip(h,t);
-      const o=p.id===myId?me:disp.get(p.id)||h;hooks.push({o:p.id,x:o.x,y:o.y,tx:tip.x,ty:tip.y,team:teamById.get(p.id),caught:!!(h.orb||h.vic),vic:h.vic||0});}
-    const orbs=[];for(const o of S.o){const at=orbXY(o,t);if(at)orbs.push({id:o.id,k:o.k,x:at.x,y:at.y,alpha:at.alpha,held:!!at.held,hooked:!!at.hooked});}
+      const o=p.id===myId?me:disp.get(p.id)||h;hooks.push({o:p.id,x:o.x,y:o.y,tx:tip.x,ty:tip.y,team:teamById.get(p.id),caught:!!(h.orb||h.loot)});}
+    // My team's bomb fish carry a little bomb so we don't hook them by mistake (the other team just sees a fish).
+    const orbs=[];for(const o of S.o){const at=orbXY(o,t);if(at)orbs.push({id:o.id,k:o.k,x:at.x,y:at.y,alpha:at.alpha,held:!!at.held,hooked:!!at.hooked,mark:ownBomb(o)});}
+    const loot=[];for(const l of S.l){const at=lootXY(l,t);if(at)loot.push({id:l.id,k:l.k,x:at.x,y:at.y,alpha:at.alpha,hooked:!!at.hooked});}
     const aimA=aim.id!=null?aim.a:null,rush=S.ru?Math.max(0,S.ru-t):0;
-    // Aiming: a skill card being held shows its path (freeze) or landing circle (slime); otherwise the fishing line.
-    let aimV=aimA!=null&&canAct()?{x:me.x,y:me.y,a:aimA,fan:mine.tri}:null;
+    // Aiming: a skill card being held shows its path (freeze) or landing circle (slime, whirlpool); otherwise the fishing line.
+    let aimV=aimA!=null&&canAct()?{x:me.x,y:me.y,a:aimA}:null;
     if(cardAim&&canAct()){const tg=cardTarget(cardAim);
-      aimV=cardAim.k==='ice'?{kind:'ice',x:me.x,y:me.y-10,a:tg.a}
-        :{kind:'slime',x:me.x,y:me.y,tx:me.x+Math.cos(tg.a)*Math.min(tg.d,C.SLIME.RANGE),ty:me.y+Math.sin(tg.a)*Math.min(tg.d,C.SLIME.RANGE)};}
+      if(cardAim.k==='ice')aimV={kind:'ice',x:me.x,y:me.y-10,a:tg.a};
+      else{const at=landAt(cardAim.k,tg);aimV={kind:cardAim.k==='whirl'?'whirl':'slime',x:me.x,y:me.y,tx:at.x,ty:at.y};}}
     vp=G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:S.tc,t,players,orbs,hooks,aim:aimV,
-      drops:S.d,shots:S.s,zones:S.z,spots:S.sp,rush,fx:S.fx.map(f=>({...f,age:t-f.at}))},tn);
+      loot,shots:S.s,zones:S.z,rush,fx:S.fx.map(f=>({...f,age:t-f.at}))},tn);
+    // Ink card: blots over most of my screen for 2.5 s (not while I'm answering a question).
+    if(mine.ink>t&&mine.st!==1){const left=mine.ink-t,inkK=Math.min(1,(C.CARD.INK-left)/150,left/500);G.inkCover(ctx,cv.width,cv.height,inkK,mine.ink);}
     hud(t,rush);
   }
   let lastTick=0,glowSeen=false;
@@ -394,7 +423,7 @@
     if(S.ph==='play'&&timeLeft>0&&n10<=10&&n10!==lastTick){lastTick=n10;HA?.tick(n10);}
     const glow=S.o.some(o=>o.k==='g');if(glow&&!glowSeen)G.sfx.glow();glowSeen=glow;
     const rt=rush?`金鱼潮 ×2 · ${Math.ceil(rush/1000)}`:'',rg=$('#rushTag');if(rg.textContent!==rt){rg.textContent=rt;rg.classList.toggle('hidden',!rt);}
-    const bf=[mine.tri&&'三连',mine.x2&&'×2'].filter(Boolean).join(' '),bt=$('#buff');if(bt.textContent!==bf){bt.textContent=bf;bt.classList.toggle('hidden',!bf);}
+    const bf=mine.x2?'×2':'',bt=$('#buff');if(bt.textContent!==bf){bt.textContent=bf;bt.classList.toggle('hidden',!bf);}
     if(usedAt&&now()-usedAt>1500){usedAt=0;drawCards();}   // the card didn't go off (nobody in reach after all): show it again
     const left=Math.max(0,(S.tl-t)/1000),mm=Math.floor(left/60),ss=String(Math.floor(left%60)).padStart(2,'0');
     const clock=S.ph==='pause'?'暂停中':`${mm}:${ss} <small>${S.md==='time'?'限时赛':`先到 ${S.tg} 分`}</small>`;
@@ -402,8 +431,8 @@
     const sc=S.sc.map((v,i)=>{const T=teamOf(i);return `<div class="score${i===mine.team?' mine':''}" style="--tc:${T.color};--ti:${T.ink}">${v}<small>${T.zh}${i===mine.team?' · 我':''}</small></div>`;}).join('');
     if($('#scores').innerHTML!==sc)$('#scores').innerHTML=sc;
     hookBtn.classList.toggle('cool',!canAct()||hookActive());
-    const secs=Math.max(0,Math.ceil((mine.until-t)/1000)),fz=mine.st===2?`<b>冻住啦 ${secs}</b>`:mine.st===3?`<b>飞起来啦 ${secs}</b>`:mine.st===4?'<b>被勾住啦！</b>':'',frost=$('#frost');
-    if(fz!==lastFrost){lastFrost=fz;frost.innerHTML=fz;frost.classList.toggle('hidden',!fz);frost.classList.toggle('air',mine.st===3||mine.st===4);}
+    const secs=Math.max(0,Math.ceil((mine.until-t)/1000)),fz=mine.st===2?`<b>冻住啦 ${secs}</b>`:mine.st===3?'<b>被击飞啦！</b>':mine.st===5?`<b>晕啦 ${secs}</b>`:'',frost=$('#frost');
+    if(fz!==lastFrost){lastFrost=fz;frost.innerHTML=fz;frost.classList.toggle('hidden',!fz);frost.classList.toggle('air',mine.st===3||mine.st===5);}
     const cnt=$('#count');
     if(S.ph==='count'){const n=Math.max(1,Math.ceil((S.cd-(now()-recvAt))/1000));
       if(n!==lastCount){lastCount=n;cnt.textContent=n;cnt.classList.remove('bump');void cnt.offsetWidth;cnt.classList.add('bump');G.sfx.tick();}cnt.classList.remove('hidden');}

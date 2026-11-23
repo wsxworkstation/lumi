@@ -261,15 +261,18 @@
     requestAnimationFrame(frame);
     if($('#stage').classList.contains('hidden'))return;
     const r=cur,game=r.game,t=game.t,hooked=new Set(game.hooks.map(h=>h.o));
-    const players=[...game.players.values()].map(p=>({...p,fx:p.dx,fy:p.dy,mv:game.ph==='play'&&p.st===0&&!!(p.dx||p.dy)&&!hooked.has(p.id),sh:p.sh>t,x2:!!p.x2,tri:!!p.tri,slow:p.st===0&&game.slowed(p.id)}));
-    const hooks=game.hooks.map(h=>{const tip=G.hookTip(h,t);return {o:h.o,x:h.x,y:h.y,tx:tip.x,ty:tip.y,team:game.players.get(h.o)?.team,caught:!!(h.orb||h.vic),vic:h.vic||0};});
+    const players=[...game.players.values()].map(p=>({...p,fx:p.dx,fy:p.dy,mv:game.ph==='play'&&p.st===0&&!!(p.dx||p.dy)&&!hooked.has(p.id),sh:p.sh>t,x2:!!p.x2,slow:p.st===0&&game.slowed(p.id)}));
+    const hooks=game.hooks.map(h=>{const tip=G.hookTip(h,t);return {o:h.o,x:h.x,y:h.y,tx:tip.x,ty:tip.y,team:game.players.get(h.o)?.team,caught:!!(h.orb||h.loot)};});
+    // Bomb fish look like any fish on the big screen too (the class can see it).
     const orbs=[];for(const o of game.orbs){const at=game.orbAt(o);if(at)orbs.push({id:o.id,k:o.k,x:at.x,y:at.y,alpha:o.hk||o.by?1:Math.min(1,(t-o.b)/300),held:!!o.by,hooked:!!o.hk&&!o.by});}
+    const loot=[];for(const l of game.loot){const at=game.lootAt(l);if(at)loot.push({id:l.id,k:l.k,x:at.x,y:at.y,alpha:l.hk?1:Math.min(1,(t-l.b)/300),hooked:!!l.hk});}
     const rush=game.rush?Math.max(0,game.rush-t):0;
-    G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:game.teams,t,players,orbs,hooks,drops:game.drops,shots:game.shots,zones:game.zones,spots:game.spots,rush,
+    G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:game.teams,t,players,orbs,hooks,loot,shots:game.shots,zones:game.zones,rush,
       fx:game.fx.map(f=>({...f,age:t-f.at}))},performance.now(),64);
-    // Sounds for card moves and the goldfish rush (the big screen is where the class watches).
+    // Sounds for card moves and the goldfish rush (the big screen is where the class watches). A bomb fish being put down stays secret.
     for(const f of game.fx)if(f.id>r.lastFx){r.lastFx=f.id;
-      ({up:G.sfx.boom,shoot:G.sfx.shoot,ice:G.sfx.freeze,throw:G.sfx.fire,slime:G.sfx.slime,grab:G.sfx.grab,shield:G.sfx.shield,block:G.sfx.block,x2:G.sfx.power,tri:G.sfx.power,rush:G.sfx.rush}[f.k]||(()=>{}))();}
+      ({up:G.sfx.boom,shoot:G.sfx.shoot,ice:G.sfx.freeze,throw:G.sfx.fire,slime:G.sfx.slime,whirl:G.sfx.whirl,bomb:G.sfx.bomb,ink:G.sfx.ink,box:G.sfx.card,
+        shield:G.sfx.shield,block:G.sfx.block,x2:G.sfx.power,rush:G.sfx.rush}[f.k]||(()=>{}))();}
     // Music follows the game (the rock tune during a goldfish rush), ticking in the last 10 seconds, a sparkle for a glowing goldfish.
     HA?.music(game.ph==='play'||game.ph==='count'?(rush?'rush':'main'):null);
     if(game.ph==='play'&&r.lastPlayPh==='count')G.sfx.go();r.lastPlayPh=game.ph;
