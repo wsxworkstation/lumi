@@ -222,8 +222,15 @@
   /* A teacher page forgotten in the background (hidden 10 minutes, room still empty) stops showing its room to students;
      it comes back as soon as the page is looked at again. */
   let hiddenSince=document.hidden?Date.now():0;
-  document.addEventListener('visibilitychange',()=>{hiddenSince=document.hidden?Date.now():0;});
+  document.addEventListener('visibilitychange',()=>{hiddenSince=document.hidden?Date.now():0;if(!hiddenSince)rooms.forEach(wake);});
   const asleep=r=>!!hiddenSince&&Date.now()-hiddenSince>10*60000&&r.game.ph==='lobby'&&!r.game.players.size;
+  // Asleep, the room gives its number back (so another teacher page can use it without both hearing the same phones);
+  // awake again, it takes its old number if still free, otherwise the next free one.
+  function nap(r){if(r.sleeping||!r.code)return;r.sleeping=r.code;
+    net.push(r.down,'closed',{});net.push('hook-lobby','room',{room:r.code,n:0,ph:'closed',hid:HID});net.leave(r.down);net.leave(r.up);
+    r.code=r.down=r.up='';saveCodes();if(r===cur)$('#code').textContent='····';tabs();}
+  function wake(r){if(!r.sleeping)return;const want=r.sleeping,used=inUse();r.sleeping='';openCode(r,used.has(want)?G.pickRoom(used):want);}
+  if(local){window.__nap=()=>{hiddenSince=1;};window.__wake=()=>{hiddenSince=0;rooms.forEach(wake);};}   // test mode only
   /* A worker keeps every referee ticking even if this tab is behind another window. */
   let last=performance.now(),lastSweep=0;
   function step(){
@@ -235,7 +242,8 @@
       while(d>0){const s=Math.min(d,50);g.tick(s);d-=s;}
       if(g.ph!==r.lastPh){r.lastPh=g.ph;if(g.ph==='end'&&r===cur)showEnd(r,false);snapNow(r);tabs();}
       if(now-r.lastSnap>=(g.ph==='play'||g.ph==='count'?every:1000))snapNow(r);
-      if(r.code&&now-r.lastAnnounce>2000&&!asleep(r)){r.lastAnnounce=now;net.push('hook-lobby','room',{room:r.code,n:g.players.size,ph:g.ph,hid:HID});}
+      if(asleep(r))nap(r);
+      if(r.code&&now-r.lastAnnounce>2000){r.lastAnnounce=now;net.push('hook-lobby','room',{room:r.code,n:g.players.size,ph:g.ph,hid:HID});}
       // Students silent for 10 s have left: take them off (in a game they keep their team and score if they come back).
       if(sweep&&g.sweep()&&g.ph==='lobby'&&r===cur)drawPlayers();
     }
