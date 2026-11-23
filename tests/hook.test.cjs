@@ -140,22 +140,25 @@ test('room numbers count up from 0001 and skip rooms already open', () => {
 });
 
 // Helpers for the item-card tests: a game already playing, with no cards dropping and no goldfish unless asked.
-function playing(ids,seed=7){const g=game(seed);for(const id of ids)g.join(id,id.toUpperCase());g.start();run(g,C.COUNT+10);g.dropAt=1e9;g.glowAt=1e9;return g;}
+function playing(ids,seed=7){const g=game(seed);for(const id of ids)g.join(id,id.toUpperCase());g.start();run(g,C.COUNT+10);g.dropAt=1e9;g.glowAt=1e9;g.drops=[];g.spots=[];for(const p of g.players.values())p.cards=[];return g;}
 function give(g,p,o){o.hk='';o.by=p.id;Object.assign(p,{st:1,orb:o.id,q:0,until:g.t+C.ANSWER});p.qn++;}
 const right=(g,p)=>g.input({k:'ans',id:p.id,qn:p.qn,v:g.qs[p.q].answer});
 const wrong=(g,p)=>g.input({k:'ans',id:p.id,qn:p.qn,v:[g.qs[p.q].answer[0]%4+1]});
 
-test('cards appear on the shore and a player holds at most two', () => {
-  const g=game();g.join('a','A');g.join('b','B');g.start();run(g,C.COUNT+C.CARD.FIRST+50);
+test('cards are there from the start, one more every 5 s, at most 4 on the shore; a player holds at most two', () => {
+  const g=game();g.join('a','A');g.join('b','B');g.start();
   const held=()=>[...g.players.values()].reduce((n,p)=>n+p.cards.length,0);
-  assert.equal(g.drops.length+held(),1,'one card after 6 s');
+  assert.equal(g.drops.length+held(),C.CARD.START,'2 cards at the start');
+  run(g,C.COUNT+C.CARD.EVERY+50);assert.equal(g.drops.length+held(),C.CARD.START+1,'one more after 5 s');
+  run(g,30000);assert.ok(g.drops.length<=C.CARD.ON_MAP,'never more than 4 lying around');for(const p of g.players.values())assert.ok(p.cards.length<=C.CARD.MAX);
   const s=C.SEA;for(const d of g.drops)assert.ok(((d.x-s.x)/s.rx)**2+((d.y-s.y)/s.ry)**2>1,'on the shore, not in the lake');
-  const a=g.players.get('a');a.cards=[];g.drops=[{id:50,x:Math.round(a.x),y:Math.round(a.y)}];g.tick(33);
-  assert.equal(a.cards.length,1);assert.ok(H.CARDS[a.cards[0]],'a real card');assert.equal(g.drops.length,0);
+  const a=g.players.get('a'),got=new Set();
+  for(let i=0;i<200;i++){a.cards=[];g.drops=[{id:900+i,x:Math.round(a.x),y:Math.round(a.y)}];g.tick(33);got.add(a.cards[0]);}
+  assert.ok(got.has('slow')&&got.has('ice')&&got.has('up'),'the new slime card is in the pool');assert.ok(!got.has('shield'),'shields are not cards any more');
   a.cards=['up','ice'];g.drops=[{id:51,x:Math.round(a.x),y:Math.round(a.y)}];g.tick(33);
   assert.equal(a.cards.length,2,'hands full');assert.equal(g.drops.length,1,'card stays on the grass');
   const off=game();off.items=false;off.join('a','A');off.start();run(off,C.COUNT+40000);
-  assert.equal(off.drops.length,0,'teacher switched cards off');
+  assert.equal(off.drops.length,0,'teacher switched items off');assert.equal(off.spots.length,0,'no corner shields either');
 });
 
 test('knock-up throws nearby enemies in the air for 2 s, never a teammate or someone answering', () => {
@@ -172,20 +175,54 @@ test('knock-up throws nearby enemies in the air for 2 s, never a teammate or som
   b.x=a.x+400;a.cards=['up'];assert.equal(g.useCard('a',0),false);assert.deepEqual(a.cards,['up'],'nobody in reach: card kept');
 });
 
-test('freeze hits the nearest enemy; a shield blocks one hit and stops steals', () => {
-  const g=playing(['a','b','c','d']),[a,b,,d]=['a','b','c','d'].map(id=>g.players.get(id));
-  b.x=a.x+100;b.y=a.y;d.x=a.x+500;d.y=a.y;
-  a.cards=['ice'];assert.ok(g.useCard('a',0));assert.equal(b.st,2,'nearest enemy frozen');assert.equal(d.st,0);
-  run(g,C.CARD.ICE+50);assert.equal(b.st,0);
-  b.cards=['shield'];g.useCard('b',0);assert.ok(b.sh>g.t,'shield on');
-  a.cards=['ice'];assert.ok(g.useCard('a',0));assert.equal(b.st,0,'blocked');assert.equal(b.sh,0,'shield used up');
-  assert.ok(g.fx.some(f=>f.k==='block'&&f.by==='b'));
+test('freeze is aimed: the arrow flies straight and freezes the first enemy on its path for 2.5 s', () => {
+  const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
+  b.x=a.x+150;b.y=a.y;c.x=a.x+60;c.y=a.y;d.x=a.x+100;d.y=a.y;Object.assign(d,{st:1,until:g.t+C.ANSWER});
+  a.cards=['ice'];assert.ok(g.useCard('a',0,0));assert.deepEqual(a.cards,[],'card used');assert.equal(g.shots.length,1);
+  run(g,300);
+  assert.equal(b.st,2,'enemy on the path is frozen');assert.equal(c.st,0,'passes through a teammate');assert.equal(d.st,1,'passes someone answering');
+  assert.ok(Math.abs(b.until-g.t-C.CARD.ICE)<=300,'about 2.5 s');assert.equal(g.shots.length,0,'arrow gone after hitting');
+  assert.deepEqual(g.fx.filter(f=>f.k==='ice').map(f=>[f.by,f.to]),[['a',['b']]]);
+  run(g,C.CARD.ICE);assert.equal(b.st,0);
+  // Aimed the other way: a miss, and the card is still used up.
+  a.cards=['ice'];g.useCard('a',0,Math.PI);run(g,600);assert.equal(b.st,0,'missed');assert.deepEqual(a.cards,[]);assert.equal(g.shots.length,0,'flew its full range and vanished');
+  // Out of range (420): the arrow stops before reaching the enemy.
+  b.x=a.x+C.SHOT.RANGE+60;a.cards=['ice'];g.useCard('a',0,0);run(g,800);assert.equal(b.st,0,'too far');
+  // No aim given: it goes at the nearest enemy in reach.
+  b.x=a.x+80;b.y=a.y+80;a.cards=['ice'];g.useCard('a',0);run(g,300);assert.equal(b.st,2,'auto-aim');
+  const s=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));assert.ok(Array.isArray(s.s)&&Array.isArray(s.z)&&Array.isArray(s.sp));
+});
+
+test('corner shields: walk onto one for 10 s of protection; it comes back 5 s later; it blocks a freeze and stops steals', () => {
+  const g=game();g.join('a','A');g.join('b','B');g.start();run(g,C.COUNT+10);g.drops=[];
+  assert.equal(g.spots.length,4,'four corners');assert.ok(g.spots.every(s=>s.at<=g.t),'ready from the start');
+  for(const s of H.spotsFor(3).slice(0,2))assert.ok(s.x>200&&s.x<1000,'with 3 teams the top shields move off the picnic blankets');
+  const [a,b]=['a','b'].map(id=>g.players.get(id)),spot=g.spots[0];
+  b.x=spot.x;b.y=spot.y;g.tick(33);assert.ok(b.sh>g.t+C.CARD.SHIELD-100,'10 s shield');assert.ok(spot.at>g.t,'taken');
+  a.x=spot.x;a.y=spot.y;g.tick(33);assert.ok(!(a.sh>g.t),'not back yet');run(g,C.SPOT.EVERY+50);assert.ok(a.sh>g.t,'back after 5 s');
+  // A freeze arrow at a shielded enemy breaks the shield instead.
+  b.x=400;b.y=60;a.x=250;a.y=60;b.sh=g.t+5000;a.cards=['ice'];g.useCard('a',0,0);run(g,300);
+  assert.equal(b.st,0,'blocked');assert.equal(b.sh,0,'shield used up');assert.ok(g.fx.some(f=>f.k==='block'&&f.by==='b'));
   // A shielded player's fish can't be stolen on the way back.
-  b.sh=g.t+5000;const o=g.orbs[0];g.orbs=[o];
+  b.sh=g.t+5000;const o=g.orbs[0];g.orbs=[o];g.hooks=[];
   g.hooks.push({o:'b',x:b.x,y:b.y,a:0,t0:g.t,tt:g.t,d:300,orb:o.id,lt:g.t});o.hk='b';
   const tip=H.hookTip(g.hooks[0],g.t+33);a.x=tip.x-200;a.y=tip.y;g.hooks.push({o:'a',x:a.x,y:a.y,a:0,t0:g.t,tt:0,d:0,orb:0,lt:g.t});
   let stolen=false;for(let i=0;i<14;i++){g.tick(33);if(o.hk==='a'||o.by==='a')stolen=true;}
   assert.equal(stolen,false);
+});
+
+test('slime ball: lands where aimed, enemies inside walk at 40% and their rods go half speed; teammates are not slowed', () => {
+  const g=playing(['a','b','c']),[a,b,c]=['a','b','c'].map(id=>g.players.get(id));
+  a.x=200;a.y=60;b.x=300;b.y=60;c.x=320;c.y=60;   // b is the enemy, c is a's teammate
+  a.cards=['slow'];assert.ok(g.useCard('a',0,0,100));assert.equal(g.zones.length,0,'still flying');
+  run(g,C.SLIME.FLY+50);assert.equal(g.zones.length,1,'landed');const z=g.zones[0];assert.ok(Math.abs(z.x-300)<2&&Math.abs(z.y-60)<2);
+  assert.ok(g.slowed('b'),'enemy slowed');assert.equal(g.slowed('c'),false,'teammate not slowed');
+  const bx=b.x,cx=c.x;b.dx=1;b.dy=0;c.dx=1;c.dy=0;run(g,250);
+  const vb=(b.x-bx)/0.25,vc=(c.x-cx)/0.25;assert.ok(Math.abs(vb-C.SPEED*C.SLIME.SLOW)<15,'40% speed: '+vb.toFixed(0));assert.ok(Math.abs(vc-C.SPEED)<15,'teammate full speed');
+  b.dx=c.dx=0;
+  assert.ok(g.input({k:'fire',id:'b',x:b.x,y:b.y,a:Math.PI/2,t:g.t}));const h=g.hooks.find(x=>x.o==='b');assert.equal(h.sp,C.SLIME.ROD,'rod at half speed');
+  assert.ok(Math.abs(H.hookDist(h,h.t0+200)-C.OUT*C.SLIME.ROD*0.2)<1);
+  run(g,C.SLIME.LEN);assert.equal(g.zones.length,0,'gone after 4 s');assert.equal(g.slowed('b'),false);
 });
 
 test('double card doubles the next right answer; the glowing goldfish starts a rush where every fish is worth 2', () => {

@@ -108,7 +108,7 @@
     if(m.rs!==lastRs){lastRs=m.rs;result(m.rk);}
     events(s);
     const ck=m.cards.join(',');
-    if(ck!==lastCards){if(m.cards.length>(lastCards?lastCards.split(',').length:0)){const k=m.cards[m.cards.length-1];note(`拿到「${G.CARDS[k]?.zh||''}」卡！`,'good');G.sfx.card();buzz(30);}
+    if(ck!==lastCards){if(m.cards.length>(lastCards?lastCards.split(',').length:0)){const k=m.cards[m.cards.length-1];note(`拿到「${G.CARDS[k]?.zh||''}」卡！${AIMED[k]?'按住卡片拖动瞄准':''}`,'good');G.sfx.card();buzz(30);}
       lastCards=ck;usedAt=0;drawCards();}
     if(m.st===1&&m.qn!==shownQn&&shownQn!==-2)showQuestion();
     if(m.st!==1&&!$('#ask').classList.contains('hidden'))hideQuestion();
@@ -128,7 +128,9 @@
       else if(f.k==='ice'&&hitMe){note(`被 ${nameOf(f.by)} 冻住了！`,'bad');G.sfx.freeze();buzz(120);}
       else if(f.k==='block'&&mineFx){note('保护罩挡住了！','good');G.sfx.block();}
       else if(f.k==='up'&&mineFx)note(f.to.length?`击飞了 ${f.to.length} 人！`:'被保护罩挡住了','good');
-      else if(f.k==='ice'&&mineFx)note(f.to.length?`冻住了 ${nameOf(f.to[0])}！`:'被保护罩挡住了','good');
+      else if(f.k==='ice'&&mineFx){note(f.to.length?`冻住了 ${nameOf(f.to[0])}！`:'被保护罩挡住了','good');G.sfx.freeze();}
+      else if(f.k==='slime'){if(mineFx)note('黏液丢中了！','good');G.sfx.slime();}
+      else if(f.k==='shield'&&mineFx){note('拿到保护罩 10 秒！','good');G.sfx.shield();buzz(40);}
       else if(f.k==='rush'){note(mineFx?'你钓到发光金鱼！金鱼潮开始！':`${nameOf(f.by)} 开启金鱼潮！每条鱼 2 分`,'gold');G.sfx.rush();}
     }
     lastFx=Math.max(lastFx,top);
@@ -138,27 +140,48 @@
   const buzz=ms=>{if(navigator.vibrate)try{navigator.vibrate(ms);}catch{}};
 
   /* ── Item cards: up to two buttons above the hook button ── */
-  const SHORT={up:'击飞',ice:'冷冻',shield:'保护',x2:'加倍',tri:'三连'};
+  const SHORT={up:'击飞',ice:'冷冻',slow:'缓速',shield:'保护',x2:'加倍',tri:'三连'};
+  const AIMED={ice:1,slow:1};   // hold and drag to aim (like a hero skill); a quick tap aims at the nearest enemy
   const ICON={
     up:'<svg viewBox="0 0 24 24"><path d="M12 3l6.5 7H15v6H9v-6H5.5z" fill="currentColor"/><path d="M5 20h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>',
     ice:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 2.5v19M3.8 7.2l16.4 9.6M3.8 16.8l16.4-9.6M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/></svg>',
     shield:'<svg viewBox="0 0 24 24"><path d="M12 2.5 20 6v5.5c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6z" fill="currentColor"/><path d="m8.5 12 2.4 2.4 4.6-4.8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    slow:'<svg viewBox="0 0 24 24"><path d="M12 3c3.5 4 6.5 7.3 6.5 11a6.5 6.5 0 0 1-13 0C5.5 10.3 8.5 7 12 3z" fill="currentColor"/><circle cx="9.5" cy="14" r="1.6" fill="#fff"/><circle cx="14" cy="16.5" r="1.1" fill="#fff"/></svg>',
     x2:'<b>×2</b>',
     tri:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 21V4M12 21 4.5 6.5M12 21l7.5-14.5"/><circle cx="12" cy="4" r="1.8" fill="currentColor"/><circle cx="4.5" cy="6.5" r="1.8" fill="currentColor"/><circle cx="19.5" cy="6.5" r="1.8" fill="currentColor"/></svg>'};
   function drawCards(){
     const box=$('#cards'),cards=mine?.cards||[];
     const icon=k=>{const image=globalThis.HookArt?.get('card-'+k);return image?`<img class="item-art" src="${esc(image.src)}" alt="" width="32" height="32">`:ICON[k];};
     box.innerHTML=cards.map((k,i)=>G.CARDS[k]?`<button class="card-btn" data-i="${i}" data-quiet style="--cc:${G.CARDS[k].color}">${icon(k)}<span>${SHORT[k]}</span></button>`:'').join('');
-    box.querySelectorAll('[data-i]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();useCard(Number(b.dataset.i));}));
+    box.querySelectorAll('[data-i]').forEach(b=>{
+      const i=Number(b.dataset.i),k=cards[i];
+      b.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();G.sfx.unlock();
+        if(!AIMED[k])return useCard(i);
+        if(!canAct()){note(mine.st===1?'先答题':'现在不能用','bad');return;}
+        cardAim={id:e.pointerId,i,k,sx:e.clientX,sy:e.clientY,a:null,d:null};b.setPointerCapture?.(e.pointerId);});
+      b.addEventListener('pointermove',e=>{if(cardAim?.id!==e.pointerId)return;const x=e.clientX-cardAim.sx,y=e.clientY-cardAim.sy,l=Math.hypot(x,y);
+        if(l>18){cardAim.a=Math.atan2(y,x);cardAim.d=Math.min(1,l/80)*(cardAim.k==='slow'?C.SLIME.RANGE:C.SHOT.RANGE);}else cardAim.a=cardAim.d=null;});
+      const done=e=>{if(cardAim?.id!==e.pointerId)return;const c=cardAim;cardAim=null;if(e.type==='pointerup')useCard(c.i,c.a,c.d);};
+      b.addEventListener('pointerup',done);b.addEventListener('pointercancel',done);
+    });
   }
-  function useCard(i){
+  let cardAim=null;   // {id,i,k,sx,sy,a,d} while a freeze / slime card is being aimed
+  // Where my aimed card would go if released now (no drag yet: the nearest enemy in reach, like the teacher's computer does).
+  function cardTarget(c){
+    if(c.a!=null)return {a:c.a,d:c.d};
+    const range=c.k==='slow'?C.SLIME.RANGE:C.SHOT.RANGE;let best=null;
+    for(const p of S.p){if(p.team===mine.team||p.st!==0)continue;const q=disp.get(p.id)||p,d=Math.hypot(q.x-me.x,q.y-me.y);if(d<=range&&(!best||d<best.d))best={d,a:Math.atan2(q.y-me.y,q.x-me.x)};}
+    return best||{a:Math.atan2(C.SEA.y-me.y,C.SEA.x-me.x),d:range*0.7};
+  }
+  function useCard(i,a,d){
     const k=mine?.cards[i];if(!k||usedAt)return;G.sfx.unlock();
     if(!canAct()){note(mine.st===1?'先答题':'现在不能用','bad');return;}
     const foes=S.p.filter(p=>p.team!==mine.team&&p.st===0);
-    if(k==='up'&&!foes.some(p=>{const d=disp.get(p.id)||p;return Math.hypot(d.x-me.x,d.y-me.y)<=C.CARD.R_UP;})){note('身边没有敌人，走近一点','bad');return;}
-    if(k==='ice'&&!foes.length){note('现在没有可以冻的人','bad');return;}
-    usedAt=now();send({k:'use',i});buzz(25);
-    ({up:G.sfx.boom,ice:G.sfx.freeze,shield:G.sfx.shield}[k]||G.sfx.power)();
+    if(k==='up'&&!foes.some(p=>{const q=disp.get(p.id)||p;return Math.hypot(q.x-me.x,q.y-me.y)<=C.CARD.R_UP;})){note('身边没有敌人，走近一点','bad');return;}
+    const msg={k:'use',i};
+    if(AIMED[k]){const tg=cardTarget({k,a:a??null,d:d??null});msg.a=+tg.a.toFixed(4);if(k==='slow')msg.d=Math.round(tg.d);}
+    usedAt=now();send(msg);buzz(25);
+    ({up:G.sfx.boom,ice:G.sfx.shoot,slow:G.sfx.fire}[k]||G.sfx.power)();
     $(`#cards [data-i="${i}"]`)?.classList.add('used');
   }
 
@@ -274,8 +297,8 @@
   function fire(a){
     if(!canAct()||hookActive()||a==null||!Number.isFinite(a))return;
     // Triple-hook card: three lines in a fan (the teacher's computer does the same).
-    const t0=gameNow(),fan=mine.tri?[-C.CARD.SPREAD,0,C.CARD.SPREAD]:[0];
-    myHooks=fan.map(d=>({o:myId,x:me.x,y:me.y,a:a+d,t0,tt:0,d:0,orb:0}));me.fx=Math.cos(a);me.fy=Math.sin(a);
+    const t0=gameNow(),fan=mine.tri?[-C.CARD.SPREAD,0,C.CARD.SPREAD]:[0],sp=G.inSlime(S.z,mine.team,me.x,me.y,t0)?C.SLIME.ROD:1;
+    myHooks=fan.map(d=>({o:myId,x:me.x,y:me.y,a:a+d,t0,tt:0,d:0,orb:0,sp}));me.fx=Math.cos(a);me.fy=Math.sin(a);
     send({k:'fire',x:Math.round(me.x),y:Math.round(me.y),a:+a.toFixed(4),t:Math.round(t0)});G.sfx.fire();
     buzz(15);
   }
@@ -303,7 +326,7 @@
   }
 
   /* ── Every frame ── */
-  let last=now(),moveKey='0,0',moveAt=0,moveSeq=0,lastCount=-1,lastFrost='';
+  let last=now(),moveKey='0,0',moveAt=0,moveSeq=0,lastCount=-1,lastFrost='',wasSlow=false;
   function resize(){const dpr=Math.min(2,devicePixelRatio||1);cv.width=innerWidth*dpr;cv.height=innerHeight*dpr;}
   addEventListener('resize',resize);resize();
   function frame(){
@@ -315,8 +338,11 @@
     let dx=joy.dx,dy=joy.dy;
     if(keys.size){dx=(keys.has('d')||keys.has('arrowright'))-(keys.has('a')||keys.has('arrowleft'));dy=(keys.has('s')||keys.has('arrowdown'))-(keys.has('w')||keys.has('arrowup'));}
     const free=canAct()&&!hookActive();let qx=0,qy=0;
+    // Standing in an enemy's slime: walk at 40% (the teacher's computer does the same).
+    const slowMe=canAct()&&G.inSlime(S.z,mine.team,me.x,me.y,t),v=C.SPEED*(slowMe?C.SLIME.SLOW:1);
+    if(slowMe&&!wasSlow){note('被黏液黏住了，变慢！','bad');buzz(60);}wasSlow=slowMe;
     if(free&&(dx||dy)){const ang=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*(Math.PI/4);qx=+Math.cos(ang).toFixed(2);qy=+Math.sin(ang).toFixed(2);
-      const p=G.confine(me.x+qx*C.SPEED*dt,me.y+qy*C.SPEED*dt);me.x=p.x;me.y=p.y;me.fx=qx;me.fy=qy;}
+      const p=G.confine(me.x+qx*v*dt,me.y+qy*v*dt);me.x=p.x;me.y=p.y;me.fx=qx;me.fy=qy;}
     // Tell the teacher's computer only when I start, stop or turn (turns at most every half second), to save messages.
     const key=qx||qy?`${qx},${qy}`:'0,0',moving=key!=='0,0',wasMoving=moveKey!=='0,0',gap=tn-moveAt;
     const due=(key!==moveKey&&gap>120&&(gap>500||!moving||!wasMoving))||(moving&&gap>3000);
@@ -331,20 +357,25 @@
     // Everyone else, smoothed toward where the teacher's computer says they are heading.
     const since=(tn-recvAt)/1000,k=Math.min(1,dt*10);
     const players=S.p.map(p=>{
-      if(p.id===myId)return {...p,av:myAv,x:me.x,y:me.y,fx:me.fx,fy:me.fy,me:true,mv:moving,sh:p.sh>t,upRange:p.cards.includes('up')&&canAct()};
+      if(p.id===myId)return {...p,av:myAv,x:me.x,y:me.y,fx:me.fx,fy:me.fy,me:true,mv:moving,sh:p.sh>t,upRange:p.cards.includes('up')&&canAct(),slow:slowMe};
       const d=disp.get(p.id)||{x:p.x,y:p.y,fx:1,fy:0};let tx=p.x,ty=p.y;
-      const walking=S.ph==='play'&&p.st===0&&(p.dx||p.dy)&&!S.h.some(h=>h.o===p.id);
-      if(walking){const q=G.confine(p.x+p.dx*C.SPEED*Math.min(since,1),p.y+p.dy*C.SPEED*Math.min(since,1));tx=q.x;ty=q.y;}
+      const walking=S.ph==='play'&&p.st===0&&(p.dx||p.dy)&&!S.h.some(h=>h.o===p.id),slow=p.st===0&&G.inSlime(S.z,p.team,d.x,d.y,t);
+      if(walking){const w=C.SPEED*(slow?C.SLIME.SLOW:1)*Math.min(since,1),q=G.confine(p.x+p.dx*w,p.y+p.dy*w);tx=q.x;ty=q.y;}
       if(Math.hypot(tx-d.x,ty-d.y)>200){d.x=tx;d.y=ty;}else{d.x+=(tx-d.x)*k;d.y+=(ty-d.y)*k;}
-      if(p.dx||p.dy){d.fx=p.dx;d.fy=p.dy;}disp.set(p.id,d);return {...p,x:d.x,y:d.y,fx:d.fx,fy:d.fy,mv:walking,sh:p.sh>t};
+      if(p.dx||p.dy){d.fx=p.dx;d.fy=p.dy;}disp.set(p.id,d);return {...p,x:d.x,y:d.y,fx:d.fx,fy:d.fy,mv:walking,sh:p.sh>t,slow};
     });
     const hooks=[],teamById=new Map(S.p.map(p=>[p.id,p.team]));
     for(const p of S.p)for(const h of hooksFor(p.id)){if(G.hookDone(h,t))continue;const tip=G.hookTip(h,t);
       const o=p.id===myId?me:disp.get(p.id)||h;hooks.push({o:p.id,x:o.x,y:o.y,tx:tip.x,ty:tip.y,team:teamById.get(p.id),caught:!!h.orb});}
     const orbs=[];for(const o of S.o){const at=orbXY(o,t);if(at)orbs.push({id:o.id,k:o.k,x:at.x,y:at.y,alpha:at.alpha,held:!!at.held,hooked:!!at.hooked});}
     const aimA=aim.id!=null?aim.a:null,rush=S.ru?Math.max(0,S.ru-t):0;
-    vp=G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:S.tc,players,orbs,hooks,aim:aimA!=null&&canAct()?{x:me.x,y:me.y,a:aimA,fan:mine.tri}:null,
-      drops:S.d,rush,fx:S.fx.map(f=>({...f,age:t-f.at}))},tn);
+    // Aiming: a skill card being held shows its path (freeze) or landing circle (slime); otherwise the fishing line.
+    let aimV=aimA!=null&&canAct()?{x:me.x,y:me.y,a:aimA,fan:mine.tri}:null;
+    if(cardAim&&canAct()){const tg=cardTarget(cardAim);
+      aimV=cardAim.k==='ice'?{kind:'ice',x:me.x,y:me.y-10,a:tg.a}
+        :{kind:'slime',x:me.x,y:me.y,tx:me.x+Math.cos(tg.a)*Math.min(tg.d,C.SLIME.RANGE),ty:me.y+Math.sin(tg.a)*Math.min(tg.d,C.SLIME.RANGE)};}
+    vp=G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:S.tc,t,players,orbs,hooks,aim:aimV,
+      drops:S.d,shots:S.s,zones:S.z,spots:S.sp,rush,fx:S.fx.map(f=>({...f,age:t-f.at}))},tn);
     hud(t,rush);
   }
   let lastTick=0,glowSeen=false;

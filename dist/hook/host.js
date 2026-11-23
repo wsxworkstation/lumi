@@ -15,7 +15,8 @@
   HA?.setup({key:'lumi-hook-host-sound',music:musicVol});
   let itemsDefault=true;try{itemsDefault=localStorage.getItem('lumi-hook-items')!=='0';}catch{}
 
-  const joinUrl=new URL('./',location.href).href.replace(/\/host\.html.*$/,'/');
+  // Opened straight from the computer's folder (file://…): students still need the website address, not the file path.
+  const joinUrl=/^https?:$/.test(location.protocol)?new URL('./',location.href).href.replace(/\/host\.html.*$/,'/'):'https://wsxworkstation.github.io/lumi/hook/';
   $('#url').textContent=joinUrl.replace(/^https?:\/\//,'')+(local?'?local':'');
 
   /* ── Rooms ── */
@@ -70,7 +71,10 @@
   function tabs(){
     const many=rooms.length>1,add=rooms.length<MAX_ROOMS?`<button class="new-room" data-new>＋ 开新房间</button>`:'';
     const list=rooms.map(r=>`<span class="room-tab${r===cur?' on':''}"><button data-room="${rooms.indexOf(r)}"><b>${esc(r.code||'····')}</b><small>${status(r)}</small></button>${many?`<button class="room-x" data-close="${rooms.indexOf(r)}" title="关掉这个房间">✕</button>`:''}</span>`).join('');
-    const setupHtml=(many?list:'')+add,stageHtml=many?list:'';
+    // Rooms announced by another teacher page (another tab, window or computer) — usually an old page left open.
+    const elsewhere=[...others].filter(([c,o])=>Date.now()-o.at<6000&&o.ph!=='closed'&&!rooms.some(r=>r.code===c)).map(([c])=>c).sort();
+    const note=elsewhere.length?`<span class="other-rooms">还有房间 ${elsewhere.map(esc).join('、')} 在别的分页或电脑开着</span>`:'';
+    const setupHtml=note+(many?list:'')+add,stageHtml=many?list:'';
     // Only redraw when something changed, so a click is never lost to a redraw happening under the pointer.
     if(setupHtml!==tabsDrawn[0]){tabsDrawn[0]=setupHtml;$('#roomsSetup').innerHTML=setupHtml;}
     if(stageHtml!==tabsDrawn[1]){tabsDrawn[1]=stageHtml;$('#roomsStage').innerHTML=stageHtml;}
@@ -215,6 +219,11 @@
     if(!quiet){HA?.jingle(win?'win':'lose');if(win)G.confetti($('#end'));}
   }
 
+  /* A teacher page forgotten in the background (hidden 10 minutes, room still empty) stops showing its room to students;
+     it comes back as soon as the page is looked at again. */
+  let hiddenSince=document.hidden?Date.now():0;
+  document.addEventListener('visibilitychange',()=>{hiddenSince=document.hidden?Date.now():0;});
+  const asleep=r=>!!hiddenSince&&Date.now()-hiddenSince>10*60000&&r.game.ph==='lobby'&&!r.game.players.size;
   /* A worker keeps every referee ticking even if this tab is behind another window. */
   let last=performance.now(),lastSweep=0;
   function step(){
@@ -226,7 +235,7 @@
       while(d>0){const s=Math.min(d,50);g.tick(s);d-=s;}
       if(g.ph!==r.lastPh){r.lastPh=g.ph;if(g.ph==='end'&&r===cur)showEnd(r,false);snapNow(r);tabs();}
       if(now-r.lastSnap>=(g.ph==='play'||g.ph==='count'?every:1000))snapNow(r);
-      if(r.code&&now-r.lastAnnounce>2000){r.lastAnnounce=now;net.push('hook-lobby','room',{room:r.code,n:g.players.size,ph:g.ph,hid:HID});}
+      if(r.code&&now-r.lastAnnounce>2000&&!asleep(r)){r.lastAnnounce=now;net.push('hook-lobby','room',{room:r.code,n:g.players.size,ph:g.ph,hid:HID});}
       // Students silent for 10 s have left: take them off (in a game they keep their team and score if they come back).
       if(sweep&&g.sweep()&&g.ph==='lobby'&&r===cur)drawPlayers();
     }
@@ -244,13 +253,15 @@
     requestAnimationFrame(frame);
     if($('#stage').classList.contains('hidden'))return;
     const r=cur,game=r.game,t=game.t,hooked=new Set(game.hooks.map(h=>h.o));
-    const players=[...game.players.values()].map(p=>({...p,fx:p.dx,fy:p.dy,mv:game.ph==='play'&&p.st===0&&!!(p.dx||p.dy)&&!hooked.has(p.id),sh:p.sh>t,x2:!!p.x2,tri:!!p.tri}));
+    const players=[...game.players.values()].map(p=>({...p,fx:p.dx,fy:p.dy,mv:game.ph==='play'&&p.st===0&&!!(p.dx||p.dy)&&!hooked.has(p.id),sh:p.sh>t,x2:!!p.x2,tri:!!p.tri,slow:p.st===0&&game.slowed(p.id)}));
     const hooks=game.hooks.map(h=>{const tip=G.hookTip(h,t);return {o:h.o,x:h.x,y:h.y,tx:tip.x,ty:tip.y,team:game.players.get(h.o)?.team,caught:!!h.orb};});
     const orbs=[];for(const o of game.orbs){const at=game.orbAt(o);if(at)orbs.push({id:o.id,k:o.k,x:at.x,y:at.y,alpha:o.hk||o.by?1:Math.min(1,(t-o.b)/300),held:!!o.by,hooked:!!o.hk&&!o.by});}
     const rush=game.rush?Math.max(0,game.rush-t):0;
-    G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:game.teams,players,orbs,hooks,drops:game.drops,rush,fx:game.fx.map(f=>({...f,age:t-f.at}))},performance.now(),64);
+    G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:game.teams,t,players,orbs,hooks,drops:game.drops,shots:game.shots,zones:game.zones,spots:game.spots,rush,
+      fx:game.fx.map(f=>({...f,age:t-f.at}))},performance.now(),64);
     // Sounds for card moves and the goldfish rush (the big screen is where the class watches).
-    for(const f of game.fx)if(f.id>r.lastFx){r.lastFx=f.id;({up:G.sfx.boom,ice:G.sfx.freeze,shield:G.sfx.shield,block:G.sfx.block,x2:G.sfx.power,tri:G.sfx.power,rush:G.sfx.rush}[f.k]||(()=>{}))();}
+    for(const f of game.fx)if(f.id>r.lastFx){r.lastFx=f.id;
+      ({up:G.sfx.boom,shoot:G.sfx.shoot,ice:G.sfx.freeze,throw:G.sfx.fire,slime:G.sfx.slime,shield:G.sfx.shield,block:G.sfx.block,x2:G.sfx.power,tri:G.sfx.power,rush:G.sfx.rush}[f.k]||(()=>{}))();}
     // Music follows the game (the rock tune during a goldfish rush), ticking in the last 10 seconds, a sparkle for a glowing goldfish.
     HA?.music(game.ph==='play'||game.ph==='count'?(rush?'rush':'main'):null);
     if(game.ph==='play'&&r.lastPlayPh==='count')G.sfx.go();r.lastPlayPh=game.ph;

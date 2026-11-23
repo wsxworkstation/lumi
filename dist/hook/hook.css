@@ -298,3 +298,4 @@ body.host{overflow:auto;background:linear-gradient(#d4efff,#f4fbff 340px);backgr
 #stage .end-panel{top:64px}
 #time button,#sound button{white-space:nowrap;padding:7px 4px}
 #sound button{font-size:14px}
+.other-rooms{font-size:12px;color:var(--muted);background:#fff6d8;border-radius:999px;padding:4px 10px}

@@ -12,7 +12,8 @@
   'use strict';
   // The teacher's choice on sound.html (2026-11-22).
   const PICK={main:'C',rush:'B',win:'A',lose:'B',tick:'B',
-    tap:'B',fire:'A',catch:'B',right:'A',wrong:'B',freeze:'B',count:'B',go:'A',card:'B',boom:'B',shield:'B',block:'B',power:'A',glow:'B',rushStart:'A'};
+    tap:'B',fire:'A',catch:'B',right:'A',wrong:'B',freeze:'B',count:'B',go:'A',card:'B',boom:'B',shield:'B',block:'B',power:'A',glow:'B',rushStart:'A',
+    shoot:'A',slime:'A'};
   const LABEL={
     main:['背景音乐（平常）',{A:'木琴野餐',B:'泡泡 pop',C:'小游戏 chiptune'}],
     rush:['金鱼潮音乐',{A:'电吉他摇滚',B:'chiptune 摇滚',C:'电子冲刺'}],
@@ -20,7 +21,8 @@
     lose:['输了（辛苦了）',{A:'温柔木琴',B:'八音盒',C:'轻松吉他'}],
     tick:['最后 10 秒',{A:'时钟滴答',B:'心跳'}],
     tap:['按钮'],fire:['甩竿'],catch:['钓到鱼'],right:['答对'],wrong:['答错'],freeze:['冻住／冷冻'],count:['倒数 3-2-1'],go:['开始！'],
-    card:['拿到卡'],boom:['击飞'],shield:['保护罩'],block:['保护罩挡住'],power:['加倍／三连钩'],glow:['发光金鱼出现'],rushStart:['金鱼潮开始']};
+    card:['拿到卡'],boom:['击飞'],shield:['保护罩'],block:['保护罩挡住'],power:['加倍／三连钩'],glow:['发光金鱼出现'],rushStart:['金鱼潮开始'],
+    shoot:['冰箭射出'],slime:['黏液落地']};
 
   /* ── Notes and chords ── */
   const mtof=m=>440*Math.pow(2,(m-69)/12);
@@ -276,6 +278,10 @@
            B:(t,d)=>{sweep('sawtooth',200,1600,0.3,0.12,t,d);for(const s of ['G5','B5','D6'])INST.brass(t+0.25,nm(s),0.3,0.4,d);}},
     glow:{A:(t,d)=>notes('bell',['E6','G6','A6','C7','E7','G7'],t,0.07,0.22,d,0.3),
           B:(t,d)=>notes('pluck',['C5','D5','E5','G5','A5','C6','D6','E6'],t,0.035,0.35,d,0.2)},
+    shoot:{A:(t,d)=>{hiss(t,d,'highpass',3000,0.7,0.6,0.18,9000);sweep('sine',2200,900,0.15,0.3,t,d);INST.bell(t+0.02,nm('E7'),0.15,0.3,d);},
+           B:(t,d)=>{sweep('square',1800,400,0.12,0.25,t,d);INST.bell(t+0.03,nm('B6'),0.2,0.35,d);}},
+    slime:{A:(t,d)=>{hiss(t,d,'lowpass',900,1.2,0.9,0.22);sweep('sine',420,120,0.22,0.6,t,d);sweep('sine',300,520,0.08,0.35,t+0.12,d);},
+           B:(t,d)=>{for(const [k,f] of [[0,260],[0.08,340],[0.16,220]])sweep('sine',f,f*0.5,0.1,0.5,t+k,d);hiss(t,d,'lowpass',1200,0.7,0.6,0.2);}},
     rushStart:{A:(t,d)=>{[['E3',0],['G3',0.18],['A3',0.36]].forEach(([s,k],i)=>{INST.guitar(t+k,nm(s),i===2?0.7:0.15,0.9,d);DRUM.kick(t+k,0.9,d);});DRUM.crash(t+0.36,0.6,d);DRUM.snare(t+0.36,0.6,d);},
                B:(t,d)=>{[[0,0.12],[0.18,0.12],[0.36,0.6]].forEach(([k,l])=>{for(const s of ['D5','F#5','A5'])INST.brass(t+k,nm(s),l,0.55,d);});DRUM.crash(t+0.36,0.55,d);DRUM.kick(t+0.36,0.8,d);}}
   };
