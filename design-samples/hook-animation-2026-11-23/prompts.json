@@ -1,0 +1,98 @@
+[
+  {
+    "name": "fx-ice-arrow",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. A single horizontal icy arrow pointing RIGHT, broad faceted pale cyan crystal tip at right, small frosty feathers at left, softly painted edges. No trail baked in, no bow. Wide 2:1 asset. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 128,
+    "h": 64,
+    "source": "exec-37f69d48-ba64-4669-a0b0-f20902df7191.png",
+    "tool": "built-in imagegen"
+  },
+  {
+    "name": "fx-ice-burst",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. A single icy impact burst: six short rounded crystal shards radiating around a clear open center, pale cyan and pearl white, tiny snow glints. Square sprite. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 128,
+    "h": 128,
+    "source": "exec-b419dee2-9e09-444a-b9cd-4cfb6838fe49.png",
+    "tool": "built-in imagegen"
+  },
+  {
+    "name": "fx-slime-ball",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. One plump rounded lime-green gelatin ball with a little tapered droplet tip, glossy ivory highlight, gentle olive edge, no face. Square sprite. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 64,
+    "h": 64,
+    "source": "exec-3700b035-d9fb-47b4-a370-05bab5911976.png",
+    "tool": "built-in imagegen"
+  },
+  {
+    "name": "fx-slime-splash",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. One radial lime green jelly splash with short rounded lobes and a few separate droplets, clear open middle so an animal remains visible, no face. Square sprite. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 128,
+    "h": 128,
+    "source": "exec-da927481-585e-4a4e-b7ff-c39f69da4cc7.png",
+    "tool": "built-in imagegen"
+  },
+  {
+    "name": "fx-slime-puddle",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. Top-down perfectly circular lime-green jelly puddle with subtle scalloped edge, translucent center, a few milky highlights and tiny round bubbles, no ground shadow, no directional tilt. Circle silhouette completely within square. Square sprite. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 192,
+    "h": 192,
+    "source": "exec-be5317d0-ad03-4027-9464-4fa6c9ca3fed.png",
+    "tool": "built-in imagegen"
+  },
+  {
+    "name": "fx-shield-bubble",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. One clear transparent round soap bubble, center almost completely transparent, thin softly painted mint and pale aqua rim with a faint pink iridescent glint, two small ivory highlight strokes in upper left. No object or animal inside. Square sprite. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 128,
+    "h": 128,
+    "source": "exec-110a258d-c85b-44da-8eb1-6e3e8d6be949.png",
+    "tool": "built-in imagegen"
+  },
+  {
+    "name": "fx-ice-block",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. One front-view translucent rounded ice block encasing EMPTY space, square-ish with subtly faceted icy blue rim, center almost completely transparent so a character behind remains visible, short diagonal ivory glints and tiny frosted corners. No pedestal, animal or background. Square sprite. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 128,
+    "h": 128,
+    "source": "exec-888c2d4b-f883-491f-9bb4-20ccbd34f35c.png",
+    "tool": "built-in imagegen"
+  },
+  {
+    "name": "fx-dizzy-star",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. One plump five-point buttery gold star, soft apricot edge and tiny cream highlight, gently rounded points, no face or eyes. Square sprite. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 48,
+    "h": 48,
+    "source": "exec-017c6911-6ef7-43a3-85ca-9b2ba7eacb10.png",
+    "tool": "built-in imagegen"
+  },
+  {
+    "name": "card-slow",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. One lime jelly droplet sitting on a small irregular puddle, three little rounded trailing bubbles, ivory highlight, readable tiny game ability button icon, no face. Square sprite. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 64,
+    "h": 64,
+    "source": "exec-4b1ccd4d-4d1e-4ad7-9ca8-34d823fbe437.png",
+    "tool": "built-in imagegen"
+  },
+  {
+    "name": "hook-caught-sample",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. The same plump apricot kitten as reference, neutral clothing-free, tilted slightly back as a small ivory and lavender rounded fishing hook gently catches a soft floating loop beside its belly. Playful surprised expression, completely harmless, no piercing, no injury. Standalone future game sprite, no scenery. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 160,
+    "h": 160,
+    "source": "exec-c31a8ea1-7ac1-48a8-996a-bbf4057e3d5e.png",
+    "tool": "built-in imagegen"
+  },
+  {
+    "name": "hook-dust-sample",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. A short horizontal trail of three soft cream and apricot dust puffs with three pale lavender speed strokes, moving to the right, standalone game effect with open center, no animal or ground. Wide 2:1 sprite. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 192,
+    "h": 96,
+    "source": "exec-d085e871-a687-418d-af9a-827e56b3e9d4.png",
+    "tool": "built-in imagegen"
+  },
+  {
+    "name": "hook-hit-sample",
+    "prompt": "Original cute hand-painted matte 2.5D gouache game effect sprite for a cozy lakeside animal fishing game. A playful compact coral pink and lavender celebratory radial pop burst with a small rounded ivory fishing hook symbol in its center, short cream streaks and three tiny stars. No words or letters, no animal. Square sprite. Clean simple silhouette readable on a phone, consistent soft warm top-left light, gentle shaded volume, no black outline, no logo, no UI, no ground plane, no scenery, isolated on genuinely transparent background. Fill about 85% of canvas with modest padding. Do not include animals unless explicitly requested.",
+    "w": 160,
+    "h": 160,
+    "source": "exec-8562ae63-3727-4686-9e34-dcee7c5320a1.png",
+    "tool": "built-in imagegen"
+  }
+]
