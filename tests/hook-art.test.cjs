@@ -79,7 +79,7 @@ test('renderer switches assets independently and rebuilds cached scenery only on
 });
 
 test('skill animations follow snapshots, keep team rims and fall back independently',()=>{
-  const r=renderer(),ctx=r.context({width:844,height:390}),base={tc:3,t:1000,players:[{id:'a',name:'A',av:0,team:0,x:180,y:200,st:2,sh:true,slow:true},{id:'b',name:'B',av:1,team:1,x:1000,y:400,st:3,kb:{x0:900,y0:400,x1:1170,y1:400,t0:800,t1:1400}},{id:'c',name:'C',av:2,team:1,x:300,y:600,st:0,daze:1800,ink:3000}],hooks:[],orbs:[],drops:[],shots:[{k:'ice',x:200,y:200,a:0,t0:900,d:420},{k:'slime',x:180,y:400,tx:350,ty:450,t0:800,land:1350}],zones:[{id:1,x:350,y:450,team:2,from:500,until:4500}],loot:[{id:1,k:'b',x:500,y:300},{id:2,k:'c',x:700,y:330,hooked:true}],fx:[{k:'ice',tx:1000,ty:400,age:200},{k:'slime',x:350,y:450,age:200}],aim:{kind:'ice',x:180,y:200,a:0}};
+  const r=renderer(),ctx=r.context({width:844,height:390}),base={tc:3,t:1000,players:[{id:'a',name:'A',av:0,team:0,x:180,y:200,st:2,sh:true,slow:true},{id:'b',name:'B',av:1,team:1,x:1000,y:400,st:3,kb:{x0:900,y0:400,x1:1170,y1:400,t0:800,t1:1400}},{id:'c',name:'C',av:2,team:1,x:300,y:600,st:5,until:1800,ink:3000}],hooks:[],orbs:[],drops:[],shots:[{k:'ice',x:200,y:200,a:0,t0:900,d:420},{k:'slime',x:180,y:400,tx:350,ty:450,t0:800,land:1350}],zones:[{id:1,x:350,y:450,team:2,from:500,until:4500}],loot:[{id:1,k:'b',x:500,y:300},{id:2,k:'c',x:700,y:330,hooked:true}],fx:[{k:'ice',tx:1000,ty:400,age:200},{k:'slime',x:350,y:450,age:200}],aim:{kind:'ice',x:180,y:200,a:0}};
   const untouched=JSON.stringify(base);
   r.game.render(ctx,844,390,1,base,1000);
   for(const key of ['fx-ice-arrow','fx-ice-burst','fx-slime-ball','fx-slime-splash','fx-slime-puddle','fx-shield-bubble','fx-ice-block','fx-dizzy-star','card-shield'])r.add(key);
@@ -102,12 +102,12 @@ test('new card visuals draw with or without pictures and never change the game d
   const r=renderer(),ctx=r.context({width:844,height:390});
   const V={tc:2,t:2000,hooks:[{o:'a',x:200,y:150,tx:400,ty:250,team:0,caught:true}],
     players:[{id:'a',name:'A',av:0,team:0,x:200,y:150,st:0,me:true},{id:'b',name:'B',av:3,team:1,x:500,y:60,st:3,kb:{x0:450,y0:60,x1:1170,y1:60,t0:1800,t1:2300}},
-      {id:'c',name:'C',av:4,team:1,x:900,y:600,st:5,until:3000},{id:'d',name:'D',av:5,team:1,x:1000,y:120,st:0,daze:2500,ink:4000}],
+      {id:'c',name:'C',av:4,team:1,x:900,y:600,st:5,until:3000},{id:'d',name:'D',av:5,team:1,x:1000,y:120,st:1,ink:4000,kb:{x0:900,y0:120,x1:1170,y1:120,t0:1900,t1:2400}}],
     orbs:[{id:101,k:'n',x:620,y:330,mark:true},{id:2,k:'n',x:520,y:300}],loot:[{id:1,k:'c',x:500,y:350},{id:2,k:'b',x:700,y:300},{id:3,k:'c',x:400,y:250,hooked:true}],
     zones:[{id:9,k:'w',team:0,x:600,y:337,from:1000,until:6000},{id:8,k:'s',team:1,x:300,y:600,from:1500,until:5000}],
     shots:[{k:'whirl',x:600,y:60,tx:600,ty:300,t0:1800,land:2250,team:0}],
-    fx:[{k:'bomb',x:600,y:300,tx:620,ty:330,age:200},{k:'ink',x:200,y:150,age:200},{k:'whirl',x:600,y:337,age:100},{k:'box',x:200,y:150,age:300}],
-    aim:{kind:'whirl',x:200,y:150,tx:500,ty:300},rush:0};
+    fx:[{k:'bomb',x:600,y:300,tx:620,ty:330,age:200,w:'2'},{k:'ink',x:200,y:150,age:200},{k:'whirl',x:600,y:337,age:100},{k:'box',x:200,y:150,age:300},{k:'up',x:200,y:150,tx:0.3,age:200},{k:'steal',x:200,y:150,tx:500,ty:60,w:'p',age:300},{k:'steal',x:200,y:150,tx:500,ty:60,w:'ice',age:500}],
+    aim:{kind:'fan',x:200,y:150,a:0.3},rush:0};
   const before=JSON.stringify(V);
   r.game.render(ctx,844,390,1,V,1000);r.game.inkCover(ctx,844,390,0.8,12345);
   for(const k of ['fx-whirl','bomb-mark','fx-bomb','lake-box','lake-bubble','ink-1','ink-2','ink-3','ink-mark','fx-hook-dust'])r.add(k);

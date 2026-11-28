@@ -15,11 +15,12 @@
   <link rel="stylesheet" href="./hook.css?v=__V__">
 </head>
 <body>
+  <div id="game">
   <canvas id="cv"></canvas>
   <div id="hud" class="hidden">
     <div class="clock" id="clock"></div>
     <div class="scores" id="scores"></div>
-    <button class="icon-btn" id="mute" aria-label="声音 Sound"></button>
+    <span class="hud-btns"><button class="icon-btn flip" id="flip" aria-label="画面翻转 Flip" title="画面上下颠倒就按这里"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg></button><button class="icon-btn" id="mute" aria-label="声音 Sound"></button></span>
   </div>
   <div id="joy" class="hidden"><i></i></div>
   <div class="joy-hint hidden" id="joyHint">左边拖动 走路</div>
@@ -32,6 +33,7 @@
   <div id="toast"></div>
   <div id="net" class="hidden">连线中… Reconnecting</div>
   <div id="ask" class="hidden"></div>
+  </div>
   <div id="ui"></div>
   <div id="ver"></div>
   <div id="rotate"><div><i class="phone"></i>请把手机横过来<br><small>Turn your phone sideways</small></div></div>

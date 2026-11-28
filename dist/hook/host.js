@@ -8,7 +8,11 @@
   const net=local?G.createLocalNet():G.createNet(window.STUDYLOG_CLOUD||{});
   const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const teamOf=i=>C.TEAMS[i]||C.TEAMS[0];
-  const HID=Math.random().toString(36).slice(2,10),MAX_ROOMS=3,EMPTY_Q='还没有题目。Excel 用线上练习同一个模板（Quizizz 格式）。';
+  // This page's own id (kept across a refresh of the same tab). Phones only listen to the page whose room they picked,
+  // so an old teacher page left open somewhere can never catch them.
+  const HID=(()=>{let h='';try{h=sessionStorage.getItem('lumi-hook-hid')||'';}catch{}if(!/^[a-z0-9]{8}$/.test(h)){h=(Math.random().toString(36)+'00000000').slice(2,10);try{sessionStorage.setItem('lumi-hook-hid',h);}catch{}}return h;})();
+  const STARTED=Date.now(),VER=document.querySelector('meta[name="hook-version"]')?.content||'';
+  const MAX_ROOMS=3,EMPTY_Q='还没有题目。Excel 用线上练习同一个模板（Quizizz 格式）。';
   G.pressFeedback();
   // Sound on the teacher's computer (the classroom speakers): its own setting and music volume.
   const HA=window.HookAudio;let musicVol=0.6;try{const v=Number(localStorage.getItem('lumi-hook-music-vol'));if(v>=0&&v<=1&&localStorage.getItem('lumi-hook-music-vol')!==null)musicVol=v;}catch{}
@@ -44,8 +48,9 @@
   const saveCodes=()=>{try{sessionStorage.setItem('lumi-hook-codes',JSON.stringify(rooms.map(r=>r.code).filter(Boolean)));}catch{}};
   function onUp(r,ev,m){
     if(ev!=='u'||!m||!m.id)return;recv++;
+    if(m.to&&m.to!==HID)return;   // a phone talking to another teacher page that uses the same room number
     const g=r.game;
-    if(m.k==='need'){const i=Number(m.q),at=r.needAt.get(i)||0;if(r.pack[i]&&performance.now()-at>800){r.needAt.set(i,performance.now());push(r,'q',{items:[[i,r.pack[i]]]});}return;}
+    if(m.k==='need'){const i=Number(m.q),at=r.needAt.get(i)||0;if(r.pack[i]&&performance.now()-at>800){r.needAt.set(i,performance.now());push(r,'q',{items:[[i,r.pack[i]]],hid:HID});}return;}
     const before=g.players.size,p=g.input(m);
     if(r===cur&&((m.k==='join'&&p&&g.players.size!==before)||m.k==='bye'))drawPlayers();
   }
@@ -61,7 +66,7 @@
   });
   // If this computer can't reach the server, students never see the room. Say so instead of looking fine.
   setInterval(()=>{$('#netWarn').classList.toggle('hidden',net.downFor()<4000);},1000);
-  addEventListener('beforeunload',()=>{for(const r of rooms)if(r.code){net.push(r.down,'closed',{});net.push('hook-lobby','room',{room:r.code,n:0,ph:'closed',hid:HID});}});
+  addEventListener('beforeunload',()=>{for(const r of rooms)if(r.code){net.push(r.down,'closed',{hid:HID});net.push('hook-lobby','room',{room:r.code,n:0,ph:'closed',hid:HID});}});
 
   /* Tabs: 0001 | 0002 | 0003 | ＋开新房间. Each shows how that room is doing. */
   function status(r){const g=r.game;
@@ -73,7 +78,7 @@
     const list=rooms.map(r=>`<span class="room-tab${r===cur?' on':''}"><button data-room="${rooms.indexOf(r)}"><b>${esc(r.code||'····')}</b><small>${status(r)}</small></button>${many?`<button class="room-x" data-close="${rooms.indexOf(r)}" title="关掉这个房间">✕</button>`:''}</span>`).join('');
     // Rooms announced by another teacher page (another tab, window or computer) — usually an old page left open.
     const elsewhere=[...others].filter(([c,o])=>Date.now()-o.at<6000&&o.ph!=='closed'&&!rooms.some(r=>r.code===c)).map(([c])=>c).sort();
-    const note=elsewhere.length?`<span class="other-rooms">还有房间 ${elsewhere.map(esc).join('、')} 在别的分页或电脑开着</span>`:'';
+    const note=elsewhere.length?`<span class="other-rooms">⚠ 房间 ${elsewhere.map(esc).join('、')} 是另一个老师页开的（可能是忘了关的旧分页）。学生可能点错，不用的话请把那个分页关掉。</span>`:'';
     const setupHtml=note+(many?list:'')+add,stageHtml=many?list:'';
     // Only redraw when something changed, so a click is never lost to a redraw happening under the pointer.
     if(setupHtml!==tabsDrawn[0]){tabsDrawn[0]=setupHtml;$('#roomsSetup').innerHTML=setupHtml;}
@@ -85,7 +90,7 @@
     if(t.dataset.new!=null){if(rooms.length>=MAX_ROOMS)return;const r=newRoom(G.pickRoom(inUse()),cur);select(r);return;}
     if(t.dataset.close!=null){const r=rooms[Number(t.dataset.close)];if(!r||rooms.length<2)return;
       if((r.game.players.size||r.game.ph!=='lobby')&&!confirm(`关掉房间 ${r.code}？里面的学生会被请出去。`))return;
-      push(r,'closed',{});if(r.code){net.push('hook-lobby','room',{room:r.code,n:0,ph:'closed',hid:HID});net.leave(r.down);net.leave(r.up);}
+      push(r,'closed',{hid:HID});if(r.code){net.push('hook-lobby','room',{room:r.code,n:0,ph:'closed',hid:HID});net.leave(r.down);net.leave(r.up);}
       rooms.splice(rooms.indexOf(r),1);saveCodes();if(r===cur)select(rooms[0]);else tabs();return;}
     const r=rooms[Number(t.dataset.room)];if(r&&r!==cur)select(r);
   });
@@ -146,7 +151,8 @@
     let part=[],size=0;const parts=[];
     r.pack.forEach((q,i)=>{const n=JSON.stringify(q).length;if(part.length&&size+n>60000){parts.push(part);part=[];size=0;}part.push([i,q]);size+=n;});
     if(part.length)parts.push(part);
-    parts.forEach((items,i)=>setTimeout(()=>push(r,'q',{items}),i*200));
+    const gap=Math.max(200,Math.round((phonesIn(r)+1)*1000/40));
+    parts.forEach((items,i)=>setTimeout(()=>push(r,'q',{items,hid:HID}),i*gap));
   }
 
   /* ── Settings of the room on screen ── */
@@ -203,7 +209,7 @@
   $('#pause').onclick=()=>{const g=cur.game;if(g.ph==='play')g.pause();else if(g.ph==='pause')g.resume();snapNow(cur);};
   $('#stop').onclick=()=>{const r=cur;if(r.game.ph==='end')return;if(confirm('现在结束这一局？')){r.game.stop();snapNow(r);}};
   function toLobby(r){r.game.toLobby();snapNow(r);if(r===cur)select(r);}
-  function snapNow(r){r.lastSnap=performance.now();push(r,'snap',r.game.snapshot());}
+  function snapNow(r){r.lastSnap=performance.now();const s=r.game.snapshot();s.hid=HID;push(r,'snap',s);}
   function showEnd(r,quiet){
     const g=r.game,e=g.end,win=e.win>=0?teamOf(e.win):null;
     // Top three stand on a little podium: 2nd, 1st, 3rd.
@@ -223,12 +229,17 @@
      it comes back as soon as the page is looked at again. */
   let hiddenSince=document.hidden?Date.now():0;
   document.addEventListener('visibilitychange',()=>{hiddenSince=document.hidden?Date.now():0;if(!hiddenSince)rooms.forEach(wake);});
-  const asleep=r=>!!hiddenSince&&Date.now()-hiddenSince>10*60000&&r.game.ph==='lobby'&&!r.game.players.size;
+  const idle=r=>(r.game.ph==='lobby'||r.game.ph==='end')&&!phonesIn(r);
+  const asleep=r=>!!hiddenSince&&Date.now()-hiddenSince>10*60000&&idle(r);
   // Asleep, the room gives its number back (so another teacher page can use it without both hearing the same phones);
   // awake again, it takes its old number if still free, otherwise the next free one.
   function nap(r){if(r.sleeping||!r.code)return;r.sleeping=r.code;
-    net.push(r.down,'closed',{});net.push('hook-lobby','room',{room:r.code,n:0,ph:'closed',hid:HID});net.leave(r.down);net.leave(r.up);
+    net.push(r.down,'closed',{hid:HID});net.push('hook-lobby','room',{room:r.code,n:0,ph:'closed',hid:HID});net.leave(r.down);net.leave(r.up);
     r.code=r.down=r.up='';saveCodes();if(r===cur)$('#code').textContent='····';tabs();}
+  // Another teacher page opened on this computer: an old page in the background with no students gives its rooms back at once.
+  try{const bc=new BroadcastChannel('lumi-hook-hosts');
+    bc.onmessage=e=>{if(e.data?.k==='hello'&&e.data.hid!==HID&&document.hidden)for(const r of rooms)if(idle(r))nap(r);};
+    bc.postMessage({k:'hello',hid:HID});}catch{}
   function wake(r){if(!r.sleeping)return;const want=r.sleeping,used=inUse();r.sleeping='';openCode(r,used.has(want)?G.pickRoom(used):want);}
   if(local){window.__nap=()=>{hiddenSince=1;};window.__wake=()=>{hiddenSince=0;rooms.forEach(wake);};}   // test mode only
   /* A worker keeps every referee ticking even if this tab is behind another window. */
@@ -243,7 +254,7 @@
       if(g.ph!==r.lastPh){r.lastPh=g.ph;if(g.ph==='end'&&r===cur)showEnd(r,false);snapNow(r);tabs();}
       if(now-r.lastSnap>=(g.ph==='play'||g.ph==='count'?every:1000))snapNow(r);
       if(asleep(r))nap(r);
-      if(r.code&&now-r.lastAnnounce>2000){r.lastAnnounce=now;net.push('hook-lobby','room',{room:r.code,n:g.players.size,ph:g.ph,hid:HID});}
+      if(r.code&&now-r.lastAnnounce>2000){r.lastAnnounce=now;net.push('hook-lobby','room',{room:r.code,n:phonesIn(r),ph:g.ph,hid:HID,v:VER,vis:document.hidden?0:1,t0:STARTED});}
       // Students silent for 10 s have left: take them off (in a game they keep their team and score if they come back).
       if(sweep&&g.sweep()&&g.ph==='lobby'&&r===cur)drawPlayers();
     }
@@ -261,7 +272,7 @@
     requestAnimationFrame(frame);
     if($('#stage').classList.contains('hidden'))return;
     const r=cur,game=r.game,t=game.t,hooked=new Set(game.hooks.map(h=>h.o));
-    const players=[...game.players.values()].map(p=>({...p,fx:p.dx,fy:p.dy,mv:game.ph==='play'&&p.st===0&&!!(p.dx||p.dy)&&!hooked.has(p.id),sh:p.sh>t,x2:!!p.x2,slow:p.st===0&&game.slowed(p.id)}));
+    const players=[...game.players.values()].map(p=>({...p,fx:p.dx,fy:p.dy,mv:game.ph==='play'&&p.st===0&&!!(p.dx||p.dy)&&!hooked.has(p.id),sh:p.sh>t,x2:!!p.x2,slow:!p.kb&&game.slowed(p.id)}));
     const hooks=game.hooks.map(h=>{const tip=G.hookTip(h,t);return {o:h.o,x:h.x,y:h.y,tx:tip.x,ty:tip.y,team:game.players.get(h.o)?.team,caught:!!(h.orb||h.loot)};});
     // Bomb fish look like any fish on the big screen too (the class can see it).
     const orbs=[];for(const o of game.orbs){const at=game.orbAt(o);if(at)orbs.push({id:o.id,k:o.k,x:at.x,y:at.y,alpha:o.hk||o.by?1:Math.min(1,(t-o.b)/300),held:!!o.by,hooked:!!o.hk&&!o.by});}
@@ -271,7 +282,7 @@
       fx:game.fx.map(f=>({...f,age:t-f.at}))},performance.now(),64);
     // Sounds for card moves and the goldfish rush (the big screen is where the class watches). A bomb fish being put down stays secret.
     for(const f of game.fx)if(f.id>r.lastFx){r.lastFx=f.id;
-      ({up:G.sfx.boom,shoot:G.sfx.shoot,ice:G.sfx.freeze,throw:G.sfx.fire,slime:G.sfx.slime,whirl:G.sfx.whirl,bomb:G.sfx.bomb,ink:G.sfx.ink,box:G.sfx.card,
+      ({up:G.sfx.boom,shoot:G.sfx.shoot,ice:G.sfx.freeze,throw:G.sfx.fire,slime:G.sfx.slime,whirl:G.sfx.whirl,bomb:G.sfx.bomb,ink:G.sfx.ink,box:G.sfx.card,steal:G.sfx.steal,
         shield:G.sfx.shield,block:G.sfx.block,x2:G.sfx.power,rush:G.sfx.rush}[f.k]||(()=>{}))();}
     // Music follows the game (the rock tune during a goldfish rush), ticking in the last 10 seconds, a sparkle for a glowing goldfish.
     HA?.music(game.ph==='play'||game.ph==='count'?(rush?'rush':'main'):null);
@@ -302,5 +313,11 @@
   // Test mode only: lets a test script set up a situation (__hook = the game on screen).
   if(local){window.__rooms=rooms;Object.defineProperty(window,'__hook',{configurable:true,get:()=>cur.game});}
   // Run the newest version (only while every room is still empty, so a running game is never reloaded).
-  const ver=G.freshen(()=>rooms.some(r=>r.game.players.size>0||r.game.ph!=='lobby'));if(ver)$('#ver').textContent='版本 '+ver;
+  const busy=()=>rooms.some(r=>r.game.players.size>0||r.game.ph!=='lobby'||r.game.qs.length);
+  const showUpdate=v=>{const el=$('#update');if(!el||!v||v===VER)return;el.classList.remove('hidden');
+    $('#updateBtn').onclick=()=>{if(rooms.some(r=>r.game.ph==='play'||r.game.ph==='count')&&!confirm('还有一局在进行，现在更新会结束它。继续？'))return;
+      const q=new URLSearchParams(location.search);q.set('v',v);location.replace(location.pathname+'?'+q);};};
+  const ver=G.freshen(busy,showUpdate);if(ver)$('#ver').textContent='版本 '+ver;
+  if(!local)setInterval(()=>G.latestVersion().then(showUpdate),10*60000);
+  if(local){window.__showUpdate=showUpdate;window.__hid=HID;}   // test mode only
 })();

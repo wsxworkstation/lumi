@@ -176,7 +176,7 @@ test('a box caught with the rod gives a card at once (no question); hands full: 
   const seen={};g.sc=[0,15,0];
   for(let i=0;i<700;i++){a.cards=[];const l={id:900+i,k:'c',s:1,b:0,hk:'a'};g.loot.push(l);
     g.hooks=[{o:'a',x:a.x,y:a.y,a:0,t0:g.t-2000,tt:g.t-1990,d:5,orb:0,loot:l.id,lt:g.t}];g.tick(33);seen[a.cards[0]]=(seen[a.cards[0]]||0)+1;}
-  assert.deepEqual(Object.keys(seen).sort(),['bomb','ice','ink','slow','up','whirl','x2']);
+  assert.deepEqual(Object.keys(seen).sort(),['bomb','ice','ink','steal','up','whirl','x2'],'seven cards, no slime any more');
   for(const n of Object.values(seen))assert.ok(n>60&&n<150,'about equally likely: '+JSON.stringify(seen));
 });
 
@@ -209,76 +209,79 @@ test('the shield bubble: caught with the rod for 10 s of shield, back 15 s later
   assert.equal(stolen,false);
 });
 
-test('knock-back throws nearby enemies to the edge of the map; they walk at half speed for 1 s after landing', () => {
-  const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
-  assert.deepEqual([a.team,b.team,c.team,d.team],[0,1,0,1]);
-  a.x=400;a.y=60;b.x=470;b.y=60;c.x=430;c.y=60;d.x=400;d.y=130;Object.assign(d,{st:1,until:g.t+C.ANSWER});
-  a.cards=['up'];assert.ok(g.useCard('a',0));
-  assert.equal(b.st,3,'enemy flies');assert.equal(c.st,0,'teammate safe');assert.equal(d.st,1,'answering is never interrupted');
-  assert.deepEqual(a.cards,[]);
-  const s=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));
-  assert.deepEqual(s.fx.map(f=>[f.k,f.by,f.to]),[['up','a',['b']]]);const sb=s.p.find(p=>p.id==='b');assert.equal(sb.st,3);
-  assert.ok(sb.kb&&sb.kb.x1>1150&&Math.abs(sb.kb.y1-60)<2,'flying right, away from a, to the edge');
-  g.input({k:'fire',id:'b',x:b.x,y:b.y,a:Math.PI/2,t:g.t});assert.equal(g.hooks.length,0,'cannot fish while flying');
-  g.tick(100);assert.ok(b.x>470,'on the way');
-  for(let i=0;i<40&&b.st===3;i++)g.tick(33);
-  assert.equal(b.st,0,'landed within a second');assert.ok(b.x>1150,'at the edge of the map');assert.ok(b.daze>g.t,'dizzy for a moment');
-  const x0=b.x;b.dx=-1;b.dy=0;run(g,250);assert.ok(Math.abs((x0-b.x)/0.25-C.SPEED*C.CARD.DAZE_K)<20,'half speed: '+((x0-b.x)/0.25).toFixed(0));
-  run(g,C.CARD.DAZE);const x1=b.x;run(g,250);assert.ok(Math.abs((x1-b.x)/0.25-C.SPEED)<20,'full speed again');b.dx=0;
-  b.x=a.x+400;b.y=a.y;a.cards=['up'];assert.equal(g.useCard('a',0),false);assert.deepEqual(a.cards,['up'],'nobody in reach: card kept');
-  // Standing right on top of the enemy: thrown away from the lake.
-  b.x=a.x;b.y=a.y;g.useCard('a',0);assert.ok(b.kb.y1<=b.kb.y0,'pushed away from the water');
+test('knock-back: every enemy in the aimed fan flies to the edge of the map, whatever they are doing; no slowing after', () => {
+  const g=playing(['a','b','c','d','e']),[a,b,c,d,e]=['a','b','c','d','e'].map(id=>g.players.get(id));
+  assert.deepEqual([a.team,b.team,c.team,d.team,e.team],[0,1,0,1,0]);
+  g.orbs=[];a.x=400;a.y=60;
+  b.x=560;b.y=70;                                    // enemy in front, inside the fan
+  d.x=600;d.y=110;Object.assign(d,{st:1,until:g.t+C.ANSWER,q:0,qn:1});   // enemy answering a question, also in front
+  c.x=480;c.y=60;                                    // teammate in front: never hit
+  a.cards=['up'];assert.ok(g.useCard('a',0,0),'aimed straight right');
+  assert.equal(b.st,3,'enemy flies');assert.ok(b.kb&&b.kb.x1>1150,'to the right edge');
+  assert.ok(d.kb,'the one answering flies too');assert.equal(d.st,1,'and keeps answering');assert.equal(c.kb,null,'teammate safe');
+  const s=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));assert.ok(s.p.find(p=>p.id==='d').kb,'phones see the flight');
+  g.input({k:'fire',id:'b',x:b.x,y:b.y,a:Math.PI/2,t:g.t});assert.equal(g.hooks.filter(h=>h.o==='b').length,0,'cannot fish while flying');
+  for(let i=0;i<40&&(b.kb||d.kb);i++)g.tick(33);
+  assert.equal(b.st,0,'landed');assert.ok(b.x>1150);assert.equal(d.st,1,'still answering after landing');
+  const x0=b.x;b.dx=-1;b.dy=0;run(g,250);assert.ok(Math.abs((x0-b.x)/0.25-C.SPEED)<20,'full speed right after landing: '+((x0-b.x)/0.25).toFixed(0));b.dx=0;
+  // Behind me, or outside the fan's sides, or too far: not hit — and the card is kept when the fan is empty.
+  b.x=a.x-100;b.y=a.y;d.x=a.x+40;d.y=a.y+200;Object.assign(d,{st:0});
+  a.cards=['up'];assert.equal(g.useCard('a',0,0),false,'nobody inside the fan');assert.deepEqual(a.cards,['up'],'card kept');
+  b.x=a.x+C.FAN.R+40;b.y=a.y;assert.equal(g.useCard('a',0,0),false,'too far');
+  // No aim: at the nearest enemy. A shield stops it.
+  b.x=a.x+100;b.y=a.y+100;b.sh=g.t+5000;assert.ok(g.useCard('a',0));assert.equal(b.kb,null,'shield took it');assert.equal(b.sh,0);
 });
-
-test('freeze is aimed: the arrow flies straight and freezes the first enemy on its path for 3 s', () => {
+test('freeze is aimed: a big arrow flies far and freezes the first enemy on its path for 3 s', () => {
+  assert.equal(C.SHOT.RANGE,600);assert.equal(C.SHOT.R,40);assert.equal(C.CARD.ICE,3000);
   const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
   a.x=200;a.y=60;b.x=a.x+150;b.y=a.y;c.x=a.x+60;c.y=a.y;d.x=a.x+100;d.y=a.y;Object.assign(d,{st:1,until:g.t+C.ANSWER});
   a.cards=['ice'];assert.ok(g.useCard('a',0,0));assert.deepEqual(a.cards,[],'card used');assert.equal(g.shots.length,1);
   run(g,300);
   assert.equal(b.st,2,'enemy on the path is frozen');assert.equal(c.st,0,'passes through a teammate');assert.equal(d.st,1,'passes someone answering');
-  assert.equal(C.CARD.ICE,3000);assert.ok(Math.abs(b.until-g.t-C.CARD.ICE)<=300,'about 3 s');assert.equal(g.shots.length,0,'arrow gone after hitting');
-  assert.deepEqual(g.fx.filter(f=>f.k==='ice').map(f=>[f.by,f.to]),[['a',['b']]]);
+  assert.ok(Math.abs(b.until-g.t-C.CARD.ICE)<=300,'about 3 s');assert.equal(g.shots.length,0,'arrow gone after hitting');
   run(g,C.CARD.ICE);assert.equal(b.st,0);
-  a.cards=['ice'];g.useCard('a',0,Math.PI);run(g,600);assert.equal(b.st,0,'missed');assert.deepEqual(a.cards,[]);assert.equal(g.shots.length,0,'flew its full range and vanished');
-  b.x=a.x+C.SHOT.RANGE+60;a.cards=['ice'];g.useCard('a',0,0);run(g,800);assert.equal(b.st,0,'too far');
+  // Far away (550) and a little off the line (35): the big arrow still gets them.
+  b.x=a.x+550;b.y=a.y+35;a.cards=['ice'];g.useCard('a',0,0);run(g,700);assert.equal(b.st,2,'far and slightly off the line');run(g,C.CARD.ICE);
+  a.cards=['ice'];g.useCard('a',0,Math.PI);run(g,800);assert.equal(b.st,0,'missed');assert.deepEqual(a.cards,[]);assert.equal(g.shots.length,0,'flew its full range and vanished');
+  b.x=a.x+C.SHOT.RANGE+60;b.y=a.y;a.cards=['ice'];g.useCard('a',0,0);run(g,900);assert.equal(b.st,0,'too far');
   b.x=a.x+80;b.y=a.y+80;a.cards=['ice'];g.useCard('a',0);run(g,300);assert.equal(b.st,2,'auto-aim');
   const s=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));assert.ok(Array.isArray(s.s)&&Array.isArray(s.z)&&Array.isArray(s.l));
 });
-
-test('slime ball: lands where aimed, enemies inside walk at 40% and their rods go half speed; teammates are not slowed', () => {
-  const g=playing(['a','b','c']),[a,b,c]=['a','b','c'].map(id=>g.players.get(id));
-  a.x=200;a.y=60;b.x=300;b.y=60;c.x=320;c.y=60;   // b is the enemy, c is a's teammate
-  a.cards=['slow'];assert.ok(g.useCard('a',0,0,100));assert.equal(g.zones.length,0,'still flying');
-  run(g,C.SLIME.FLY+50);assert.equal(g.zones.length,1,'landed');const z=g.zones[0];assert.ok(Math.abs(z.x-300)<2&&Math.abs(z.y-60)<2);assert.equal(z.k,'s');
-  assert.ok(g.slowed('b'),'enemy slowed');assert.equal(g.slowed('c'),false,'teammate not slowed');
-  const bx=b.x,cx=c.x;b.dx=1;b.dy=0;c.dx=1;c.dy=0;run(g,250);
-  const vb=(b.x-bx)/0.25,vc=(c.x-cx)/0.25;assert.ok(Math.abs(vb-C.SPEED*C.SLIME.SLOW)<15,'40% speed: '+vb.toFixed(0));assert.ok(Math.abs(vc-C.SPEED)<15,'teammate full speed');
-  b.dx=c.dx=0;
-  assert.ok(g.input({k:'fire',id:'b',x:b.x,y:b.y,a:Math.PI/2,t:g.t}));const h=g.hooks.find(x=>x.o==='b');assert.equal(h.sp,C.SLIME.ROD,'rod at half speed');
-  assert.ok(Math.abs(H.hookDist(h,h.t0+200)-C.OUT*C.SLIME.ROD*0.2)<1);
-  run(g,C.SLIME.LEN);assert.equal(g.zones.length,0,'gone after 4 s');assert.equal(g.slowed('b'),false);
+test('the slime card is gone: an old one left in a hand is simply dropped', () => {
+  const g=playing(['a','b']),a=g.players.get('a');
+  assert.ok(!('slow' in H.CARDS));a.cards=['slow'];assert.equal(g.useCard('a',0,0,100),false);assert.deepEqual(a.cards,[]);assert.equal(g.shots.length,0);
 });
-
-test('whirlpool: lands in the lake and pulls nearby fish into a bunch for 5 s, smoothly; it slows nobody', () => {
-  const g=playing(['a','b']),a=g.players.get('a');a.x=600;a.y=60;
-  a.cards=['whirl'];assert.ok(g.useCard('a',0,Math.PI/2,300));run(g,C.WHIRL.FLY+50);
-  const z=g.zones.find(z=>z.k==='w');assert.ok(z,'whirlpool landed');const s=C.SEA;
-  assert.ok(((z.x-s.x)/s.rx)**2+((z.y-s.y)/s.ry)**2<=0.79**2,'in the water');assert.equal(g.slowed('b'),false);
-  // Aimed at the shore: still lands in the water.
-  a.cards=['whirl'];g.useCard('a',0,0,300);run(g,C.WHIRL.FLY+50);const z2=g.zones.filter(z=>z.k==='w')[1];assert.ok(((z2.x-s.x)/s.rx)**2+((z2.y-s.y)/s.ry)**2<=0.79**2);
-  // The pull: fish near the middle are drawn in, far fish are left alone, nothing jumps, and it ends after 5 s.
+test('whirlpool: thrown anywhere, 4 s; enemies inside (answering too) are dragged in and walk at half speed; fish bunch up', () => {
+  assert.equal(C.WHIRL.LEN,4000);assert.ok(C.WHIRL.R>=70&&C.WHIRL.R<=110,'about a fifth of the lake');
+  const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
+  a.x=200;a.y=60;
+  a.cards=['whirl'];assert.ok(g.useCard('a',0,0,300));run(g,C.WHIRL.FLY+40);
+  const z=g.zones.find(z=>z.k==='w');assert.ok(z,'landed');assert.ok(Math.abs(z.x-500)<3&&Math.abs(z.y-60)<3,'on the shore, where aimed');
+  // b: enemy walking inside; d: enemy answering inside; c: teammate inside.
+  b.x=z.x+60;b.y=z.y;d.x=z.x-60;d.y=z.y+10;Object.assign(d,{st:1,until:g.t+C.ANSWER,q:0,qn:1});c.x=z.x;c.y=z.y+50;
+  assert.ok(g.slowed('b'));assert.equal(g.slowed('c'),false,'teammates are not slowed');
+  const b0=Math.hypot(b.x-z.x,b.y-z.y),d0=Math.hypot(d.x-z.x,d.y-z.y),c0={x:c.x,y:c.y};
+  run(g,300);assert.ok(Math.hypot(b.x-z.x,b.y-z.y)<b0-20,'dragged to the middle');assert.ok(Math.hypot(d.x-z.x,d.y-z.y)<d0-20,'answering, still dragged');
+  assert.equal(d.st,1,'keeps answering');assert.deepEqual({x:c.x,y:c.y},c0,'teammate not dragged');
+  // Walking out: half speed (plus the pull).
+  b.x=z.x+80;b.y=z.y;b.dx=1;b.dy=0;const bx=b.x;g.tick(100);assert.ok(b.x-bx<C.SPEED*0.1*C.WHIRL.SLOW+1,'half speed inside');b.dx=0;
+  run(g,C.WHIRL.LEN);assert.equal(g.zones.filter(z=>z.k==='w').length,0,'gone after 4 s');assert.equal(g.slowed('b'),false,'no slowing afterwards');
+  // A shield takes the whirlpool once: not dragged, not slowed by it.
+  b.sh=g.t+9000;a.cards=['whirl'];g.useCard('a',0,0,300);run(g,C.WHIRL.FLY+40);const z2=g.zones.find(z=>z.k==='w');b.x=z2.x+60;b.y=z2.y;
+  const bx2=b.x;run(g,300);assert.equal(b.sh,0,'shield used');assert.ok(Math.abs(b.x-bx2)<1,'not dragged');assert.equal(g.slowed('b'),false);
+  // Fish inside are pulled into a bunch (and so swim slowly), fish outside are left alone, nothing jumps.
   const W={k:'w',x:600,y:337,from:0,until:C.WHIRL.LEN,team:0},R=C.WHIRL.R;let pulled=0,maxStep=0;
-  for(const seedN of [1,2,3,4,5,6]){const o={id:seedN,k:'n',s:seedN*101,b:0};let prev=null;
+  for(const seedN of [1,2,3,4,5,6,7,8]){const o={id:seedN,k:'n',s:seedN*101,b:0};let prev=null;
     for(let t=900;t<C.WHIRL.LEN+900;t+=10){const n=H.orbPos(o,t),p=H.fishPos(o,t,[W]),dn=Math.hypot(n.x-W.x,n.y-W.y),dp=Math.hypot(p.x-W.x,p.y-W.y);
       if(t>=1000&&t<C.WHIRL.LEN-1000&&dn<R){assert.ok(dp<=dn*(1-C.WHIRL.PULL)+0.5,'pulled in');pulled++;}
       if(dn>=R*C.WHIRL.BAND||t>=C.WHIRL.LEN)assert.deepEqual(p,n,'untouched');
       if(prev)maxStep=Math.max(maxStep,Math.hypot(p.x-prev.x,p.y-prev.y));prev=p;}}
-  assert.ok(pulled>50,'some fish swam into it');assert.ok(maxStep<8,'no jumps: '+maxStep.toFixed(1));
-  // In the game, the referee and the phones use the same pulled position.
-  const live=g.zones.find(z=>z.k==='w'),o=g.orbs[0];o.b=0;assert.deepEqual(g.orbAt(o),H.fishPos(o,g.t,g.zones));
-  run(g,C.WHIRL.LEN);assert.equal(g.zones.filter(z=>z.k==='w').length,0,'gone after 5 s');assert.ok(live);
+  assert.ok(pulled>20,'some fish swam into it: '+pulled);assert.ok(maxStep<8,'no jumps: '+maxStep.toFixed(1));
+  // The phones work out the same drag and the same slow walk from the snapshot.
+  b.sh=0;a.cards=['whirl'];g.useCard('a',0,0,300);run(g,C.WHIRL.FLY+40);const s=H.unpack(JSON.parse(JSON.stringify(g.snapshot()))),sz=s.z.find(z=>z.k==='w');
+  assert.ok(sz);assert.ok(H.inWhirl(s.z,1,sz.x+30,sz.y,g.t,'b'));assert.equal(H.inWhirl(s.z,0,sz.x+30,sz.y,g.t,'c'),false);
+  const m=H.dragWhirl(s.z,1,sz.x+60,sz.y,g.t,100,'b');assert.ok(m&&m.x<sz.x+60,'dragged in');
 });
-
 test('bomb fish: a plain fish to the other team; its own team passes through it; an enemy who hooks it is dizzy 2 s', () => {
   const g=playing(['a','b','c']),[a,b,c]=['a','b','c'].map(id=>g.players.get(id));g.orbs=[];
   assert.equal(c.team,a.team);a.x=600;a.y=60;
@@ -294,9 +297,14 @@ test('bomb fish: a plain fish to the other team; its own team passes through it;
   // The other team hooks it: boom, dizzy 2 s, can't fish meanwhile.
   shoreNear(b,g.orbAt(o));castAt(g,b,g.orbAt(o),o);for(let i=0;i<30&&b.st!==5;i++)g.tick(33);
   assert.equal(b.st,5,'dizzy');assert.ok(!g.orbs.includes(o),'blown up');assert.ok(Math.abs(b.until-g.t-C.CARD.STUN)<400);
-  assert.deepEqual(g.fx.filter(f=>f.k==='bomb').map(f=>[f.by,f.to]),[['a',['b']]]);assert.equal(g.sc[0]+g.sc[1],0,'no points');
+  assert.deepEqual(g.fx.filter(f=>f.k==='bomb').map(f=>[f.by,f.to]),[['a',['b']]]);assert.equal(g.sc[b.team],0,'already 0: stays 0, never negative');
   g.input({k:'fire',id:'b',x:b.x,y:b.y,a:Math.PI/2,t:g.t});assert.equal(g.hooks.filter(h=>h.o==='b').length,0,'no fishing while dizzy');
   run(g,C.CARD.STUN+50);assert.equal(b.st,0);
+  // With points: the team that hooks it loses 2.
+  run(g,C.CARD.STUN+50);g.sc[b.team]=5;a.cards=['bomb'];g.useCard('a',0);const o3=g.orbs.find(x=>x.bomb!=null);run(g,400);
+  shoreNear(b,g.orbAt(o3));castAt(g,b,g.orbAt(o3),o3);for(let i=0;i<30&&b.st!==5;i++)g.tick(33);
+  assert.equal(b.st,5);assert.equal(g.sc[b.team],3,'minus 2');assert.equal(g.fx.filter(f=>f.k==='bomb').pop().w,'2');
+  run(g,C.CARD.STUN+50);
   // Nobody catches it: gone after 15 s. Never turned into the glowing goldfish.
   a.cards=['bomb'];g.useCard('a',0);const o2=g.orbs.find(x=>x.bomb!=null);g.glowAt=g.t;g.tick(33);assert.notEqual(o2.k,'g');
   run(g,C.BOMB.LEN+100);assert.ok(!g.orbs.includes(o2),'swam away');
@@ -312,6 +320,28 @@ test('ink covers every enemy phone for 2.5 s, not someone answering; a shield bl
   assert.ok(g.input({k:'fire',id:'b',x:b.x,y:b.y,a:Math.PI/2,t:g.t}),'still fishing under the ink');
   run(g,C.CARD.INK+50);assert.equal(H.unpack(JSON.parse(JSON.stringify(g.snapshot()))).p.find(p=>p.id==='b').ink,0,'gone');
   b.sh=g.t+5000;a.cards=['ink'];g.useCard('a',0);assert.ok(!(b.ink>g.t),'shield blocks it');assert.equal(b.sh,0);
+});
+
+test('thief glove: steals a card from the nearest enemy, else a point, whatever they are doing; a shield stops it', () => {
+  const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
+  a.x=200;a.y=60;b.x=300;b.y=60;d.x=900;d.y=600;Object.assign(b,{st:1,until:g.t+C.ANSWER,q:0,qn:1});   // b is answering
+  b.cards=['ice'];d.cards=['ink'];
+  a.cards=['steal'];assert.ok(g.useCard('a',0));
+  assert.deepEqual(a.cards,['ice'],'took the nearest enemy\'s card');assert.deepEqual(b.cards,[]);assert.equal(b.st,1,'they keep answering');
+  const f=g.fx.filter(x=>x.k==='steal').pop();assert.deepEqual([f.by,f.to,f.w],['a',['b'],'ice']);
+  // No cards left on b: the nearest enemy with something to take is d (a card). Then nobody has cards: a point.
+  a.cards=['steal'];g.useCard('a',0);assert.deepEqual(a.cards,['ink'],'then the next one with a card');assert.deepEqual(d.cards,[]);
+  g.sc=[0,4,0];a.cards=['steal'];g.useCard('a',0);assert.deepEqual(g.sc.slice(0,2),[1,3],'one point moves over');
+  assert.equal(g.fx.filter(x=>x.k==='steal').pop().w,'p');
+  const s=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));assert.equal(s.fx.filter(x=>x.k==='steal').pop().w,'p');
+  // Shield: blocks it (card used, nothing taken).
+  b.sh=g.t+5000;b.cards=['x2'];a.cards=['steal'];g.useCard('a',0);assert.deepEqual(b.cards,['x2']);assert.equal(b.sh,0);assert.deepEqual(a.cards,[]);
+  assert.equal(g.fx.filter(x=>x.k==='steal').pop().w,'x');
+  // Nothing anywhere to take: the card is kept.
+  b.cards=[];g.sc=[3,0,0];a.cards=['steal'];assert.equal(g.useCard('a',0),false);assert.deepEqual(a.cards,['steal']);
+  // A stolen point can win the game.
+  g.target=4;g.sc=[3,2,0];b.cards=[];assert.ok(g.useCard('a',0));assert.equal(g.ph,'end');assert.equal(g.end.win,0);
+  assert.equal(c.team,a.team);
 });
 
 test('lines pass straight through players (nobody can be hooked)', () => {
@@ -342,7 +372,7 @@ test('bots fish for boxes and use all kinds of cards in a full game, and the sna
   let seen=0;const kinds=new Set();
   for(let t=0;t<C.COUNT+C.LIMIT&&g.ph!=='end';t+=33){g.tick(33);for(const f of g.fx)kinds.add(f.k);
     if(g.t%5000<33){const n=JSON.stringify(g.snapshot()).length;seen=Math.max(seen,n);}}
-  for(const k of ['box','up','shoot','throw','x2','trap','ink'])assert.ok(kinds.has(k),'bots did '+k+': '+[...kinds].join(','));
+  for(const k of ['box','up','shoot','throw','x2','trap','ink','steal'])assert.ok(kinds.has(k),'bots did '+k+': '+[...kinds].join(','));
   assert.ok(seen<6500,`snapshot ${seen} bytes`);
 });
 

@@ -13,15 +13,18 @@
     ORB:{n:{r:24,val:1,w:[0.32,0.55]},f:{r:18,val:2,w:[0.95,1.35]},g:{r:24,val:2,w:[0.7,0.95]}},
     ANSWER:15000,FREEZE:3000,TARGET:20,LIMIT:300000,RESPAWN:1200,COUNT:3000,SNAP:250,
     AWAY:10000,TAKEOVER:7000,   // silent this long = left (phones say "hi" every 4 s); the same name may take over a player silent 7 s
-    // Item cards: hold up to 2, tap (or hold and aim) to use. Knock-up throws nearby enemies to the edge of the map
-    // (then they walk at half speed for 1 s); freeze 3 s; bomb fish stuns 2 s; ink covers enemy phones 2.5 s.
-    CARD:{ICE:3000,SHIELD:10000,R_UP:160,MAX:2,FLY:1600,DAZE:1000,DAZE_K:0.5,STUN:2000,INK:2500},
+    // Item cards: hold up to 2, tap (or hold and aim) to use. Knock-back throws every enemy in a fan in front of you to the
+    // edge of the map, whatever they are doing; freeze 3 s; bomb fish stuns 2 s and costs that team 2 points; ink covers enemy phones 2.5 s.
+    CARD:{ICE:3000,SHIELD:10000,MAX:2,FLY:1600,STUN:2000,INK:2500,BOMB_PTS:2},
+    FAN:{R:260,HALF:0.6},                                      // knock-back: a fan 260 long, about 70° wide
     // Things floating in the lake, caught with the rod like fish (no question): "?" boxes give a card,
     // the bubble gives 10 s of shield. 1 box at the start, at most 2; a new one 6 s after one is taken; the bubble returns 15 s after.
     LOOT:{R:22,BOXES:2,BOX_EVERY:6000,BUB_EVERY:15000},
-    SHOT:{RANGE:420,SPEED:950,R:26},                           // freeze arrow: aimed, flies straight, freezes the first enemy it touches
+    SHOT:{RANGE:600,SPEED:1100,R:40},                          // freeze arrow: aimed, flies straight and far, a big arrow; freezes the first enemy it touches
     SLIME:{RANGE:380,FLY:550,R:110,LEN:4000,SLOW:0.4,ROD:0.5},  // slime ball: lands where aimed; sticky puddle 4 s (enemies walk at 40%, rods at half speed)
-    WHIRL:{RANGE:380,FLY:450,R:130,BAND:1.7,LEN:5000,PULL:0.75},// whirlpool: thrown into the lake; for 5 s nearby fish are pulled into a bunch
+    // Whirlpool: thrown anywhere (shore or lake), turns for 4 s. Enemies inside (answering too) are dragged to its middle and walk
+    // at half speed; fish inside are pulled into a bunch and swim slowly. About a fifth of the lake across.
+    WHIRL:{RANGE:380,FLY:450,R:90,BAND:1.6,LEN:4000,PULL:0.7,DRAG:110,SLOW:0.5},
     BOMB:{LEN:15000,AX:90,AY:55},                              // bomb fish: looks like any fish to the other team; gone after 15 s
     // A glowing goldfish shows up now and then; answer it right and every fish is worth 2 for a while.
     RUSH:{FIRST:40000,AFTER:40000,LEN:15000},
@@ -44,8 +47,8 @@
   ];
   /* The seven item cards. Every card is equally likely, whichever team is ahead (the teacher's choice).
      (The shield is not a card: it is a bubble floating in the lake.) */
-  const CARDS={up:{zh:'击飞',en:'Knock back',color:'#ff9a3c'},ice:{zh:'冷冻',en:'Freeze',color:'#4fb3f2'},slow:{zh:'缓速',en:'Slow',color:'#6cc24a'},
-    x2:{zh:'加倍',en:'Double',color:'#f2b000'},whirl:{zh:'漩涡',en:'Whirlpool',color:'#2fb3c9'},bomb:{zh:'炸弹鱼',en:'Bomb fish',color:'#ff6b5b'},ink:{zh:'墨水',en:'Ink',color:'#6a4c93'}};
+  const CARDS={up:{zh:'击飞',en:'Knock back',color:'#ff9a3c'},ice:{zh:'冷冻',en:'Freeze',color:'#4fb3f2'},x2:{zh:'加倍',en:'Double',color:'#f2b000'},
+    whirl:{zh:'漩涡',en:'Whirlpool',color:'#2fb3c9'},bomb:{zh:'炸弹鱼',en:'Bomb fish',color:'#ff6b5b'},ink:{zh:'墨水',en:'Ink',color:'#6a4c93'},steal:{zh:'小偷手套',en:'Thief glove',color:'#a0785a'}};
   const CARD_KINDS=Object.keys(CARDS);
   /* Room numbers count up from 0001: the smallest one nobody is using. */
   function pickRoom(used){for(let n=1;n<10000;n++){const c=String(n).padStart(4,'0');if(!used.has(c))return c;}return '0001';}
@@ -114,8 +117,20 @@
   const outgoing=(h,t)=>!h.tt&&t<turnAt(h);
   /* Is someone of this team standing in an enemy's slime puddle at time t? (zones: [{k,team,x,y,from,until}]; k 'w' = whirlpool) */
   const inSlime=(zones,team,x,y,t)=>!!zones&&zones.some(z=>z.k!=='w'&&z.team!==team&&t>=z.from&&t<z.until&&Math.hypot(x-z.x,y-z.y)<=C.SLIME.R);
-  /* Walking speed factor: an enemy's slime (40%), or still dizzy after landing from a knock-back (50%). */
-  const walkK=(zones,team,x,y,t,daze)=>Math.min(inSlime(zones,team,x,y,t)?C.SLIME.SLOW:1,daze>t?C.CARD.DAZE_K:1);
+  /* Is this player inside an enemy whirlpool at time t (and not protected from it by a shield)? */
+  const inWhirl=(zones,team,x,y,t,id)=>!!zones&&zones.some(z=>z.k==='w'&&z.team!==team&&t>=z.from&&t<z.until&&!(z.safe&&z.safe.includes(id))&&Math.hypot(x-z.x,y-z.y)<=C.WHIRL.R);
+  /* Walking speed factor: half speed inside an enemy whirlpool. */
+  const walkK=(zones,team,x,y,t,id)=>inWhirl(zones,team,x,y,t,id)?C.WHIRL.SLOW:1;
+  /* An enemy whirlpool drags a player towards its middle (answering players too); returns the new position. */
+  function dragWhirl(zones,team,x,y,t,dt,id){
+    if(!zones)return null;let moved=null;
+    for(const z of zones){if(z.k!=='w'||z.team===team||t<z.from||t>=z.until||(z.safe&&z.safe.includes(id)))continue;
+      const dx=z.x-x,dy=z.y-y,d=Math.hypot(dx,dy);if(d>C.WHIRL.R||d<2)continue;
+      const step=Math.min(d-2,C.WHIRL.DRAG*dt/1000);x+=dx/d*step;y+=dy/d*step;moved=confine(x,y);x=moved.x;y=moved.y;}
+    return moved;
+  }
+  /* Is point (x,y) inside the knock-back fan from (ox,oy) pointing at angle a? */
+  function inFan(ox,oy,a,x,y){const d=Math.hypot(x-ox,y-oy);if(d>C.FAN.R)return false;if(d<24)return true;let da=Math.atan2(y-oy,x-ox)-a;da=Math.atan2(Math.sin(da),Math.cos(da));return Math.abs(da)<=C.FAN.HALF;}
   /* Where a freeze arrow is at time t (null before it starts or once it has flown its full range). */
   function shotAt(s,t){const d=C.SHOT.SPEED*(t-s.t0)/1000;if(d<0||d>=C.SHOT.RANGE)return null;return {x:s.x+Math.cos(s.a)*d,y:s.y+Math.sin(s.a)*d,d};}
   function hookTip(h,t){const d=clamp(hookDist(h,t),0,C.RANGE);return {x:h.x+Math.cos(h.a)*d,y:h.y+Math.sin(h.a)*d,d};}
@@ -133,8 +148,8 @@
       shots:[],shotN:0,zones:[]};   // flying freeze arrows / slime balls / whirlpools, slime puddles and whirlpools
     const nameKey=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
     // st: 0 free, 1 answering, 2 frozen, 3 knocked back (flying, kb = the flight), 5 stunned by a bomb fish.
-    // daze: walks at half speed until then (just landed); ink: phone covered in ink until then.
-    const fresh=()=>({st:0,until:0,q:-1,orb:0,ok:0,bad:0,rk:0,goal:null,cool:800,botAt:0,cards:[],sh:0,x2:0,useAt:0,kb:null,daze:0,ink:0});
+    // kb: flying from a knock-back (in any state, even answering); ink: phone covered in ink until then.
+    const fresh=()=>({st:0,until:0,q:-1,orb:0,ok:0,bad:0,rk:0,goal:null,cool:800,botAt:0,cards:[],sh:0,x2:0,useAt:0,kb:null,ink:0});
     const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
     const seed=()=>Math.floor(rnd()*2**31);
     // Start positions on the team's picnic blanket, rows far enough apart that names don't cover the animal below.
@@ -195,7 +210,7 @@
     };
     g.pause=()=>{if(g.ph==='play')g.ph='pause';};
     g.resume=()=>{if(g.ph==='pause')g.ph='play';};
-    g.toLobby=()=>{g.ph='lobby';g.end=null;g.hooks=[];g.orbs=[];g.loot=[];g.fx=[];g.rush=0;g.gone.clear();g.shots=[];g.zones=[];placeAll();for(const p of g.players.values())Object.assign(p,{st:0,q:-1,orb:0,cards:[],sh:0,x2:0,kb:null,daze:0,ink:0});};
+    g.toLobby=()=>{g.ph='lobby';g.end=null;g.hooks=[];g.orbs=[];g.loot=[];g.fx=[];g.rush=0;g.gone.clear();g.shots=[];g.zones=[];placeAll();for(const p of g.players.values())Object.assign(p,{st:0,q:-1,orb:0,cards:[],sh:0,x2:0,kb:null,ink:0});};
     function draw(){if(!g.deck.length)g.deck=shuffle(g.qs.map((_,i)=>i));return g.deck.pop();}
     function orbAt(o,t){
       if(o.by){const p=g.players.get(o.by);if(!p)return null;const held=g.orbs.filter(x=>x.by===o.by),i=held.indexOf(o);return {x:p.x+(i-(held.length-1)/2)*30,y:p.y-54};}
@@ -210,11 +225,10 @@
     g.lootAt=l=>lootAt(l,g.t);
     function spawnLoot(k){g.loot.push({id:++g.lootN,k,s:seed(),b:g.t,hk:''});}
     function fire(p,x,y,a,t0){
-      if(g.ph!=='play'||p.st!==0||g.hooks.some(h=>h.o===p.id)||!Number.isFinite(a))return false;
+      if(g.ph!=='play'||p.st!==0||p.kb||g.hooks.some(h=>h.o===p.id)||!Number.isFinite(a))return false;
       const pos=confine(Number(x)||p.x,Number(y)||p.y);p.x=pos.x;p.y=pos.y;p.dx=p.dy=0;
       t0=clamp(Number(t0)||g.t,g.t-400,g.t);
-      const sp=slowed(p)?C.SLIME.ROD:1;   // casting from inside an enemy's slime: the line flies and reels at half speed
-      g.hooks.push({o:p.id,x:p.x,y:p.y,a,t0,tt:0,d:0,orb:0,loot:0,lt:t0,sp});
+      g.hooks.push({o:p.id,x:p.x,y:p.y,a,t0,tt:0,d:0,orb:0,loot:0,lt:t0,sp:1});
       return true;
     }
     /* Start answering a caught fish. */
@@ -223,46 +237,64 @@
     /* ── Item cards ── */
     const addFx=(k,p,to=[],extra={})=>{g.fx.push({id:++g.fxN,k,at:g.t,by:p.id,x:Math.round(p.x),y:Math.round(p.y),to,...extra});};
     function dropHooks(p){g.hooks=g.hooks.filter(h=>{if(h.o!==p.id)return true;letGo(h);return false;});}
-    /* Hit by a card (or a bomb fish). Someone answering a question is never hit; a shield takes the hit instead (and breaks).
-       up: thrown away from `from` to the edge of the map; ice: frozen 3 s; bomb: dizzy 2 s; ink: the phone is covered 2.5 s. */
+    /* Hit by a card (or a bomb fish). A shield takes the hit instead (and breaks).
+       up: thrown away from `from` to the edge of the map — whatever they are doing (someone answering keeps answering
+       on the way); ice: frozen 3 s; bomb: dizzy 2 s; ink: the phone is covered 2.5 s. */
     function hit(q,kind,from){
       if(q.sh>g.t){q.sh=0;addFx('block',q,[q.id]);return false;}
       if(kind==='ink'){q.ink=g.t+C.CARD.INK;return true;}
-      dropHooks(q);q.dx=q.dy=0;
       if(kind==='up'){
         let dx=q.x-from.x,dy=q.y-from.y,l=Math.hypot(dx,dy);
         if(l<1){dx=q.x-C.SEA.x;dy=q.y-C.SEA.y;l=Math.hypot(dx,dy)||1;}   // standing on top of each other: away from the lake
         const end=edgeFrom(q.x,q.y,dx/l,dy/l),ms=clamp(Math.hypot(end.x-q.x,end.y-q.y)/C.CARD.FLY*1000,400,900);
-        q.st=3;q.until=g.t+ms;q.kb={x0:q.x,y0:q.y,x1:end.x,y1:end.y,t0:g.t,t1:g.t+ms};return true;}
+        dropHooks(q);q.dx=q.dy=0;if(q.st===0){q.st=3;q.until=g.t+ms;}
+        q.kb={x0:q.x,y0:q.y,x1:end.x,y1:end.y,t0:g.t,t1:g.t+ms};return true;}
+      dropHooks(q);q.dx=q.dy=0;
       q.st=kind==='bomb'?5:2;q.until=g.t+(kind==='bomb'?C.CARD.STUN:C.CARD.ICE);return true;
     }
     const foes=p=>[...g.players.values()].filter(q=>q.team!==p.team&&q.st===0);
-    const slowed=p=>inSlime(g.zones,p.team,p.x,p.y,g.t);
-    const speedOf=p=>C.SPEED*walkK(g.zones,p.team,p.x,p.y,g.t,p.daze);
+    const slowed=p=>inWhirl(g.zones,p.team,p.x,p.y,g.t,p.id);
+    const speedOf=p=>C.SPEED*walkK(g.zones,p.team,p.x,p.y,g.t,p.id);
+    // Anything to take from q? A card (the thief always has room: the glove itself leaves the hand), else a point of their team.
+    const stealable=q=>q.cards.length>0||g.sc[q.team]>0;
     function nearestFoe(p,range){let best=null;for(const q of foes(p)){const d=Math.hypot(q.x-p.x,q.y-p.y);if(d<=range&&(!best||d<best.d))best={q,d};}return best;}
-    /* Use card i. Freeze, slime and whirlpool are aimed like a skill (angle a, slime and whirlpool also distance d);
-       without an aim, freeze and slime go at the nearest enemy in reach and the whirlpool into the lake in front.
-       Knock-back needs an enemy close by, otherwise the card is kept. */
+    /* Use card i. Knock-back, freeze and whirlpool are aimed like a skill (angle a; whirlpool also distance d).
+       Without an aim: knock-back and freeze go at the nearest enemy, the whirlpool towards the lake.
+       Knock-back with nobody inside the fan, or a glove with nothing to steal: the card is kept. */
     function useCard(p,i,a,d){
       i=Number(i)||0;const k=p.cards[i];
-      if(g.ph!=='play'||p.st!==0||!k)return false;
-      if(k==='up'){const tg=foes(p).filter(q=>Math.hypot(q.x-p.x,q.y-p.y)<=C.CARD.R_UP);if(!tg.length)return false;
-        addFx('up',p,tg.filter(q=>hit(q,'up',p)).map(q=>q.id));}
-      else if(k==='ice'||k==='slow'||k==='whirl'){
-        a=Number(a);d=Number(d);const range=k==='ice'?C.SHOT.RANGE:k==='slow'?C.SLIME.RANGE:C.WHIRL.RANGE;
+      if(g.ph!=='play'||p.st!==0||p.kb||!k)return false;
+      a=Number(a);d=Number(d);
+      if(k==='up'){
+        if(!Number.isFinite(a)){let best=null;for(const q of g.players.values()){if(q.team===p.team||q.kb)continue;const dd=Math.hypot(q.x-p.x,q.y-p.y);if(dd<=C.FAN.R&&(!best||dd<best.d))best={q,d:dd};}
+          if(!best)return false;a=Math.atan2(best.q.y-p.y,best.q.x-p.x);}
+        const tg=[...g.players.values()].filter(q=>q.team!==p.team&&!q.kb&&inFan(p.x,p.y,a,q.x,q.y));if(!tg.length)return false;
+        addFx('up',p,tg.filter(q=>hit(q,'up',p)).map(q=>q.id),{tx:+a.toFixed(3)});}
+      else if(k==='ice'||k==='whirl'){
+        const range=k==='ice'?C.SHOT.RANGE:C.WHIRL.RANGE;
         if(!Number.isFinite(a)){const n=k==='whirl'?null:nearestFoe(p,range);
           a=n?Math.atan2(n.q.y-p.y,n.q.x-p.x):Math.atan2(C.SEA.y-p.y,C.SEA.x-p.x);if(n&&!Number.isFinite(d))d=n.d;}
         if(k==='ice'){g.shots.push({id:++g.shotN,k:'ice',o:p.id,team:p.team,x:p.x,y:p.y-10,a,t0:g.t,lt:g.t});addFx('shoot',p);}
         else{const dist=clamp(Number.isFinite(d)?d:range*0.7,40,range);
-          let tx=clamp(p.x+Math.cos(a)*dist,0,C.W),ty=clamp(p.y+Math.sin(a)*dist,0,C.H);
-          if(k==='whirl')({x:tx,y:ty}=intoLake(tx,ty,0.78));   // a whirlpool always lands in the water
-          g.shots.push({id:++g.shotN,k:k==='slow'?'slime':'whirl',o:p.id,team:p.team,x:p.x,y:p.y,tx:Math.round(tx),ty:Math.round(ty),t0:g.t,land:g.t+(k==='slow'?C.SLIME.FLY:C.WHIRL.FLY)});addFx('throw',p);}
+          const tx=clamp(p.x+Math.cos(a)*dist,C.PR,C.W-C.PR),ty=clamp(p.y+Math.sin(a)*dist,C.PR,C.H-C.PR);   // shore or lake, anywhere
+          g.shots.push({id:++g.shotN,k:'whirl',o:p.id,team:p.team,x:p.x,y:p.y,tx:Math.round(tx),ty:Math.round(ty),t0:g.t,land:g.t+C.WHIRL.FLY});addFx('throw',p);}
       }
+      else if(k==='steal'){
+        // The nearest enemy who has something to take, whatever they are doing. A card if they have one, otherwise a point.
+        let best=null;for(const q of g.players.values()){if(q.team===p.team||!stealable(q))continue;const dd=Math.hypot(q.x-p.x,q.y-p.y);if(!best||dd<best.d)best={q,d:dd};}
+        if(!best)return false;const q=best.q;p.cards.splice(i,1);
+        if(q.sh>g.t){q.sh=0;addFx('block',q,[q.id]);addFx('steal',p,[],{tx:Math.round(q.x),ty:Math.round(q.y),w:'x'});return true;}
+        let w;if(q.cards.length){const j=Math.floor(rnd()*q.cards.length);w=q.cards.splice(j,1)[0];p.cards.push(w);}
+        else{g.sc[q.team]--;g.sc[p.team]++;w='p';}
+        addFx('steal',p,[q.id],{tx:Math.round(q.x),ty:Math.round(q.y),w});
+        if(w==='p'&&g.mode!=='time'&&g.sc[p.team]>=g.target)finish('target');
+        return true;}
       else if(k==='x2'){p.x2=1;addFx('x2',p);}
       else if(k==='bomb'){
         // A fake fish in the lake on this player's side. To the other team it looks and swims like any fish.
         const s=C.SEA,f=Math.hypot((p.x-s.x)/s.rx,(p.y-s.y)/s.ry)||1,c=[Math.round(s.x+(p.x-s.x)*0.3/f),Math.round(s.y+(p.y-s.y)*0.3/f)];
         g.orbs.push({id:++g.orbN,k:'n',s:seed(),b:g.t,hk:'',by:'',bomb:p.team,owner:p.id,c,until:g.t+C.BOMB.LEN});addFx('trap',p);}
+      // (The slime card is gone; an old one still in someone's hand is simply dropped below.)
       else if(k==='ink'){
         const tg=[...g.players.values()].filter(q=>q.team!==p.team&&q.st!==1);
         addFx('ink',p,tg.filter(q=>hit(q,'ink',p)).map(q=>q.id));}
@@ -276,7 +308,7 @@
         if(s.k==='slime'||s.k==='whirl'){
           if(t<s.land)return true;
           const w=s.k==='whirl';
-          g.zones.push({id:s.id,k:w?'w':'s',team:s.team,x:s.tx,y:s.ty,from:s.land,until:s.land+(w?C.WHIRL.LEN:C.SLIME.LEN)});
+          g.zones.push({id:s.id,k:w?'w':'s',team:s.team,x:s.tx,y:s.ty,from:s.land,until:s.land+(w?C.WHIRL.LEN:C.SLIME.LEN),safe:[]});
           addFx(w?'whirl':'slime',{id:s.o,x:s.tx,y:s.ty});return false;}
         // The arrow's path since the last tick: the first enemy on it (not answering, not in the air) is frozen.
         const d0=Math.min(C.SHOT.RANGE,C.SHOT.SPEED*(s.lt-s.t0)/1000),d1=Math.min(C.SHOT.RANGE,C.SHOT.SPEED*(t-s.t0)/1000);s.lt=t;
@@ -340,7 +372,7 @@
       const p=m&&g.players.get(String(m.id));
       if(m?.k==='join')return g.join(m.id,m.name,false,m.av);
       if(!p)return null;p.seen=Date.now();
-      if(m.k==='mv'){if(m.s<=p.seq)return;p.seq=m.s;if(p.st!==0||g.hooks.some(h=>h.o===p.id)||g.ph!=='play')return;
+      if(m.k==='mv'){if(m.s<=p.seq)return;p.seq=m.s;if(p.st!==0||p.kb||g.hooks.some(h=>h.o===p.id)||g.ph!=='play')return;
         // The phone stamps its message with the game time, so the walk it did while the message travelled is added back.
         const l=Math.hypot(m.dx||0,m.dy||0),dx=l?m.dx/l:0,dy=l?m.dy/l:0,lag=clamp(g.t-(Number(m.t)||g.t),0,600)/1000,v=speedOf(p);
         const pos=confine((Number(m.x)||p.x)+dx*v*lag,(Number(m.y)||p.y)+dy*v*lag);p.x=pos.x;p.y=pos.y;p.dx=dx;p.dy=dy;}
@@ -400,7 +432,9 @@
             else if(got.o.bomb!=null){
               // The other team's bomb fish: it blows up and the angler is dizzy for 2 s (a shield takes it instead).
               const o=got.o,at=orbAt(o,t);g.orbs.splice(g.orbs.indexOf(o),1);
-              if(owner){const by=g.players.get(o.owner)||{id:o.owner,x:at.x,y:at.y};addFx('bomb',by,hit(owner,'bomb')?[owner.id]:[],{tx:Math.round(at.x),ty:Math.round(at.y)});}}
+              if(owner){const by=g.players.get(o.owner)||{id:o.owner,x:at.x,y:at.y},hurt=hit(owner,'bomb');let lost=0;
+                if(hurt){lost=Math.min(C.CARD.BOMB_PTS,g.sc[owner.team]);g.sc[owner.team]-=lost;}
+                addFx('bomb',by,hurt?[owner.id]:[],{tx:Math.round(at.x),ty:Math.round(at.y),w:String(lost)});}}
             else{if(got.o.hk){const prev=g.hooks.find(x=>x.o===got.o.hk&&x.orb===got.o.id);if(prev)prev.orb=0;}
               got.o.hk=h.o;h.orb=got.o.id;}}
         }
@@ -423,9 +457,14 @@
         if(g.ph!=='play')return;
         if(p.st===1&&g.t>=p.until){settle(p,false,true);if(g.ph!=='play')return;}
         // Knocked back: flying to the edge of the map; on landing, half speed for 1 s.
-        if(p.st===3&&p.kb){const f=flyPos(p.kb,g.t);p.x=f.x;p.y=f.y;if(g.t>=p.until){p.x=p.kb.x1;p.y=p.kb.y1;p.kb=null;p.daze=g.t+C.CARD.DAZE;}}
-        if((p.st===2||p.st===3||p.st===5)&&g.t>=p.until){p.st=0;p.kb=null;}
-        if(p.st===0&&(p.dx||p.dy)&&!g.hooks.some(h=>h.o===p.id)){const v=speedOf(p)*dt/1000,pos=confine(p.x+p.dx*v,p.y+p.dy*v);p.x=pos.x;p.y=pos.y;}
+        // Knocked back: flying to the edge of the map (whatever they were doing); no slowing down after landing.
+        if(p.kb){const f=flyPos(p.kb,g.t);p.x=f.x;p.y=f.y;if(g.t>=p.kb.t1){p.x=p.kb.x1;p.y=p.kb.y1;p.kb=null;if(p.st===3)p.st=0;}}
+        if((p.st===2||p.st===3||p.st===5)&&g.t>=p.until&&!p.kb)p.st=0;
+        if(p.st===0&&!p.kb&&(p.dx||p.dy)&&!g.hooks.some(h=>h.o===p.id)){const v=speedOf(p)*dt/1000,pos=confine(p.x+p.dx*v,p.y+p.dy*v);p.x=pos.x;p.y=pos.y;}
+        if(!p.kb&&g.zones.length){
+          for(const z of g.zones)if(z.k==='w'&&z.team!==p.team&&g.t>=z.from&&g.t<z.until&&!z.safe.includes(p.id)&&p.sh>g.t&&Math.hypot(p.x-z.x,p.y-z.y)<=C.WHIRL.R){
+            p.sh=0;z.safe.push(p.id);addFx('block',p,[p.id]);}   // a shield takes the whirlpool once
+          const m=dragWhirl(g.zones,p.team,p.x,p.y,g.t,dt,p.id);if(m){p.x=m.x;p.y=m.y;}}
       }
       stepHooks();
       stepShots();
@@ -440,15 +479,15 @@
         p:[...g.players.values()].map(p=>[p.id,p.name,p.team,Math.round(p.x),Math.round(p.y),+p.dx.toFixed(2),+p.dy.toFixed(2),p.st,Math.round(p.until),p.q,p.ok,p.rs,p.rk,p.qn,p.av,
           p.cards.join(','),p.sh>g.t?Math.round(p.sh):0,p.x2?1:0,
           p.kb?[Math.round(p.kb.x0),Math.round(p.kb.y0),Math.round(p.kb.x1),Math.round(p.kb.y1),Math.round(p.kb.t0),Math.round(p.kb.t1)]:0,
-          p.daze>g.t?Math.round(p.daze):0,p.ink>g.t?Math.round(p.ink):0]),
+          p.ink>g.t?Math.round(p.ink):0]),
         // A bomb fish also carries its team and the spot it swims around (the other team's phones draw it as a plain fish).
         o:g.orbs.map(o=>{const a=[o.id,o.k,o.s,Math.round(o.b),o.hk,o.by];if(o.bomb!=null)a.push(o.bomb,o.c[0],o.c[1]);return a;}),
         h:g.hooks.map(h=>[h.o,Math.round(h.x),Math.round(h.y),+h.a.toFixed(4),Math.round(h.t0),Math.round(h.tt),Math.round(h.d),h.orb,h.sp||1,h.loot||0]),
         l:g.loot.map(l=>[l.id,l.k,l.s,Math.round(l.b),l.hk]),
         s:g.shots.map(s=>s.k==='ice'?[s.id,'i',Math.round(s.x),Math.round(s.y),+s.a.toFixed(4),Math.round(s.t0),s.team]
           :[s.id,s.k==='whirl'?'w':'s',Math.round(s.x),Math.round(s.y),s.tx,s.ty,Math.round(s.t0),Math.round(s.land),s.team]),
-        z:g.zones.map(z=>[z.id,z.team,z.x,z.y,Math.round(z.from),Math.round(z.until),z.k]),
-        fx:g.fx.map(f=>[f.id,f.k,Math.round(f.at),f.by,f.x,f.y,f.to,f.tx||0,f.ty||0]),
+        z:g.zones.map(z=>z.k==='w'&&z.safe.length?[z.id,z.team,z.x,z.y,Math.round(z.from),Math.round(z.until),z.k,z.safe]:[z.id,z.team,z.x,z.y,Math.round(z.from),Math.round(z.until),z.k]),
+        fx:g.fx.map(f=>f.w!=null?[f.id,f.k,Math.round(f.at),f.by,f.x,f.y,f.to,f.tx||0,f.ty||0,f.w]:[f.id,f.k,Math.round(f.at),f.by,f.x,f.y,f.to,f.tx||0,f.ty||0]),
         ru:g.rush?Math.round(g.rush):0,it:g.items?1:0,md:g.mode,
         k:[...g.kicked.keys()],end:g.end};
     };
@@ -463,11 +502,11 @@
     return {...s,
       p:s.p.map(a=>({id:a[0],name:a[1],team:a[2],x:a[3],y:a[4],dx:a[5],dy:a[6],st:a[7],until:a[8],q:a[9],ok:a[10],rs:a[11],rk:a[12],qn:a[13],av:a[14]??avOf(a[0]),
         cards:a[15]?String(a[15]).split(','):[],sh:a[16]||0,x2:!!(a[17]&1),
-        kb:Array.isArray(a[18])?{x0:a[18][0],y0:a[18][1],x1:a[18][2],y1:a[18][3],t0:a[18][4],t1:a[18][5]}:null,daze:a[19]||0,ink:a[20]||0})),
+        kb:Array.isArray(a[18])?{x0:a[18][0],y0:a[18][1],x1:a[18][2],y1:a[18][3],t0:a[18][4],t1:a[18][5]}:null,ink:a[19]||0})),
       l:(s.l||[]).map(a=>({id:a[0],k:a[1],s:a[2],b:a[3],hk:a[4]})),
       s:(s.s||[]).map(a=>a[1]==='i'?{id:a[0],k:'ice',x:a[2],y:a[3],a:a[4],t0:a[5],team:a[6]}:{id:a[0],k:a[1]==='w'?'whirl':'slime',x:a[2],y:a[3],tx:a[4],ty:a[5],t0:a[6],land:a[7],team:a[8]}),
-      z:(s.z||[]).map(a=>({id:a[0],team:a[1],x:a[2],y:a[3],from:a[4],until:a[5],k:a[6]||'s'})),
-      fx:(s.fx||[]).map(a=>({id:a[0],k:a[1],at:a[2],by:a[3],x:a[4],y:a[5],to:a[6]||[],tx:a[7],ty:a[8]})),ru:s.ru||0,it:s.it??1,md:s.md||'score',
+      z:(s.z||[]).map(a=>({id:a[0],team:a[1],x:a[2],y:a[3],from:a[4],until:a[5],k:a[6]||'s',safe:a[7]||[]})),
+      fx:(s.fx||[]).map(a=>({id:a[0],k:a[1],at:a[2],by:a[3],x:a[4],y:a[5],to:a[6]||[],tx:a[7],ty:a[8],w:a[9]??''})),hid:s.hid||'',ru:s.ru||0,it:s.it??1,md:s.md||'score',
       o:s.o.map(a=>{const o={id:a[0],k:a[1],s:a[2],b:a[3],hk:a[4],by:a[5]};if(a.length>6){o.bomb=a[6];o.c=[a[7],a[8]];}return o;}),
       h:s.h.map(a=>({o:a[0],x:a[1],y:a[2],a:a[3],t0:a[4],tt:a[5],d:a[6],orb:a[7],sp:a[8]||1,loot:a[9]||0}))};
   }
@@ -740,13 +779,12 @@
     const jump=m.rk>0&&since<650?Math.sin(since/650*Math.PI)*22:0,shake=m.rk<0&&since<450?Math.sin(since/28)*3.5:0;
     const bob=p.mv?-Math.abs(Math.sin(now/90))*3.5:Math.sin(now/520+p.x*0.05)*0.8,step=p.mv?Math.sin(now/90)*2.4:0;
     // Knocked back by a card: flying in an arc to the edge of the map (p.lift = height, p.fly = direction), dust behind.
-    const air=p.st===3?(p.lift??34+Math.sin(now/110)*5):0;
+    const air=p.lift!=null?p.lift:p.st===3?34+Math.sin(now/110)*5:0;
     ctx.save();ctx.translate(p.x+shake,p.y);
     ctx.globalAlpha=0.4;ctx.fillStyle=T.color;ctx.beginPath();ctx.ellipse(0,24,Math.max(8,22-jump*0.25-air*0.25),7,0,0,TAU);ctx.fill();ctx.globalAlpha=1;
-    if(p.slow)goo(ctx,now);
-    if(p.st===3&&p.fly!=null){ctx.save();ctx.translate(0,-air);trail(ctx,p.fly,now);ctx.restore();}
+    if(p.slow)swirlFeet(ctx,now);
+    if(p.fly!=null){ctx.save();ctx.translate(0,-air);trail(ctx,p.fly,now);ctx.restore();}
     if(p.me){ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.setLineDash([5,5]);ctx.lineDashOffset=-now/40;ctx.beginPath();ctx.ellipse(0,24,29,10.5,0,0,TAU);ctx.stroke();ctx.setLineDash([]);}
-    if(p.upRange){ctx.strokeStyle='rgba(255,154,60,.55)';ctx.lineWidth=2.5;ctx.setLineDash([8,8]);ctx.beginPath();ctx.ellipse(0,10,C.CARD.R_UP,C.CARD.R_UP,0,0,TAU);ctx.stroke();ctx.setLineDash([]);}
     ctx.translate(0,bob-jump-air);
     if(air){ctx.rotate(p.spin??Math.sin(now/90)*0.35);}   // one somersault through the air
     const ra=hook?Math.atan2(hook.ty-p.y,hook.tx-p.x):Math.atan2(m.fy,m.fx),side=Math.cos(ra)>=0?1:-1,behind=Math.sin(ra)<-0.3;
@@ -758,7 +796,7 @@
     drawAnimal(ctx,p.av,{team:p.team,ex:m.fx*2.4,ey:p.st===1?-2.2:m.fy*1.6,face:p.st>=2?'frozen':jump>0?'happy':'',step:air?Math.sin(now/60)*3:step});
     if(holding&&!behind)rod();
     if(p.st===2)ice(ctx,now);
-    if(p.st===5||p.dazed)dizzy(ctx,now);   // stunned by a bomb fish, or just landed from a knock-back
+    if(p.st===5)dizzy(ctx,now);   // stunned by a bomb fish
     if(p.inked)inkMark(ctx,now);
     if(p.sh)bubble(ctx,now);
     ctx.restore();
@@ -780,6 +818,12 @@
     else{ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=3;ctx.lineCap='round';
       for(let i=0;i<3;i++){const o=(now/60+i*7)%20;ctx.beginPath();ctx.moveTo(-10-o,-14+i*14);ctx.lineTo(-34-o,-14+i*14);ctx.stroke();}
       ctx.fillStyle='rgba(222,200,170,.6)';for(let i=0;i<4;i++){const k=(now/500+i/4)%1;ctx.globalAlpha=1-k;ctx.beginPath();ctx.arc(-6-k*30,14+Math.sin(i*2)*6,4+k*6,0,TAU);ctx.fill();}}
+    ctx.restore();
+  }
+  // Caught in an enemy whirlpool: turning water rings around the feet.
+  function swirlFeet(ctx,now){
+    ctx.save();ctx.translate(0,22);ctx.scale(1,0.38);ctx.lineCap='round';
+    for(let i=0;i<3;i++){const r=14+i*8,a=-now/(180+i*60)+i*2;ctx.strokeStyle=`rgba(70,190,215,${0.85-i*0.2})`;ctx.lineWidth=4-i;ctx.beginPath();ctx.arc(0,0,r,a,a+3.8);ctx.stroke();}
     ctx.restore();
   }
   // Stuck in slime: green goo around the feet with little bubbles.
@@ -862,6 +906,12 @@
     if(A.kind==='slime'){ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=2.5;ctx.setLineDash([10,9]);ctx.beginPath();ctx.arc(A.x,A.y,C.SLIME.RANGE,0,TAU);ctx.stroke();ctx.setLineDash([]);
       ctx.fillStyle='rgba(108,194,74,.3)';ctx.beginPath();ctx.arc(A.tx,A.ty,C.SLIME.R,0,TAU);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
       ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=2;ctx.setLineDash([4,7]);ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(A.tx,A.ty);ctx.stroke();ctx.setLineDash([]);return;}
+    // Knock-back: the fan in front of the player; every enemy inside it will fly.
+    if(A.kind==='fan'){ctx.save();ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.arc(A.x,A.y,C.FAN.R,A.a-C.FAN.HALF,A.a+C.FAN.HALF);ctx.closePath();
+      ctx.fillStyle='rgba(255,154,60,.22)';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
+      ctx.strokeStyle='rgba(255,140,40,.85)';ctx.lineWidth=3;ctx.lineCap='round';
+      for(let i=1;i<=3;i++){const rad=C.FAN.R*((i+(now/400)%1)/4);ctx.globalAlpha=0.3+0.6*rad/C.FAN.R;ctx.beginPath();ctx.arc(A.x,A.y,rad,A.a-C.FAN.HALF*0.85,A.a+C.FAN.HALF*0.85);ctx.stroke();}
+      ctx.restore();return;}
     // Whirlpool: its reach, a dotted throw and the circle in the lake where the fish will be pulled together.
     if(A.kind==='whirl'){ctx.save();ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=2.5;ctx.setLineDash([10,9]);ctx.lineDashOffset=-now/70;ctx.beginPath();ctx.arc(A.x,A.y,C.WHIRL.RANGE,0,TAU);ctx.stroke();ctx.setLineDash([]);
       ctx.fillStyle='rgba(47,179,201,.22)';ctx.beginPath();ctx.arc(A.tx,A.ty,C.WHIRL.R,0,TAU);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
@@ -909,7 +959,6 @@
   function drawWhirl(ctx,z,t,now){
     const T=C.TEAMS[z.team]||C.TEAMS[0],R=C.WHIRL.R,fade=Math.min(1,(t-z.from)/300,(z.until-t)/500),spin=(t-z.from)/260;
     ctx.save();ctx.globalAlpha=fade;ctx.translate(z.x,z.y);
-    ctx.beginPath();ctx.ellipse(-z.x+C.SEA.x,-z.y+C.SEA.y,C.SEA.rx-4,C.SEA.ry-4,0,0,TAU);ctx.clip();   // only on the water
     if(!effectSprite(ctx,'fx-whirl',0,0,R*2.1,R*2.1,-spin)){
       const gr=ctx.createRadialGradient(0,0,6,0,0,R);gr.addColorStop(0,'rgba(20,90,140,.55)');gr.addColorStop(0.55,'rgba(60,170,210,.3)');gr.addColorStop(1,'rgba(120,220,240,0)');
       ctx.fillStyle=gr;ctx.beginPath();ctx.arc(0,0,R,0,TAU);ctx.fill();
@@ -945,7 +994,7 @@
       if(globalThis.HookArt?.get('fx-ice-arrow')){
         ctx.strokeStyle='#e6faff';ctx.lineWidth=4;ctx.lineCap='round';
         for(let i=0;i<3;i++){ctx.globalAlpha=0.45-i*0.1;ctx.beginPath();ctx.moveTo(-20-i*9,(i-1)*5);ctx.lineTo(-55-i*8,(i-1)*5);ctx.stroke();}
-        ctx.globalAlpha=1;effectSprite(ctx,'fx-ice-arrow',0,0,68,34);ctx.restore();return;
+        ctx.globalAlpha=1;effectSprite(ctx,'fx-ice-arrow',0,0,96,48);ctx.restore();return;
       }
       ctx.globalAlpha=1;const gr=ctx.createLinearGradient(-22,0,22,0);gr.addColorStop(0,'#bfe8ff');gr.addColorStop(1,'#ffffff');
       ctx.fillStyle=gr;ctx.strokeStyle='#4fb3f2';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(24,0);ctx.lineTo(4,-10);ctx.lineTo(-18,-5);ctx.lineTo(-14,0);ctx.lineTo(-18,5);ctx.lineTo(4,10);ctx.closePath();ctx.fill();ctx.stroke();
@@ -965,14 +1014,34 @@
     ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='rgba(255,255,255,.75)';ctx.beginPath();ctx.arc(-5,-5,4,0,TAU);ctx.fill();ctx.restore();
   }
   const FX_TXT={up:['击飞！','#ff8a1f'],ice:['冻住！','#3c9ad6'],slime:['缓速！','#4f9e2c'],shield:['保护罩','#139466'],x2:['加倍！','#d99a00'],block:['挡住了！','#139466'],rush:['金鱼潮！','#e0a000'],
-    whirl:['漩涡！','#1f95ab'],bomb:['炸弹鱼！','#e2412c'],ink:['墨水！','#5b3f86'],box:['拿到卡！','#8a5fd6']};
+    whirl:['漩涡！','#1f95ab'],bomb:['炸弹鱼！','#e2412c'],ink:['墨水！','#5b3f86'],box:['拿到卡！','#8a5fd6'],steal:['偷到了！','#8d5a3a']};
+  /* A cartoon glove (until a picture is ready). */
+  function glove(ctx,x,y,a){
+    ctx.save();ctx.translate(x,y);ctx.rotate(Math.sin(a/80)*0.3);ctx.fillStyle='#7b4fa8';ctx.strokeStyle='#fff';ctx.lineWidth=2.5;
+    rr(ctx,-11,-4,22,20,8);ctx.fill();ctx.stroke();
+    for(const [fx,fy] of [[-8,-14],[-2.5,-17],[3,-17],[8.5,-14]]){ctx.beginPath();ctx.ellipse(fx,fy,3.4,7,0,0,TAU);ctx.fill();ctx.stroke();}
+    ctx.beginPath();ctx.ellipse(-13,3,3.6,6.5,-0.9,0,TAU);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#ffc93c';rr(ctx,-11,12,22,6,3);ctx.fill();
+    ctx.restore();
+  }
   function popText(ctx,txt,x,y,col,k,size=26){ctx.globalAlpha=Math.min(1,(1-k)*2.5);ctx.font=`700 ${size}px ${FUN}`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.lineJoin='round';ctx.lineWidth=6;ctx.strokeStyle='#fff';ctx.strokeText(txt,x,y);ctx.fillStyle=col;ctx.fillText(txt,x,y);ctx.globalAlpha=1;}
   /* Card effects: a shock ring for knock-up, an icy beam for freeze, a burst for the goldfish rush, and a word that floats up. */
   function drawFx(ctx,f){
     const a=f.age;if(a<0||a>1400)return;const k=a/1400,[txt,col]=FX_TXT[f.k]||['',''];
-    if(f.k==='up'&&a<600){const q=a/600;ctx.globalAlpha=1-q;ctx.strokeStyle='#fff';ctx.lineWidth=8*(1-q)+2;ctx.beginPath();ctx.ellipse(f.x,f.y+10,C.CARD.R_UP*q,C.CARD.R_UP*q*0.8,0,0,TAU);ctx.stroke();
-      ctx.strokeStyle='#ffb35c';ctx.lineWidth=3;ctx.stroke();ctx.globalAlpha=1;}
+    if(f.k==='up'&&a<600){const q=a/600,e=1-(1-q)**2,R=C.FAN.R*(0.25+0.75*e),A=f.tx||0;ctx.save();ctx.globalAlpha=1-q;
+      ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.arc(f.x,f.y,R,A-C.FAN.HALF,A+C.FAN.HALF);ctx.closePath();ctx.fillStyle='rgba(255,179,92,.28)';ctx.fill();
+      ctx.lineCap='round';for(let i=0;i<3;i++){const rr2=R*(0.55+i*0.22);ctx.strokeStyle=i?'#ffb35c':'#fff';ctx.lineWidth=(7-i*2)*(1-q)+2;ctx.beginPath();ctx.arc(f.x,f.y,rr2,A-C.FAN.HALF*0.9,A+C.FAN.HALF*0.9);ctx.stroke();}
+      ctx.restore();}
+    // Thief glove: a little glove flies from the victim back to the thief with what it took.
+    if(f.k==='steal'&&a<900){const q=Math.min(1,a/700),e=q<0.5?2*q*q:1-(-2*q+2)**2/2,x=f.tx+(f.x-f.tx)*e,y=f.ty-20+(f.y-20-f.ty+20)*e-Math.sin(Math.PI*q)*60;
+      ctx.save();ctx.globalAlpha=a>700?1-(a-700)/200:1;
+      if(!effectSprite(ctx,'fx-glove',x,y,44,44,Math.sin(a/80)*0.3))glove(ctx,x,y,a);
+      if(f.w&&f.w!=='x'){ctx.font=`700 16px ${FUN}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=4;ctx.strokeStyle='#fff';ctx.fillStyle='#a0785a';
+        const lab=f.w==='p'?'+1':(CARDS[f.w]?.zh||'卡');ctx.strokeText(lab,x,y-26);ctx.fillText(lab,x,y-26);}
+      ctx.restore();
+      if(f.w!=='x')popText(ctx,'被偷了！',f.tx,f.ty-70-k*30,'#e2416c',k,22);}
+    if(f.k==='bomb'&&f.w&&f.w!=='0')popText(ctx,'-'+f.w,f.tx+40,f.ty-10-k*40,'#e2412c',k,30);
     if(f.k==='ice'&&a<700&&globalThis.HookArt?.get('fx-ice-burst')){
       const q=a/700,e=1-(1-q)**3;ctx.save();ctx.globalAlpha=(1-q)**0.7;
       effectSprite(ctx,'fx-ice-burst',f.tx,f.ty-10,40+e*88,40+e*88,q*0.15);
@@ -1001,7 +1070,7 @@
       for(let i=0;i<9;i++){const r=i*TAU/9+0.2,d=20+e*90;ctx.beginPath();ctx.arc(f.x+Math.cos(r)*d,f.y-20+Math.sin(r)*d*0.7,7*(1-q)+3,0,TAU);ctx.fill();}ctx.restore();}
     // Whirlpool lands: a ring of spray.
     if(f.k==='whirl'&&a<600){const q=a/600;ctx.save();ctx.globalAlpha=1-q;ctx.strokeStyle='#fff';ctx.lineWidth=5*(1-q)+2;ctx.beginPath();ctx.arc(f.x,f.y,C.WHIRL.R*(0.3+q*0.7),0,TAU);ctx.stroke();ctx.restore();}
-    if(txt){const at=f.k==='ice'||f.k==='bomb'?{x:f.tx,y:f.ty}:f;popText(ctx,txt,at.x,at.y-(f.k==='slime'||f.k==='whirl'?20:f.k==='bomb'?40:78)-k*30,col,k,f.k==='rush'?34:26);}
+    if(txt&&!(f.k==='steal'&&f.w==='x')){const at=f.k==='ice'||f.k==='bomb'?{x:f.tx,y:f.ty}:f;popText(ctx,txt,at.x,at.y-(f.k==='slime'||f.k==='whirl'?20:f.k==='bomb'?40:78)-k*30,col,k,f.k==='rush'?34:26);}
   }
   /* Goldfish rush: the lake glows warm gold and sparkles drift over it. */
   function rushGlow(ctx,now,left){
@@ -1020,8 +1089,8 @@
     ctx.restore();
   }
   let sceneKey='',sceneCv=null;
-  /* V = {tc, t (game time), players:[{id,x,y,team,av,name,st,me,fx,fy,mv,rs,rk,sh,x2,upRange,slow,kb,daze,ink}], orbs:[{id,k,x,y,alpha,held,hooked,mark}],
-         hooks:[{o,x,y,tx,ty,team,caught}], aim:{x,y,a} | {kind:'ice',x,y,a} | {kind:'slime'|'whirl',x,y,tx,ty}, loot:[{id,k,x,y,alpha,hooked}],
+  /* V = {tc, t (game time), players:[{id,x,y,team,av,name,st,me,fx,fy,mv,rs,rk,sh,x2,slow,kb,ink}], orbs:[{id,k,x,y,alpha,held,hooked,mark}],
+         hooks:[{o,x,y,tx,ty,team,caught}], aim:{x,y,a} | {kind:'ice'|'fan',x,y,a} | {kind:'slime'|'whirl',x,y,tx,ty}, loot:[{id,k,x,y,alpha,hooked}],
          shots (unpacked snapshot s), zones (z), fx:[{k,x,y,tx,ty,age}], rush: ms of goldfish rush left (0 = none)} */
   function render(ctx,cw,ch,dpr,V,now,top=0){
     const vp=viewport(cw,ch-top);vp.oy+=top;const sc=vp.k*dpr,key=sc.toFixed(4)+'|'+(V.tc||2)+'|'+(globalThis.HookArt?.revision||0),rush=V.rush>0;
@@ -1039,8 +1108,8 @@
     const hookBy=new Map(V.hooks.map(h=>[h.o,h])),tips=new Map(),mem=new Map(),ps=[...V.players].sort((a,b)=>a.y-b.y);
     for(const p of ps){const m=pState(p,now);mem.set(p.id,m);
       // Knocked back: an arc to the edge of the map with one somersault; dizzy for a moment after landing; ink over the head.
-      const q={...p,dazed:p.daze>gt,inked:p.ink>gt};
-      if(p.st===3&&p.kb){const k=clamp((gt-p.kb.t0)/Math.max(1,p.kb.t1-p.kb.t0),0,1),dir=Math.atan2(p.kb.y1-p.kb.y0,p.kb.x1-p.kb.x0);
+      const q={...p,inked:p.ink>gt};
+      if(p.kb){const k=clamp((gt-p.kb.t0)/Math.max(1,p.kb.t1-p.kb.t0),0,1),dir=Math.atan2(p.kb.y1-p.kb.y0,p.kb.x1-p.kb.x0);
         Object.assign(q,{lift:Math.sin(Math.PI*k)*(36+Math.min(60,Math.hypot(p.kb.x1-p.kb.x0,p.kb.y1-p.kb.y0)*0.08)),fly:dir,spin:(Math.cos(dir)>=0?1:-1)*k*TAU});}
       tips.set(p.id,drawBody(ctx,q,now,m,hookBy.get(p.id)));}
     for(const h of V.hooks)drawLine(ctx,tips.get(h.o)||h,h);
@@ -1082,17 +1151,24 @@
   /* GitHub Pages lets a browser keep a page for 10 minutes, so right after a fix a phone can still run the old copy.
      At start-up, ask for this page again (skipping every cache); if it carries a newer version, switch to it once.
      busy() says "don't switch now" (e.g. the student already picked a room). Returns this page's version. */
-  function freshen(busy=()=>false){
+  /* The version of this page on the website right now ('' if it can't be read). */
+  function latestVersion(){
+    if(typeof fetch==='undefined'||typeof location==='undefined')return Promise.resolve('');
+    return fetch(location.pathname+'?fresh='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'')
+      .then(t=>(/name="hook-version" content="([0-9a-f]{7})"/.exec(t)||[])[1]||'').catch(()=>'');
+  }
+  // onNewer(v): called instead of switching when busy() says not now (the teacher's page shows an "update" button).
+  function freshen(busy=()=>false,onNewer){
     if(typeof document==='undefined')return '';
     const ver=document.querySelector('meta[name="hook-version"]')?.content||'';
     if(!/^[0-9a-f]{7}$/.test(ver)||/[?&]local\b/.test(location.search))return ver;
-    fetch(location.pathname+'?fresh='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(t=>{
-      const m=/name="hook-version" content="([0-9a-f]{7})"/.exec(t);if(!m||m[1]===ver||busy())return;
+    latestVersion().then(v=>{
+      if(!v||v===ver)return;if(busy()){onNewer?.(v);return;}
       let tried='';try{tried=sessionStorage.getItem('lumi-hook-upd')||'';}catch{}
-      if(tried===m[1])return;
-      try{sessionStorage.setItem('lumi-hook-upd',m[1]);}catch{}
-      const q=new URLSearchParams(location.search);q.set('v',m[1]);location.replace(location.pathname+'?'+q);
-    }).catch(()=>{});
+      if(tried===v){onNewer?.(v);return;}
+      try{sessionStorage.setItem('lumi-hook-upd',v);}catch{}
+      const q=new URLSearchParams(location.search);q.set('v',v);location.replace(location.pathname+'?'+q);
+    });
     return ver;
   }
 
@@ -1105,7 +1181,7 @@
     get muted(){return HA()?.mode==='off';},set muted(v){if(HA())HA().mode=v?'off':'all';},
     fire:fx('fire'),catch:fx('catch'),right:fx('right'),wrong:fx('wrong'),tick:fx('count'),go:fx('go'),pop:fx('tap'),tap:fx('tap'),
     card:fx('card'),power:fx('power'),boom:fx('boom'),freeze:fx('freeze'),shield:fx('shield'),block:fx('block'),glow:fx('glow'),rush:fx('rushStart'),
-    shoot:fx('shoot'),slime:fx('slime'),whirl:fx('whirl'),bomb:fx('bomb'),ink:fx('ink'),
+    shoot:fx('shoot'),slime:fx('slime'),whirl:fx('whirl'),bomb:fx('bomb'),ink:fx('ink'),steal:fx('steal'),
     win(){HA()?.jingle('win');},lose(){HA()?.jingle('lose');}
   };
 
@@ -1122,8 +1198,8 @@
     document.addEventListener('touchstart',()=>{},{passive:true});
   }
 
-  const api={C,CARDS,ANIMALS,TURN,clamp,rng,bases,confine,orbPos,fishPos,lootPos,intoLake,edgeFrom,flyPos,hookDist,hookTip,hookDone,outgoing,segDist,inSlime,walkK,shotAt,
-    createGame,snapEvery,unpack,pickRoom,createNet,createLocalNet,viewport,render,inkCover,drawAnimal,animalIcon,confetti,freshen,pressFeedback,sfx};
+  const api={C,CARDS,ANIMALS,TURN,clamp,rng,bases,confine,orbPos,fishPos,lootPos,intoLake,edgeFrom,flyPos,hookDist,hookTip,hookDone,outgoing,segDist,inSlime,inWhirl,walkK,dragWhirl,inFan,shotAt,
+    createGame,snapEvery,unpack,pickRoom,createNet,createLocalNet,viewport,render,inkCover,drawAnimal,animalIcon,confetti,freshen,latestVersion,pressFeedback,sfx};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.HookGame=api;
 })(globalThis);

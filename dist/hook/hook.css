@@ -178,7 +178,17 @@ button,.btn,.room{-webkit-user-select:none;user-select:none}
 #rotate small{color:var(--muted);font-size:15px}
 #rotate .phone{display:block;margin:0 auto 18px;width:46px;height:78px;border:5px solid var(--pink);border-radius:12px;background:#fff;animation:turn 1.6s ease-in-out infinite}
 @keyframes turn{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
-@media (orientation:portrait) and (pointer:coarse){body.playing #rotate{display:flex}}
+/* The game layer. Normally it adds nothing; on a phone that stays tall while held sideways (rotation lock, or a scanner
+   app's browser) player.js turns it 90° and sizes it, so the game is played sideways anyway. */
+#game{display:contents}
+body.turned #game{display:block;position:fixed;transform-origin:0 0;overflow:hidden}
+.hud-btns{display:flex;gap:8px}
+.icon-btn.flip{display:none}
+body.turned .icon-btn.flip{display:grid}
+/* Turned: the screen is short like a phone held sideways, so use the compact question card */
+body.turned .card .q{font-size:20px;margin:4px 0 8px}
+body.turned .opt{min-height:44px;font-size:17px;padding:6px 10px}
+body.turned .card img{max-height:28vw}
 #net{position:fixed;left:50%;top:50px;transform:translateX(-50%);z-index:16;background:#fff;color:var(--pink-d);font-family:var(--fun);padding:4px 14px;border-radius:999px;font-size:14px;box-shadow:0 3px 0 rgba(74,59,85,.12)}
 .warn{color:var(--pink-d);font-family:var(--fun);font-size:18px}
 /* The teacher's computer can't reach the server, so no phone can see the room. */
@@ -298,4 +308,7 @@ body.host{overflow:auto;background:linear-gradient(#d4efff,#f4fbff 340px);backgr
 #stage .end-panel{top:64px}
 #time button,#sound button{white-space:nowrap;padding:7px 4px}
 #sound button{font-size:14px}
-.other-rooms{font-size:12px;color:var(--muted);background:#fff6d8;border-radius:999px;padding:4px 10px}
+.other-rooms{font-size:13px;color:#a2400f;background:#fff1d6;border:2px solid #ffc98a;border-radius:12px;padding:6px 12px;line-height:1.45;flex-basis:100%}
+/* A newer version of the teacher page is on the website. */
+.update-bar{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:14px;background:#fff;border:3px solid #9a7cff;border-radius:16px;padding:8px 10px 8px 16px;box-shadow:0 6px 0 rgba(122,92,214,.2);font-size:15px;max-width:calc(100% - 32px)}
+.update-bar b{font-family:var(--fun);color:#7b5cd6;margin-right:6px}

@@ -13,13 +13,17 @@
   // Everyone starts as a random animal; arrows on the name screen (or a tap in the lobby) pick another.
   let myAv=Number(store('lumi-hook-av'));if(!(Number.isInteger(myAv)&&myAv>=0&&myAv<N)){myAv=Math.floor(Math.random()*N);store('lumi-hook-av',String(myAv));}
   let room=null,up='',S=null,recvAt=0,off=null,lastPh='',mine=null,joinedAt=0,kicked=false,lastSnapAt=0;
+  // host = the id of the teacher page whose room I picked. Messages carry it, and anything from another page is ignored,
+  // so an old teacher page left open somewhere with the same room number can't catch me. If my page goes quiet for 8 s
+  // while another one keeps talking on this room (the teacher closed the tab and opened a new one), I follow the new one.
+  let host='',otherHost='',otherAt=0;
   const qs=[],disp=new Map(),me={x:0,y:0,fx:1,fy:0,placed:false};
   if(local)window.__phoneMe=me;   // test scripts (?local only) can place this student
   let myHooks=[],shownQn=-1,lastRs=null,answerSent=0,lastNeed=0,lastFx=-1,lastCards='',usedAt=0;
   G.pressFeedback();
 
   let lastSend=0;
-  const send=(m)=>{lastSend=performance.now();return net.post(up,'u',{...m,id:myId});};
+  const send=(m)=>{lastSend=performance.now();return net.post(up,'u',host?{...m,id:myId,to:host}:{...m,id:myId});};
   const now=()=>performance.now();
   const gameNow=()=>!S?0:S.ph==='play'?now()+off:S.t;
   const teamOf=i=>C.TEAMS[i]||C.TEAMS[0];
@@ -38,22 +42,25 @@
     if(qp.get('r'))return askName(qp.get('r'));
     // Rooms announce themselves every 2 s. Only redraw the list while the student is still choosing a room —
     // once a room is picked (name screen), the list must never come back over it.
-    net.join('hook-lobby',(ev,p)=>{if(ev==='room'&&p?.room){rooms.set(String(p.room),{...p,at:Date.now()});drawRooms();}});
+    net.join('hook-lobby',(ev,p)=>{if(ev==='room'&&p?.room){rooms.set(String(p.room)+'|'+(p.hid||''),{...p,room:String(p.room),at:Date.now()});drawRooms();}});
     clearInterval(roomTimer);drawRooms();roomTimer=setInterval(drawRooms,2000);
   }
   function drawRooms(){
     if(room)return;
-    const list=[...rooms.values()].filter(r=>Date.now()-r.at<6000&&r.ph!=='closed'),down=net.downFor()>4000;
-    const key='rooms:'+(down?'down':list.map(r=>r.room+'/'+r.n).join(','));if(ui.dataset.key===key)return;ui.dataset.key=key;
+    const best=new Map(),score=x=>(x.vis?4:0)+(x.v?2:0)+(x.n>0?1:0);
+    for(const r of rooms.values()){if(Date.now()-r.at>=6000||r.ph==='closed')continue;const o=best.get(r.room);
+      if(!o||score(r)>score(o)||(score(r)===score(o)&&(r.t0||0)>(o.t0||0)))best.set(r.room,r);}
+    const list=[...best.values()].sort((a,b)=>a.room<b.room?-1:1),down=net.downFor()>4000;
+    const key='rooms:'+(down?'down':list.map(r=>r.room+'/'+r.n+'/'+(r.hid||'')).join(','));if(ui.dataset.key===key)return;ui.dataset.key=key;
     ui.innerHTML=`<div class="screen room-cover"><div class="box"><div class="cover-art" aria-hidden="true"></div>${head('Hook Rush')}<div class="sheet">
-      ${list.length?`<p class="sub">点老师的房间 Tap your teacher's room</p><div class="room-list">${list.map(r=>`<button class="room" data-room="${esc(r.room)}"><span>房间 ${esc(r.room)}</span><small>${r.n} 人</small></button>`).join('')}</div>`
+      ${list.length?`<p class="sub">点老师的房间 Tap your teacher's room</p><div class="room-list">${list.map(r=>`<button class="room" data-room="${esc(r.room)}" data-hid="${esc(r.hid||'')}"><span>房间 ${esc(r.room)}</span><small>${r.n} 人</small></button>`).join('')}</div>`
         :down?`<img class="wait-pet" src="${pet(myAv,96)}" alt=""><p class="sub"><b class="warn">连不上网络</b><br>请检查 Wi-Fi 或流量<br><small>Can't connect. Check your internet.</small></p>`
         :`<img class="wait-pet" src="${pet(myAv,96)}" alt=""><p class="sub dots">等老师开房间 Waiting for the teacher</p>`}</div></div></div>`;
-    ui.querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>askName(b.dataset.room));
+    ui.querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>askName(b.dataset.room,b.dataset.hid));
   }
   /* ── 2. Pick an animal and type your name ── */
-  function askName(code){
-    clearInterval(roomTimer);room=String(code);ui.dataset.key='';
+  function askName(code,hid){
+    clearInterval(roomTimer);room=String(code);host=hid||'';ui.dataset.key='';
     ui.innerHTML=`<div class="screen"><div class="box wide">${head('房间 '+esc(room))}<div class="sheet two">
       <div class="pick"><button class="arrow" id="prev" data-quiet aria-label="上一只 Previous">‹</button>
         <div class="pet"><img id="pet" src="${pet(myAv,104)}" alt=""><span id="petName"></span></div>
@@ -78,7 +85,8 @@
   /* ── 3. Join and listen ── */
   function joinRoom(){
     net.leave('hook-lobby');up=`hook-${room}-u`;joinedAt=now();
-    net.join(`hook-${room}`,(ev,p)=>{if(ev==='snap')onSnap(p);else if(ev==='q')onQuestions(p);else if(ev==='closed')closed();});
+    const mineHost=p=>!p?.hid||!host||p.hid===host;
+    net.join(`hook-${room}`,(ev,p)=>{if(ev==='snap')onSnap(p);else if(ev==='q'){if(mineHost(p))onQuestions(p);}else if(ev==='closed'){if(mineHost(p))closed();}});
     send({k:'join',name:myName,av:myAv});
     waiting('正在加入 Joining');
   }
@@ -96,6 +104,11 @@
   function onQuestions(p){for(const [i,q] of p.items||[])qs[i]=q;if(mine?.st===1&&shownQn===-2)showQuestion();}
   function onSnap(raw){
     if(kicked)return;
+    if(raw.hid){const t0=now();
+      if(!host)host=raw.hid;
+      else if(raw.hid!==host){otherHost=raw.hid;otherAt=t0;
+        if(t0-Math.max(lastSnapAt,joinedAt)<8000)return;   // still hearing my own teacher page (or just joined): ignore the other one
+        host=raw.hid;mine=null;}}   // my page went quiet and a new one runs this room: follow it (I'll rejoin)
     const s=G.unpack(raw),t=now();lastSnapAt=t;
     if(s.k?.includes(myId)){kicked=true;setPlaying(false);message('老师把你移出了房间。<br>The teacher removed you.','再加入 Join again',()=>location.reload());return;}
     if(s.ph!==lastPh){off=null;phaseChange(lastPh,s.ph,s);lastPh=s.ph;}
@@ -103,14 +116,14 @@
     S=s;recvAt=t;
     const m=s.p.find(p=>p.id===myId);
     if(!m){mine=null;return;}
-    const first=!mine,wasFlying=mine?.st===3;mine=m;
+    const first=!mine,wasFlying=!!mine?.kb;mine=m;
     // Just landed after a knock-back: stand where the teacher's computer put me.
-    if(first||!me.placed||s.ph==='lobby'||s.ph==='count'||(wasFlying&&m.st!==3)){me.x=m.x;me.y=m.y;me.placed=true;}
+    if(first||!me.placed||s.ph==='lobby'||s.ph==='count'||(wasFlying&&!m.kb)){me.x=m.x;me.y=m.y;me.placed=true;}
     if(first&&lastRs==null)lastRs=m.rs;
     if(m.rs!==lastRs){lastRs=m.rs;result(m.rk);}
-    events(s);
+    stoleCard=false;events(s);
     const ck=m.cards.join(',');
-    if(ck!==lastCards){if(m.cards.length>(lastCards?lastCards.split(',').length:0)){const k=m.cards[m.cards.length-1];note(`拿到「${G.CARDS[k]?.zh||''}」卡！${AIMED[k]?'按住卡片拖动瞄准':''}`,'good');G.sfx.card();buzz(30);}
+    if(ck!==lastCards){if(!stoleCard&&m.cards.length>(lastCards?lastCards.split(',').length:0)){const k=m.cards[m.cards.length-1];note(`拿到「${G.CARDS[k]?.zh||''}」卡！${AIMED[k]?'按住卡片拖动瞄准':''}`,'good');G.sfx.card();buzz(30);}
       lastCards=ck;usedAt=0;drawCards();}
     if(m.st===1&&m.qn!==shownQn&&shownQn!==-2)showQuestion();
     if(m.st!==1&&!$('#ask').classList.contains('hidden'))hideQuestion();
@@ -120,6 +133,7 @@
     for(const p of s.p)if(p.id!==myId&&!disp.has(p.id))disp.set(p.id,{x:p.x,y:p.y,fx:1,fy:0});
   }
   /* What other players did with their cards (and the goldfish rush): tell this student when it concerns them. */
+  let stoleCard=false;
   function events(s){
     const top=s.fx.reduce((a,f)=>Math.max(a,f.id),0);
     if(lastFx<0){lastFx=top;return;}   // first snapshot: don't replay old news
@@ -128,17 +142,19 @@
       if(f.id<=lastFx)continue;const hitMe=f.to.includes(myId),mineFx=f.by===myId;
       if(f.k==='up'&&hitMe){note(`被 ${nameOf(f.by)} 击飞了！`,'bad');G.sfx.boom();buzz(120);}
       else if(f.k==='ice'&&hitMe){note(`被 ${nameOf(f.by)} 冻住了！`,'bad');G.sfx.freeze();buzz(120);}
-      else if(f.k==='bomb'&&hitMe){note('钓到炸弹鱼！晕 2 秒','bad');G.sfx.bomb();buzz(200);}
+      else if(f.k==='bomb'&&hitMe){note(f.w&&f.w!=='0'?`钓到炸弹鱼！晕 2 秒，扣 ${f.w} 分`:'钓到炸弹鱼！晕 2 秒','bad');G.sfx.bomb();buzz(200);}
+      else if(f.k==='steal'&&hitMe){note(f.w==='p'?`被 ${nameOf(f.by)} 偷了 1 分！`:`被 ${nameOf(f.by)} 偷了「${G.CARDS[f.w]?.zh||'卡'}」卡！`,'bad');G.sfx.steal();buzz(120);}
+      else if(f.k==='steal'&&mineFx){if(f.w==='x')note('被保护罩挡住了','bad');else{note(f.w==='p'?'偷到 1 分！':`偷到「${G.CARDS[f.w]?.zh||'卡'}」卡！`,'good');if(f.w!=='p')stoleCard=true;}G.sfx.steal();}
       else if(f.k==='ink'&&hitMe){note(`被 ${nameOf(f.by)} 喷墨水了！`,'bad');G.sfx.ink();buzz(80);}
       else if(f.k==='block'&&mineFx){note('保护罩挡住了！','good');G.sfx.block();}
-      else if(f.k==='up'&&mineFx)note(f.to.length?`击飞了 ${f.to.length} 人！`:'被保护罩挡住了','good');
+      else if(f.k==='up'&&mineFx){note(f.to.length?`击飞了 ${f.to.length} 人！`:'被保护罩挡住了','good');G.sfx.boom();}
       else if(f.k==='ice'&&mineFx){note(f.to.length?`冻住了 ${nameOf(f.to[0])}！`:'被保护罩挡住了','good');G.sfx.freeze();}
       else if(f.k==='ink'&&mineFx){note(f.to.length?`墨水喷中 ${f.to.length} 人！`:'都被保护罩挡住了','good');G.sfx.ink();}
       else if(f.k==='bomb'&&mineFx){note(f.to.length?`${nameOf(f.to[0])} 钓到你的炸弹鱼！`:'炸弹鱼被保护罩挡住了','good');G.sfx.bomb();}
       else if(f.k==='bomb'){const p=S.p.find(x=>x.id===f.by);if(p&&mine&&p.team===mine.team)note(`${nameOf(f.to[0])||'敌人'} 钓到我们的炸弹鱼！`,'good');G.sfx.bomb();}
       else if(f.k==='trap'&&mineFx)note('炸弹鱼放好了！敌人看起来是普通的鱼','good');
       else if(f.k==='slime'){if(mineFx)note('黏液丢中了！','good');G.sfx.slime();}
-      else if(f.k==='whirl'){if(mineFx)note('漩涡把鱼吸过去了！快钓！','good');G.sfx.whirl();}
+      else if(f.k==='whirl'){if(mineFx)note('漩涡转起来了！','good');G.sfx.whirl();}
       else if(f.k==='full'&&mineFx){note('卡满了，先用掉一张','bad');buzz(30);}
       else if(f.k==='shield'&&mineFx){note('拿到保护罩 10 秒！','good');G.sfx.shield();buzz(40);}
       else if(f.k==='rush'){note(mineFx?'你钓到发光金鱼！金鱼潮开始！':`${nameOf(f.by)} 开启金鱼潮！每条鱼 2 分`,'gold');G.sfx.rush();}
@@ -150,16 +166,17 @@
   const buzz=ms=>{if(navigator.vibrate)try{navigator.vibrate(ms);}catch{}};
 
   /* ── Item cards: up to two buttons above the hook button ── */
-  const SHORT={up:'击飞',ice:'冷冻',slow:'缓速',x2:'加倍',whirl:'漩涡',bomb:'炸弹鱼',ink:'墨水'};
-  const AIMED={ice:1,slow:1,whirl:1};   // hold and drag to aim (like a hero skill); a quick tap aims at the nearest enemy (whirlpool: the lake in front)
-  const RANGE={ice:C.SHOT.RANGE,slow:C.SLIME.RANGE,whirl:C.WHIRL.RANGE};
+  const SHORT={up:'击飞',ice:'冷冻',x2:'加倍',whirl:'漩涡',bomb:'炸弹鱼',ink:'墨水',steal:'小偷'};
+  // Hold and drag to aim (like a hero skill); a quick tap aims at the nearest enemy (whirlpool: towards the lake).
+  const AIMED={up:1,ice:1,whirl:1};
+  const RANGE={up:C.FAN.R,ice:C.SHOT.RANGE,whirl:C.WHIRL.RANGE};
   const ICON={
     up:'<svg viewBox="0 0 24 24"><path d="M12 3l6.5 7H15v6H9v-6H5.5z" fill="currentColor"/><path d="M5 20h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>',
     ice:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 2.5v19M3.8 7.2l16.4 9.6M3.8 16.8l16.4-9.6M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/></svg>',
-    slow:'<svg viewBox="0 0 24 24"><path d="M12 3c3.5 4 6.5 7.3 6.5 11a6.5 6.5 0 0 1-13 0C5.5 10.3 8.5 7 12 3z" fill="currentColor"/><circle cx="9.5" cy="14" r="1.6" fill="#fff"/><circle cx="14" cy="16.5" r="1.1" fill="#fff"/></svg>',
     x2:'<b>×2</b>',
     whirl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 12.5a1.5 1.5 0 1 1 1.6-1.9M12 12.5c3 0 4.8-2.2 4.5-4.6C16.2 5.4 13.8 4 11.5 4.2 7.6 4.5 5 7.8 5.2 11.6c.3 4.4 4 7.5 8.2 7.2 4.5-.3 6.9-3.2 7.3-6"/></svg>',
     bomb:'<svg viewBox="0 0 24 24"><circle cx="10.5" cy="14" r="7" fill="currentColor"/><path d="M14.5 8.5l2-2M16.5 6.5c1-1 2.8-.8 3.2.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="20" cy="5" r="1.7" fill="#ffc93c"/><circle cx="8" cy="11.5" r="1.8" fill="#fff" opacity=".6"/></svg>',
+    steal:'<svg viewBox="0 0 24 24"><path d="M7 12V7.5a1.5 1.5 0 0 1 3 0V11V5.5a1.5 1.5 0 0 1 3 0V11V6.5a1.5 1.5 0 0 1 3 0V12.5V9.5a1.5 1.5 0 0 1 3 0V15c0 3.6-2.6 6-6.2 6-2.6 0-4.3-1.1-5.6-3L4.6 13.8a1.4 1.4 0 0 1 2.2-1.7z" fill="currentColor"/><rect x="7" y="18.6" width="10" height="2.6" rx="1.3" fill="#ffc93c"/></svg>',
     ink:'<svg viewBox="0 0 24 24"><path d="M12 3.5c3.3 0 5.4 2 6.6 4.2 1.6.2 2.6 1.4 2.2 2.6-.3.9-1.2 1.2-2 1 .2 2.4-.6 4.8-2.7 6 .5 1 .4 2.3-.6 2.7-1 .4-1.9-.3-2.1-1.3-.9.1-1.9.1-2.9-.1-.4 1.1-1.5 1.7-2.4 1.2-.8-.5-.9-1.6-.4-2.5C5 16 4 13.6 4.3 11c-1 .1-1.9-.4-2-1.3-.1-1.2 1.1-2 2.4-1.8C6.3 5.4 8.8 3.5 12 3.5z" fill="currentColor"/><circle cx="9.5" cy="9.5" r="1.8" fill="#fff" opacity=".5"/></svg>'};
   function drawCards(){
     const box=$('#cards'),cards=mine?.cards||[];
@@ -170,33 +187,35 @@
       b.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();G.sfx.unlock();
         if(!AIMED[k])return useCard(i);
         if(!canAct()){note(mine.st===1?'先答题':'现在不能用','bad');return;}
-        cardAim={id:e.pointerId,i,k,sx:e.clientX,sy:e.clientY,a:null,d:null};b.setPointerCapture?.(e.pointerId);});
-      b.addEventListener('pointermove',e=>{if(cardAim?.id!==e.pointerId)return;const x=e.clientX-cardAim.sx,y=e.clientY-cardAim.sy,l=Math.hypot(x,y);
+        const P=pt(e);cardAim={id:e.pointerId,i,k,sx:P.x,sy:P.y,a:null,d:null};b.setPointerCapture?.(e.pointerId);});
+      b.addEventListener('pointermove',e=>{if(cardAim?.id!==e.pointerId)return;const P=pt(e),x=P.x-cardAim.sx,y=P.y-cardAim.sy,l=Math.hypot(x,y);
         if(l>18){cardAim.a=Math.atan2(y,x);cardAim.d=Math.min(1,l/80)*RANGE[cardAim.k];}else cardAim.a=cardAim.d=null;});
       const done=e=>{if(cardAim?.id!==e.pointerId)return;const c=cardAim;cardAim=null;if(e.type==='pointerup')useCard(c.i,c.a,c.d);};
       b.addEventListener('pointerup',done);b.addEventListener('pointercancel',done);
     });
   }
-  let cardAim=null;   // {id,i,k,sx,sy,a,d} while a freeze / slime / whirlpool card is being aimed
+  let cardAim=null;   // {id,i,k,sx,sy,a,d} while a knock-back / freeze / whirlpool card is being aimed
+  const where=p=>p.id===myId?me:disp.get(p.id)||p;
   // Where my aimed card would go if released now (no drag yet: the nearest enemy in reach, like the teacher's computer does;
-  // a whirlpool goes into the lake in front).
+  // a whirlpool goes towards the lake). Knock-back and freeze aim at any enemy (knock-back hits people answering too).
   function cardTarget(c){
     if(c.a!=null)return {a:c.a,d:c.d};
     const range=RANGE[c.k];let best=null;
-    if(c.k!=='whirl')for(const p of S.p){if(p.team===mine.team||p.st!==0)continue;const q=disp.get(p.id)||p,d=Math.hypot(q.x-me.x,q.y-me.y);if(d<=range&&(!best||d<best.d))best={d,a:Math.atan2(q.y-me.y,q.x-me.x)};}
+    if(c.k!=='whirl')for(const p of S.p){if(p.team===mine.team||p.kb||(c.k==='ice'&&p.st===1))continue;const q=where(p),d=Math.hypot(q.x-me.x,q.y-me.y);if(d<=range&&(!best||d<best.d))best={d,a:Math.atan2(q.y-me.y,q.x-me.x)};}
     return best||{a:Math.atan2(C.SEA.y-me.y,C.SEA.x-me.x),d:range*0.7};
   }
-  // Where a thrown slime ball / whirlpool lands (the teacher's computer works it out the same way).
-  function landAt(k,tg){const d=G.clamp(tg.d,40,RANGE[k]),x=G.clamp(me.x+Math.cos(tg.a)*d,0,C.W),y=G.clamp(me.y+Math.sin(tg.a)*d,0,C.H);return k==='whirl'?G.intoLake(x,y,0.78):{x,y};}
+  // Where a thrown whirlpool lands (the teacher's computer works it out the same way).
+  function landAt(k,tg){const d=G.clamp(tg.d,40,RANGE[k]);return {x:G.clamp(me.x+Math.cos(tg.a)*d,C.PR,C.W-C.PR),y:G.clamp(me.y+Math.sin(tg.a)*d,C.PR,C.H-C.PR)};}
   function useCard(i,a,d){
     const k=mine?.cards[i];if(!k||usedAt)return;G.sfx.unlock();
     if(!canAct()){note(mine.st===1?'先答题':'现在不能用','bad');return;}
-    const foes=S.p.filter(p=>p.team!==mine.team&&p.st===0);
-    if(k==='up'&&!foes.some(p=>{const q=disp.get(p.id)||p;return Math.hypot(q.x-me.x,q.y-me.y)<=C.CARD.R_UP;})){note('身边没有敌人，走近一点','bad');return;}
     const msg={k:'use',i};
-    if(AIMED[k]){const tg=cardTarget({k,a:a??null,d:d??null});msg.a=+tg.a.toFixed(4);if(k!=='ice')msg.d=Math.round(tg.d);}
+    if(AIMED[k]){const tg=cardTarget({k,a:a??null,d:d??null});msg.a=+tg.a.toFixed(4);if(k==='whirl')msg.d=Math.round(tg.d);
+      // Knock-back: nobody in the fan → keep the card (the teacher's computer would refuse it anyway).
+      if(k==='up'&&!S.p.some(p=>p.team!==mine.team&&!p.kb&&G.inFan(me.x,me.y,tg.a,where(p).x,where(p).y))){note('扇形里没有敌人','bad');return;}}
+    if(k==='steal'&&!S.p.some(p=>p.team!==mine.team&&(p.cards.length||S.sc[p.team]>0))){note('现在没有东西可以偷','bad');return;}
     usedAt=now();send(msg);buzz(25);
-    ({up:G.sfx.boom,ice:G.sfx.shoot,slow:G.sfx.fire,whirl:G.sfx.fire,ink:G.sfx.ink}[k]||G.sfx.power)();
+    ({up:G.sfx.boom,ice:G.sfx.shoot,whirl:G.sfx.fire,ink:G.sfx.ink,steal:G.sfx.steal}[k]||G.sfx.power)();
     $(`#cards [data-i="${i}"]`)?.classList.add('used');
   }
 
@@ -210,8 +229,24 @@
     if(to==='end')setPlaying(false);
     if(to==='lobby'){setPlaying(false);hideQuestion();myHooks=[];}
   }
+  /* Rotation lock on, or opened inside a scanner / chat app whose browser never turns: the page stays tall even when the
+     phone is held sideways. Then the game itself is turned 90° (the room list and lobby stay as they are). Which way
+     round comes from the motion sensor where the phone gives it freely (Android); the ↻ button flips it. */
+  const coarse=matchMedia('(pointer:coarse)').matches;let turn=0,tilt=1,tiltSet=false;
+  try{tilt=store('lumi-hook-tilt')==='-1'?-1:1;tiltSet=store('lumi-hook-tilt')!=null;}catch{}
+  addEventListener('devicemotion',e=>{if(tiltSet)return;const x=e.accelerationIncludingGravity?.x;if(x==null||Math.abs(x)<6)return;const t=x>0?1:-1;if(t!==tilt){tilt=t;applyTurn();}});
+  const GW=()=>turn?innerHeight:innerWidth,GH=()=>turn?innerWidth:innerHeight;
+  // A touch on the screen → a point in the (possibly turned) game.
+  function pt(e){const x=e.clientX,y=e.clientY;return turn===1?{x:y,y:innerWidth-x}:turn===-1?{x:innerHeight-y,y:x}:{x,y};}
+  function applyTurn(){
+    const want=document.body.classList.contains('playing')&&coarse&&innerHeight>innerWidth?tilt:0,g=$('#game');
+    turn=want;document.body.classList.toggle('turned',!!turn);
+    g.style.cssText=turn?`width:${innerHeight}px;height:${innerWidth}px;left:${turn===1?innerWidth:0}px;top:${turn===1?0:innerHeight}px;transform:rotate(${turn*90}deg)`:'';
+    resize();
+  }
+  $('#flip').onclick=()=>{tilt=-tilt;tiltSet=true;store('lumi-hook-tilt',String(tilt));applyTurn();};
   function setPlaying(on){
-    document.body.classList.toggle('playing',on);
+    document.body.classList.toggle('playing',on);applyTurn();
     for(const id of ['#hud','#hookBtn','#joyHint','#cards'])$(id).classList.toggle('hidden',!on);
     if(!on){$('#joy').classList.add('hidden');$('#frost').classList.add('hidden');$('#count').classList.add('hidden');joy.id=null;}
   }
@@ -275,24 +310,26 @@
   const joyEl=$('#joy'),knob=joyEl.firstElementChild,hookBtn=$('#hookBtn');
   cv.addEventListener('pointerdown',e=>{
     if(!document.body.classList.contains('playing'))return;
-    if(e.pointerType==='mouse'){fireAt(e.clientX,e.clientY);return;}
-    if(joy.id!=null||e.clientX>innerWidth*0.6)return;
-    joy.id=e.pointerId;joy.bx=e.clientX;joy.by=e.clientY;joy.dx=joy.dy=0;
-    joyEl.style.left=e.clientX+'px';joyEl.style.top=e.clientY+'px';joyEl.classList.remove('hidden');knob.style.transform='';
+    const P=pt(e);
+    if(e.pointerType==='mouse'){fireAt(P.x,P.y);return;}
+    if(joy.id!=null||P.x>GW()*0.6)return;
+    joy.id=e.pointerId;joy.bx=P.x;joy.by=P.y;joy.dx=joy.dy=0;
+    joyEl.style.left=P.x+'px';joyEl.style.top=P.y+'px';joyEl.classList.remove('hidden');knob.style.transform='';
   });
   addEventListener('pointermove',e=>{
-    if(e.pointerId===joy.id){let x=e.clientX-joy.bx,y=e.clientY-joy.by;const l=Math.hypot(x,y),max=50;
+    const P=pt(e);
+    if(e.pointerId===joy.id){let x=P.x-joy.bx,y=P.y-joy.by;const l=Math.hypot(x,y),max=50;
       if(l>max){x*=max/l;y*=max/l;}knob.style.transform=`translate(${x}px,${y}px)`;
       if(l>10){joy.dx=x/Math.min(l,max);joy.dy=y/Math.min(l,max);}else joy.dx=joy.dy=0;}
-    if(e.pointerId===aim.id){const x=e.clientX-aim.sx,y=e.clientY-aim.sy;aim.a=Math.hypot(x,y)>18?Math.atan2(y,x):null;}
+    if(e.pointerId===aim.id){const x=P.x-aim.sx,y=P.y-aim.sy;aim.a=Math.hypot(x,y)>18?Math.atan2(y,x):null;}
   });
   const endPtr=e=>{
     if(e.pointerId===joy.id){joy.id=null;joy.dx=joy.dy=0;joyEl.classList.add('hidden');}
     if(e.pointerId===aim.id){const a=aim.a;aim.id=null;aim.a=null;e.type==='pointerup'&&fire(a??autoAim());}
   };
   addEventListener('pointerup',endPtr);addEventListener('pointercancel',endPtr);
-  hookBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();G.sfx.unlock();aim.id=e.pointerId;aim.sx=e.clientX;aim.sy=e.clientY;aim.a=null;hookBtn.setPointerCapture?.(e.pointerId);});
-  hookBtn.addEventListener('pointermove',e=>{if(e.pointerId===aim.id){const x=e.clientX-aim.sx,y=e.clientY-aim.sy;aim.a=Math.hypot(x,y)>18?Math.atan2(y,x):null;}});
+  hookBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();G.sfx.unlock();const P=pt(e);aim.id=e.pointerId;aim.sx=P.x;aim.sy=P.y;aim.a=null;hookBtn.setPointerCapture?.(e.pointerId);});
+  hookBtn.addEventListener('pointermove',e=>{if(e.pointerId===aim.id){const P=pt(e),x=P.x-aim.sx,y=P.y-aim.sy;aim.a=Math.hypot(x,y)>18?Math.atan2(y,x):null;}});
   hookBtn.addEventListener('pointerup',endPtr);
   addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;keys.add(e.key.toLowerCase());if(e.key===' '){e.preventDefault();fire(autoAim());}});
   addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
@@ -304,14 +341,14 @@
   let vp={k:1,ox:0,oy:0};
   const toWorld=(x,y)=>({x:(x-vp.ox)/vp.k,y:(y-vp.oy)/vp.k});
   function fireAt(cx,cy){const w=toWorld(cx,cy);fire(Math.atan2(w.y-me.y,w.x-me.x));}
-  const canAct=()=>S&&S.ph==='play'&&mine&&mine.st===0;
+  const canAct=()=>S&&S.ph==='play'&&mine&&mine.st===0&&!mine.kb;
   const serverHooks=()=>S?S.h.filter(h=>h.o===myId):[];
   const hookActive=()=>{const t=gameNow();return myHooks.some(h=>!G.hookDone(h,t))||serverHooks().some(h=>!G.hookDone(h,t));};
   // Someone's fish can't be taken if they're a teammate or behind a shield.
   const guarded=(o,t)=>{if(!o.hk)return false;const w=S.p.find(p=>p.id===o.hk);return !!w&&(w.team===mine?.team||w.sh>t);};
   function fire(a){
     if(!canAct()||hookActive()||a==null||!Number.isFinite(a))return;
-    const t0=gameNow(),sp=G.inSlime(S.z,mine.team,me.x,me.y,t0)?C.SLIME.ROD:1;
+    const t0=gameNow(),sp=1;
     myHooks=[{o:myId,x:me.x,y:me.y,a,t0,tt:0,d:0,orb:0,loot:0,sp}];me.fx=Math.cos(a);me.fy=Math.sin(a);
     send({k:'fire',x:Math.round(me.x),y:Math.round(me.y),a:+a.toFixed(4),t:Math.round(t0)});G.sfx.fire();
     buzz(15);
@@ -353,8 +390,8 @@
 
   /* ── Every frame ── */
   let last=now(),moveKey='0,0',moveAt=0,moveSeq=0,lastCount=-1,lastFrost='',wasSlow=false;
-  function resize(){const dpr=Math.min(2,devicePixelRatio||1);cv.width=innerWidth*dpr;cv.height=innerHeight*dpr;}
-  addEventListener('resize',resize);resize();
+  function resize(){const dpr=Math.min(2,devicePixelRatio||1);cv.width=GW()*dpr;cv.height=GH()*dpr;}
+  addEventListener('resize',()=>applyTurn());resize();
   function frame(){
     requestAnimationFrame(frame);
     const tn=now(),dt=Math.min(0.1,(tn-last)/1000);last=tn;
@@ -364,11 +401,12 @@
     let dx=joy.dx,dy=joy.dy;
     if(keys.size){dx=(keys.has('d')||keys.has('arrowright'))-(keys.has('a')||keys.has('arrowleft'));dy=(keys.has('s')||keys.has('arrowdown'))-(keys.has('w')||keys.has('arrowup'));}
     const free=canAct()&&!hookActive();let qx=0,qy=0;
-    // Knocked back: I fly along the path the teacher's computer worked out.
-    if(mine.st===3&&mine.kb){const f=G.flyPos(mine.kb,t);me.x=f.x;me.y=f.y;}
-    // Standing in an enemy's slime: walk at 40%; just landed from a knock-back: 50% for 1 s (the teacher's computer does the same).
-    const slowMe=canAct()&&G.inSlime(S.z,mine.team,me.x,me.y,t),v=C.SPEED*G.walkK(S.z,mine.team,me.x,me.y,t,mine.daze);
-    if(slowMe&&!wasSlow){note('被黏液黏住了，变慢！','bad');buzz(60);}wasSlow=slowMe;
+    // Knocked back: I fly along the path the teacher's computer worked out (even while answering).
+    if(mine.kb){const f=G.flyPos(mine.kb,t);me.x=f.x;me.y=f.y;}
+    // Inside an enemy whirlpool: dragged to its middle (even while answering) and walking at half speed (the teacher's computer does the same).
+    else if(S.ph==='play'){const m2=G.dragWhirl(S.z,mine.team,me.x,me.y,t,dt*1000,myId);if(m2){me.x=m2.x;me.y=m2.y;}}
+    const slowMe=!mine.kb&&G.inWhirl(S.z,mine.team,me.x,me.y,t,myId),v=C.SPEED*G.walkK(S.z,mine.team,me.x,me.y,t,myId);
+    if(slowMe&&!wasSlow){note('被漩涡吸住了，变慢！','bad');buzz(60);}wasSlow=slowMe;
     if(free&&(dx||dy)){const ang=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*(Math.PI/4);qx=+Math.cos(ang).toFixed(2);qy=+Math.sin(ang).toFixed(2);
       const p=G.confine(me.x+qx*v*dt,me.y+qy*v*dt);me.x=p.x;me.y=p.y;me.fx=qx;me.fy=qy;}
     // Tell the teacher's computer only when I start, stop or turn (turns at most every half second), to save messages.
@@ -388,12 +426,12 @@
     // Everyone else, smoothed toward where the teacher's computer says they are heading.
     const since=(tn-recvAt)/1000,k=Math.min(1,dt*10);
     const players=S.p.map(p=>{
-      if(p.id===myId)return {...p,av:myAv,x:me.x,y:me.y,fx:me.fx,fy:me.fy,me:true,mv:moving,sh:p.sh>t,upRange:p.cards.includes('up')&&canAct(),slow:slowMe};
+      if(p.id===myId)return {...p,av:myAv,x:me.x,y:me.y,fx:me.fx,fy:me.fy,me:true,mv:moving,sh:p.sh>t,slow:slowMe};
       const d=disp.get(p.id)||{x:p.x,y:p.y,fx:1,fy:0};let tx=p.x,ty=p.y;
-      const walking=S.ph==='play'&&p.st===0&&(p.dx||p.dy)&&!S.h.some(h=>h.o===p.id),slow=p.st===0&&G.inSlime(S.z,p.team,d.x,d.y,t);
-      if(walking){const w=C.SPEED*G.walkK(S.z,p.team,d.x,d.y,t,p.daze)*Math.min(since,1),q=G.confine(p.x+p.dx*w,p.y+p.dy*w);tx=q.x;ty=q.y;}
+      const walking=S.ph==='play'&&p.st===0&&!p.kb&&(p.dx||p.dy)&&!S.h.some(h=>h.o===p.id),slow=!p.kb&&G.inWhirl(S.z,p.team,d.x,d.y,t,p.id);
+      if(walking){const w=C.SPEED*G.walkK(S.z,p.team,d.x,d.y,t,p.id)*Math.min(since,1),q=G.confine(p.x+p.dx*w,p.y+p.dy*w);tx=q.x;ty=q.y;}
       // Someone flying from a knock-back is drawn exactly on their flight path (fast; smoothing would lag behind).
-      const fl=p.st===3&&p.kb;if(fl){const f=G.flyPos(p.kb,t);tx=f.x;ty=f.y;}
+      const fl=p.kb;if(fl){const f=G.flyPos(p.kb,t);tx=f.x;ty=f.y;}
       if(fl||Math.hypot(tx-d.x,ty-d.y)>200){d.x=tx;d.y=ty;}else{d.x+=(tx-d.x)*k;d.y+=(ty-d.y)*k;}
       if(p.dx||p.dy){d.fx=p.dx;d.fy=p.dy;}disp.set(p.id,d);return {...p,x:d.x,y:d.y,fx:d.fx,fy:d.fy,mv:walking,sh:p.sh>t,slow};
     });
@@ -408,8 +446,9 @@
     let aimV=aimA!=null&&canAct()?{x:me.x,y:me.y,a:aimA}:null;
     if(cardAim&&canAct()){const tg=cardTarget(cardAim);
       if(cardAim.k==='ice')aimV={kind:'ice',x:me.x,y:me.y-10,a:tg.a};
-      else{const at=landAt(cardAim.k,tg);aimV={kind:cardAim.k==='whirl'?'whirl':'slime',x:me.x,y:me.y,tx:at.x,ty:at.y};}}
-    vp=G.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,{tc:S.tc,t,players,orbs,hooks,aim:aimV,
+      else if(cardAim.k==='up')aimV={kind:'fan',x:me.x,y:me.y,a:tg.a};
+      else{const at=landAt(cardAim.k,tg);aimV={kind:'whirl',x:me.x,y:me.y,tx:at.x,ty:at.y};}}
+    vp=G.render(ctx,GW(),GH(),cv.width/GW(),{tc:S.tc,t,players,orbs,hooks,aim:aimV,
       loot,shots:S.s,zones:S.z,rush,fx:S.fx.map(f=>({...f,age:t-f.at}))},tn);
     // Ink card: blots over most of my screen for 2.5 s (not while I'm answering a question).
     if(mine.ink>t&&mine.st!==1){const left=mine.ink-t,inkK=Math.min(1,(C.CARD.INK-left)/150,left/500);G.inkCover(ctx,cv.width,cv.height,inkK,mine.ink);}
