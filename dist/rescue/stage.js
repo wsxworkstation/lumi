@@ -7,8 +7,9 @@
   'use strict';
   const R=root.RescueGame,C=R.C,W=C.W,H=C.H,RING=C.RING,TAU=Math.PI*2;
   const FONT='"Orbitron","Noto Sans SC",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-  const COL={s:'#ff3df0',f:'#ff3df0',m:'#ff8a3d',l:'#ff3d5a',g:'#ffe53d',b:'#ff2d55'};
-  const SPIN={s:1.6,f:2.4,m:0.9,l:0.45,g:2,b:0.12};
+  // level 1 pink · level 2 orange · level 3 red · split purple · rage dark red · bomb yellow · golden · piece · alien bomb · UFO green · alien lime · King
+  const COL={s:'#ff3df0',m:'#ff8a3d',l:'#ff3d5a',p:'#b46bff',r:'#d4143a',x:'#ffd400',g:'#ffe53d',f:'#ff7bf2',d:'#ff4d4d',u:'#3dff8a',a:'#a6ff3d',b:'#ff2d55'};
+  const SPIN={s:1.6,f:2.4,m:0.9,l:0.45,p:1.2,r:1.8,x:1,g:2,d:0,b:0.12};
 
   function viewport(cw,ch,o={}){
     const top=o.top||0,l=o.padL||0,r=o.padR||0,aw=cw-l-r,ah=ch-top,k=Math.min(aw/W,ah/H);
@@ -75,23 +76,67 @@
       if(c.measureText(n).width>room){while(n.length>1&&c.measureText(n+'…').width>room)n=n.slice(0,-1);n+='…';}}
     text(c,n,x,y,{size:me?13:11,color:col,weight:700});
   }
+  // hits still needed: small marks in an arc above (UFOs, aliens, rocks with more than one hit)
+  function pips(c,P,r,m,col){
+    const n=m.max,arcLen=Math.min(TAU*0.9,n*0.32);c.lineWidth=3;c.lineCap='round';
+    for(let i=0;i<n;i++){const a=-Math.PI/2-arcLen/2+(i+0.5)*arcLen/n;c.strokeStyle=i<m.hp?col:'rgba(255,255,255,.18)';c.globalAlpha=i<m.hp?0.95:0.6;
+      c.beginPath();c.arc(P.x,P.y,r+9,a-arcLen/n*0.3,a+arcLen/n*0.3);c.stroke();}c.globalAlpha=1;
+  }
+  /* A UFO: a glowing saucer; while it hovers it locks onto the ring (a red line that brightens) before it fires. */
+  function ufo(c,m,ct,now){
+    const P=R.uState(m,ct),col=COL.u;
+    if(P.hover>=0){const tx=P.tx,ty=R.ringY(tx),k=P.ch,blink=k>0.7?0.5+0.5*Math.sin(now/45):1;
+      c.save();c.globalCompositeOperation='lighter';c.strokeStyle='#ff3d5a';c.globalAlpha=(0.25+k*0.6)*blink;c.lineWidth=1.5+k*3;c.setLineDash([12,8]);c.lineDashOffset=-now/20;
+      c.beginPath();c.moveTo(P.x,P.y+10);c.lineTo(tx,ty);c.stroke();c.setLineDash([]);
+      c.lineWidth=2.5;c.beginPath();c.arc(tx,ty,26-k*14,0,TAU);c.stroke();c.beginPath();c.moveTo(tx-34+k*14,ty);c.lineTo(tx+34-k*14,ty);c.moveTo(tx,ty-30+k*12);c.lineTo(tx,ty+12);c.stroke();
+      const g=c.createRadialGradient(P.x,P.y+8,0,P.x,P.y+8,20+k*16);g.addColorStop(0,`rgba(255,80,100,${0.5*k})`);g.addColorStop(1,'rgba(255,0,60,0)');c.fillStyle=g;c.globalAlpha=1;c.beginPath();c.arc(P.x,P.y+8,20+k*16,0,TAU);c.fill();c.restore();}
+    c.save();c.fillStyle='#04120a';c.beginPath();c.ellipse(P.x,P.y+2,30,10,0,0,TAU);c.fill();
+    c.globalCompositeOperation='lighter';
+    glow(c,()=>{c.beginPath();c.ellipse(P.x,P.y+2,30,10,0,0,TAU);c.stroke();},col,2.2);
+    glow(c,()=>{c.beginPath();c.arc(P.x,P.y-2,13,Math.PI,TAU);c.stroke();},'#7ff7ff',1.8);
+    for(let i=0;i<4;i++){const on=Math.floor(now/160+i)%4===0;c.fillStyle=on?'#ffffff':col;c.globalAlpha=on?1:0.6;c.beginPath();c.arc(P.x-18+i*12,P.y+4,2.4,0,TAU);c.fill();}
+    c.globalAlpha=1;pips(c,{x:P.x,y:P.y-6},24,m,col);c.restore();
+    return P;
+  }
+  /* An alien: a little neon invader (two poses), its fleet's colour. */
+  const INV=[['..x.....x..','...x...x...','..xxxxxxx..','.xx.xxx.xx.','xxxxxxxxxxx','x.xxxxxxx.x','x.x.....x.x','...xx.xx...'],
+             ['..x.....x..','x..x...x..x','x.xxxxxxx.x','xxx.xxx.xxx','xxxxxxxxxxx','.xxxxxxxxx.','..x.....x..','.x.......x.']];
+  function alien(c,m,ct,now){
+    const P=R.aPos(m,ct),col=COL.a,frame=INV[Math.abs(Math.floor(now/400+m.ox/62))%2],s=3;
+    c.save();c.globalCompositeOperation='lighter';c.fillStyle=col;c.shadowColor=col;c.shadowBlur=0;
+    c.globalAlpha=0.35;c.fillRect(P.x-19,P.y-14,38,27);c.globalAlpha=1;
+    frame.forEach((row,y)=>{for(let x=0;x<row.length;x++)if(row[x]==='x')c.fillRect(P.x-16.5+x*s,P.y-12+y*s,s,s);});
+    pips(c,P,16,m,col);c.restore();
+    return P;
+  }
   function meteor(c,m,ct,now){
-    const P=R.mPos(m,ct),K=C.KIND[m.k],r=K.r,col=COL[m.k],rot=m.s*TAU+ct/1000*SPIN[m.k],sh=shapeOf(m);
-    // trail
-    const Q=R.mPos(m,ct-220);c.save();c.globalCompositeOperation='lighter';
+    if(m.k==='u')return ufo(c,m,ct,now);
+    if(m.k==='a')return alien(c,m,ct,now);
+    const P=R.mPos(m,ct),K=C.KIND[m.k],r=K.r,raging=m.k==='r'&&m.rt&&ct>=m.rt,col=raging?'#ff4040':COL[m.k],rot=m.s*TAU+ct/1000*SPIN[m.k]*(raging?3:1),sh=shapeOf(m);
+    if(m.k==='d'){c.save();c.globalCompositeOperation='lighter';   // an alien's bomb: a red diamond falling
+      glow(c,()=>{c.beginPath();c.moveTo(P.x,P.y-10);c.lineTo(P.x+7,P.y);c.lineTo(P.x,P.y+10);c.lineTo(P.x-7,P.y);c.closePath();c.stroke();},col,2);
+      c.globalAlpha=0.5;c.strokeStyle=col;c.lineWidth=2;c.beginPath();c.moveTo(P.x,P.y-12);c.lineTo(P.x,P.y-34);c.stroke();c.restore();return P;}
+    // trail (a rage meteor's is long and bright)
+    const Q=R.mPos(m,ct-(raging?120:220));c.save();c.globalCompositeOperation='lighter';
     const tr=c.createLinearGradient(Q.x,Q.y,P.x,P.y);tr.addColorStop(0,'rgba(0,0,0,0)');tr.addColorStop(1,col);
-    c.strokeStyle=tr;c.globalAlpha=0.5;c.lineWidth=r*0.9;c.lineCap='round';c.beginPath();c.moveTo(Q.x+(Q.x-P.x)*1.5,Q.y+(Q.y-P.y)*1.5);c.lineTo(P.x,P.y);c.stroke();c.restore();
+    c.strokeStyle=tr;c.globalAlpha=raging?0.85:0.5;c.lineWidth=r*(raging?1.3:0.9);c.lineCap='round';c.beginPath();c.moveTo(Q.x+(Q.x-P.x)*(raging?3:1.5),Q.y+(Q.y-P.y)*(raging?3:1.5));c.lineTo(P.x,P.y);c.stroke();c.restore();
     const path=()=>{c.beginPath();sh.forEach(([a,d],i)=>{const x=P.x+Math.cos(a+rot)*r*d,y=P.y+Math.sin(a+rot)*r*d;i?c.lineTo(x,y):c.moveTo(x,y);});c.closePath();};
     path();c.fillStyle='#090512';c.fill();
+    // what makes the special ones easy to tell apart (not only by colour)
+    if(m.k==='x'){c.save();path();c.clip();c.strokeStyle='#ffd400';c.globalAlpha=0.55;c.lineWidth=5;
+      for(let i=-3;i<=3;i++){c.beginPath();c.moveTo(P.x+i*12-r,P.y-r);c.lineTo(P.x+i*12+r,P.y+r);c.stroke();}c.restore();
+      const on=Math.sin(now/(P.k>0.6?60:150))>0;c.fillStyle=on?'#ff3d3d':'#5a1010';c.beginPath();c.arc(P.x,P.y,5,0,TAU);c.fill();}
+    if(m.k==='p'){c.save();c.globalCompositeOperation='lighter';c.strokeStyle=col;c.lineWidth=1.8;c.globalAlpha=0.85;
+      for(let i=0;i<3;i++){const a=rot+i*TAU/3;c.beginPath();c.moveTo(P.x,P.y);c.lineTo(P.x+Math.cos(a+0.25)*r*0.45,P.y+Math.sin(a+0.25)*r*0.45);c.lineTo(P.x+Math.cos(a)*r*0.8,P.y+Math.sin(a)*r*0.8);c.stroke();}c.restore();}
+    if(m.k==='r'&&!raging){c.fillStyle=col;c.globalAlpha=0.9;c.font=`900 ${r}px ${FONT}`;c.textAlign='center';c.textBaseline='middle';c.fillText('!',P.x,P.y+1);c.globalAlpha=1;}
+    if(raging){const g=c.createRadialGradient(P.x,P.y,0,P.x,P.y,r*1.6);g.addColorStop(0,`rgba(255,60,60,${0.5+0.3*Math.sin(now/60)})`);g.addColorStop(1,'rgba(255,0,0,0)');c.fillStyle=g;c.beginPath();c.arc(P.x,P.y,r*1.6,0,TAU);c.fill();}
     if(m.k==='b'){const p=0.6+0.4*Math.sin(now/180),g=c.createRadialGradient(P.x,P.y,0,P.x,P.y,r*0.7);g.addColorStop(0,`rgba(255,60,90,${0.55*p})`);g.addColorStop(1,'rgba(255,0,60,0)');c.fillStyle=g;c.beginPath();c.arc(P.x,P.y,r*0.7,0,TAU);c.fill();
       c.save();c.globalCompositeOperation='lighter';c.strokeStyle='#ff5c7a';c.lineWidth=2;c.globalAlpha=0.7*p;
       for(let i=0;i<6;i++){const a=rot*1.3+i*TAU/6;c.beginPath();c.moveTo(P.x+Math.cos(a)*r*0.2,P.y+Math.sin(a)*r*0.2);c.lineTo(P.x+Math.cos(a+0.3)*r*0.55,P.y+Math.sin(a+0.3)*r*0.55);c.lineTo(P.x+Math.cos(a)*r*0.8,P.y+Math.sin(a)*r*0.8);c.stroke();}c.restore();}
     c.save();c.globalCompositeOperation='lighter';glow(c,()=>{path();c.stroke();},col,m.k==='b'?3.5:2.2);
     if(m.k==='g'){c.fillStyle='#fff7b0';for(let i=0;i<4;i++){const a=now/300+i*TAU/4;c.globalAlpha=0.8;c.beginPath();c.arc(P.x+Math.cos(a)*(r+8),P.y+Math.sin(a)*(r+8),2.2,0,TAU);c.fill();}c.globalAlpha=1;}
     // hits still needed: little marks around it (the Meteor King's bar is on the screen's top)
-    if(m.max>1&&m.k!=='b'){const n=m.max,arcLen=Math.min(TAU*0.9,n*0.32);c.lineWidth=3;c.lineCap='round';
-      for(let i=0;i<n;i++){const a=-Math.PI/2-arcLen/2+(i+0.5)*arcLen/n;c.strokeStyle=i<m.hp?col:'rgba(255,255,255,.18)';c.globalAlpha=i<m.hp?0.95:0.6;
-        c.beginPath();c.arc(P.x,P.y,r+9,a-arcLen/n*0.3,a+arcLen/n*0.3);c.stroke();}c.globalAlpha=1;}
+    if(m.max>1&&m.k!=='b')pips(c,P,r,m,col);
     // close to the ring: a red warning circle
     if(P.k>0.78&&m.k!=='g'){const p=0.5+0.5*Math.sin(now/70);c.strokeStyle='#ff3d5a';c.globalAlpha=0.35+p*0.5;c.lineWidth=2;c.beginPath();c.arc(P.x,P.y,r+16+p*4,0,TAU);c.stroke();c.globalAlpha=1;}
     c.restore();
@@ -109,13 +154,21 @@
       for(let i=0;i<n;i++){const a=i*TAU/n+f.id,d1=len*k,d2=len*(k+0.25);c.beginPath();c.moveTo(f.x+Math.cos(a)*d1,f.y+Math.sin(a)*d1);c.lineTo(f.x+Math.cos(a)*d2,f.y+Math.sin(a)*d2);c.stroke();}c.globalAlpha=1;};
     const wave=(rad,col,life,w=3)=>{const k=age/life;if(k>=1)return;c.strokeStyle=col;c.lineWidth=w*(1-k)+0.5;c.globalAlpha=1-k;c.beginPath();c.arc(f.x,f.y,rad*k,0,TAU);c.stroke();c.globalAlpha=1;};
     if(f.k==='hit'){burst(6,18,COL[f.w]||'#fff',260);}
-    else if(f.k==='boom'){const big=f.w==='b'?5:f.w==='l'?2.2:f.w==='m'?1.5:1,col=COL[f.w]||'#fff';
+    else if(f.k==='boom'){const big={b:5,l:2.2,u:1.8,m:1.5,p:1.3,a:1.2}[f.w]||1,col=COL[f.w]||'#fff';
       if(age<120){c.globalAlpha=(1-age/120)*0.8;c.fillStyle='#fff';c.beginPath();c.arc(f.x,f.y,22*big,0,TAU);c.fill();c.globalAlpha=1;}
       burst(10+Math.round(big*4),60*big,col,700*Math.min(2,big));wave(55*big,col,600*Math.min(2,big));
       if(f.w==='b'||f.w==='l')shake=Math.max(0,(1-age/700))*(f.w==='b'?16:6);}
     else if(f.k==='ring'){const dmg=Number(f.w)||0;wave(70,'#ff3d5a',700,4);burst(12,50,'#ff8a3d',600);
       if(age<1000)text(c,`-${dmg}`,f.x,f.y-50-age/25,{size:26,color:'#ff3d5a',alpha:1-age/1000});
       shake=Math.max(0,(1-age/450))*(dmg>=20?12:dmg>=10?7:4);}
+    else if(f.k==='laser'){const tx=Number(f.w)||f.x,ty=R.ringY(tx),k=age/420;if(k<1){const beam=()=>{c.beginPath();c.moveTo(f.x,f.y+8);c.lineTo(tx,ty);c.stroke();};
+        c.globalAlpha=1-k;glow(c,beam,'#ff3d5a',6*(1-k)+1);c.strokeStyle='#fff';c.lineWidth=2;c.globalAlpha=(1-k)*0.9;beam();c.globalAlpha=1;}
+      const g2={...f,x:tx,y:ty};effect(c,{...g2,k:'spark'},ct,now);}
+    else if(f.k==='spark'){burst(10,40,'#ff8a3d',500);}
+    else if(f.k==='blast'){const k=age/700;if(k<1){c.fillStyle=`rgba(255,212,0,${0.35*(1-k)})`;c.beginPath();c.arc(f.x,f.y,C.BLAST.R*Math.min(1,k*2.5),0,TAU);c.fill();}
+      wave(C.BLAST.R,'#ffd400',700,5);burst(18,C.BLAST.R*0.9,'#ff8a3d',650,3);if(age<1100)text(c,'轰！',f.x,f.y-30-age/30,{size:30,color:'#ffd400',alpha:1-age/1100});
+      shake=Math.max(0,(1-age/600))*9;}
+    else if(f.k==='rage'){wave(46,'#ff4040',500,3);}
     else if(f.k==='gold'){wave(180,'#ffe53d',1100,4);if(age<1500)text(c,'全员 +2 发',f.x,f.y-40-age/30,{size:28,color:'#ffe53d',alpha:1-age/1500});}
     else if(f.k==='away'){if(age<700)text(c,'飞走了',f.x,f.y-30-age/20,{size:18,color:'#ffe53d',alpha:1-age/700});}
     return shake;
@@ -127,7 +180,11 @@
     const {k,ox,oy}=viewport(cw,ch,o),scale=k*dpr;
     ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#02030a';ctx.fillRect(0,0,cw,ch);
     if(!bg||Math.abs(bgScale-scale)>0.01){bg=scenery(scale);bgScale=scale;}
-    let shake=0;for(const f of V.fx){const a=V.ct-f.at;if(f.k==='ring'&&a<450)shake=Math.max(shake,1);if(f.k==='boom'&&(f.w==='b'||f.w==='l')&&a<700)shake=Math.max(shake,1);}
+    // the base being hit, big meteors breaking and bomb blasts shake the picture for a moment
+    let shake=0;for(const f of V.fx){const age=V.ct-f.at;if(age<0)continue;
+      if(f.k==='ring'&&age<450)shake=Math.max(shake,(1-age/450)*(Number(f.w)>=20?12:Number(f.w)>=10?7:4));
+      if(f.k==='boom'&&age<700&&(f.w==='b'||f.w==='l'))shake=Math.max(shake,(1-age/700)*(f.w==='b'?16:6));
+      if(f.k==='blast'&&age<600)shake=Math.max(shake,(1-age/600)*9);}
     const draw=sx=>{
       ctx.setTransform(scale,0,0,scale,ox*dpr+sx.x*scale,oy*dpr+sx.y*scale);
       ctx.drawImage(bg,0,0,W,H);
@@ -148,11 +205,7 @@
       for(const f of V.fx)effect(ctx,f,V.ct,now);
       ctx.restore();
     };
-    let sx={x:0,y:0};
-    if(shake){let a=0;for(const f of V.fx){const age=V.ct-f.at;if(f.k==='ring'&&age<450)a=Math.max(a,(1-age/450)*(Number(f.w)>=20?12:Number(f.w)>=10?7:4));
-      if(f.k==='boom'&&age<700&&(f.w==='b'||f.w==='l'))a=Math.max(a,(1-age/700)*(f.w==='b'?16:6));}
-      sx={x:Math.sin(now/23)*a,y:Math.cos(now/29)*a};}
-    draw(sx);
+    draw(shake?{x:Math.sin(now/23)*shake,y:Math.cos(now/29)*shake}:{x:0,y:0});
     // the warning before the Meteor King: the edges glow red
     if(V.st==='warn'){const p=0.5+0.5*Math.sin(now/120);ctx.setTransform(dpr,0,0,dpr,0,0);
       const g=ctx.createRadialGradient(cw/2,ch/2,Math.min(cw,ch)*0.3,cw/2,ch/2,Math.max(cw,ch)*0.7);g.addColorStop(0,'rgba(255,0,40,0)');g.addColorStop(1,`rgba(255,0,40,${0.25+p*0.25})`);

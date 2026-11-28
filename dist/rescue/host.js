@@ -13,7 +13,7 @@
   try{const v=localStorage.getItem('lumi-rescue-music-vol');if(v!==null&&Number(v)>=0&&Number(v)<=1)musicVol=Number(v);}catch{}
   RA?.setup({key:'lumi-rescue-host-sound',music:musicVol});
   const game=R.createGame({check:(q,v)=>window.LumiQuiz.check(q,v)});
-  try{const l=localStorage.getItem('lumi-rescue-len');if(C.LEN[l])game.len=l;}catch{}
+  try{const l=localStorage.getItem('lumi-rescue-len');if(C.LEN[l])game.len=l;const d=localStorage.getItem('lumi-rescue-diff');if(C.DIFF[d])game.diff=d;}catch{}
   // Opened from the computer's folder (file://…): students still need the website address.
   const joinUrl=/^https?:$/.test(location.protocol)?new URL('./',location.href).href:'https://wsxworkstation.github.io/lumi/rescue/';
   $('#url').textContent=joinUrl.replace(/^https?:\/\//,'')+(local?'?local':'');
@@ -107,6 +107,9 @@
   const showLen=()=>$('#len').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.l===game.len));
   $('#len').onclick=e=>{const b=e.target.closest('[data-l]');if(!b||game.ph!=='lobby')return;game.len=b.dataset.l;try{localStorage.setItem('lumi-rescue-len',game.len);}catch{}showLen();};
   showLen();
+  const showDiff=()=>$('#diff').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.d===game.diff));
+  $('#diff').onclick=e=>{const b=e.target.closest('[data-d]');if(!b||game.ph!=='lobby')return;game.diff=b.dataset.d;try{localStorage.setItem('lumi-rescue-diff',game.diff);}catch{}showDiff();};
+  showDiff();
   const SOUND_TXT={all:'音乐＋音效',sfx:'只有音效',off:'静音'};
   const showSound=()=>{const m=RA?.mode||'all';$('#sound').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.m===m));$('#hsound').textContent=SOUND_TXT[m];};
   $('#sound').onclick=e=>{const b=e.target.closest('[data-m]');if(!b||!RA)return;RA.unlock();RA.mode=b.dataset.m;showSound();};
@@ -151,7 +154,7 @@
 
   /* ── Results: stars, the class's numbers, the best shots, who broke the Meteor King, the hardest questions,
      and (for the teacher) everyone's own numbers. Kept on this computer (last 10 games) until saving to Lumi exists. ── */
-  const TITLE=e=>({win:'陨石王被击碎了！星环守住了！',breach:'陨石王撞上星环……防线失守',lost:'星环被打穿了……防线失守',stop:'老师结束了这一局'}[e.outcome]);
+  const TITLE=e=>({win:'陨石王被击碎了！基地守住了！',breach:'陨石王撞上了基地……',lost:'基地被摧毁了……',stop:'老师结束了这一局'}[e.outcome]);
   function showEnd(quiet){
     const e=game.end;if(!e)return;
     const real=e.players.filter(p=>!p.bot),pool=real.length?real:e.players;
@@ -159,7 +162,7 @@
     const fin=e.players.find(p=>p.id===e.finisher);
     const stars=e.outcome==='stop'?'':`<p class="stars">${'★'.repeat(e.stars)}<span>${'★'.repeat(3-e.stars)}</span></p>`;
     const t=e.tally,acc=t.shots?Math.round(t.hits/t.shots*100):0;
-    const sub=[`防线剩 ${e.hull}%`,`击碎 ${t.kills} 颗陨石`,`命中率 ${acc}%`,`全班答对 ${t.right} 题`].concat(e.outcome==='breach'?[`陨石王还剩 ${e.bossLeft}%`]:[]).join(' · ');
+    const sub=[`基地剩 ${e.hull}%`,`击碎 ${t.kills} 个敌人`,`命中率 ${acc}%`,`全班答对 ${t.right} 题`].concat(e.outcome==='breach'?[`陨石王还剩 ${e.bossLeft}%`]:e.outcome==='lost'?[`撑到第 ${e.wave||1} 波`]:[]).join(' · ');
     const pct=p=>p.firstN?Math.round(p.firstOk/p.firstN*100)+'%':'—';
     $('#end').innerHTML=`<div class="box">${stars}<p class="win-title">${esc(TITLE(e))}</p><p class="sub">${sub}</p>
       ${fin?`<p class="finisher">最后一击 <b style="color:${colorOf(fin)}">${esc(fin.name)}</b></p>`:''}
@@ -212,8 +215,9 @@
   addEventListener('resize',resize);resize();
   const mmss=ms=>{const s=Math.max(0,Math.ceil(ms/1000));return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
   const setHtml=(el,h)=>{if(el.innerHTML!==h)el.innerHTML=h;};
-  let lastFx=0,lastCount=-1,lastTick=0,lastBullet=0,laserAt=0;
-  const SND={ring:'ring',gold:'gold',warn:'warn',king:'king'};
+  let lastFx=0,lastCount=-1,lastTick=0,lastBullet=0,laserAt=0,waveAt=-1e9;
+  const SND={ring:'ring',gold:'gold',warn:'warn',king:'king',wave:'wave',ufo:'ufo',fleet:'fleet',laser:'zap',blast:'blast',rage:'rage'};
+  const WAVE_TXT={1:'<b>第 1 波</b> 陨石来袭！',2:'<b>第 2 波</b> 飞碟来袭！它会停下来锁定基地开火',3:'<b>第 3 波</b> 外星舰队来袭！'};
   function frame(){
     requestAnimationFrame(frame);
     if($('#stage').classList.contains('hidden'))return;
@@ -221,14 +225,14 @@
     window.RescueStage.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,
       {ct:g.ct,hull:g.hull,st:g.stage,ms:g.ms,bs:g.bs,ps:[...g.players.values()].sort((a,b)=>a.seq-b.seq),fx:g.fx},now,{top:64});
     // sounds: bursts and the ring being hit; lasers (at most a few a second, the class shoots a lot)
-    for(const f of g.fx)if(f.id>lastFx){lastFx=f.id;
+    for(const f of g.fx)if(f.id>lastFx){lastFx=f.id;if(f.k==='wave')waveAt=now;
       if(SND[f.k])R.sfx[SND[f.k]]();else if(f.k==='boom')R.sfx[f.w==='b'||f.w==='l'?'big':'boom']();else if(f.k==='hit'&&Math.random()<0.5)R.sfx.hit();}
     for(const b of g.bs)if(b.id>lastBullet){lastBullet=b.id;if(now-laserAt>140){laserAt=now;R.sfx.laser();}}
     RA?.music(g.ph==='play'||g.ph==='count'?(g.stage==='boss'||g.stage==='warn'?'boss':'main'):null);
     // the top bar
     setHtml($('#clock'),mmss(g.ct));
-    const phase=g.ph==='pause'?'暂停中':ph==='count'?'准备':ph==='end'?'结束':g.stage==='boss'?'陨石王':g.stage==='warn'?'警报':g.ct<C.WARM?'练习瞄准':'防御中';
-    setHtml($('#phase'),phase);
+    const phase=g.ph==='pause'?'暂停中':ph==='count'?'准备':ph==='end'?'结束':g.stage==='boss'?'陨石王':g.stage==='warn'?'警报':g.ct<C.WARM?'练习瞄准':`第 ${g.wave||1} 波`;
+    setHtml($('#phase'),phase);setHtml($('#wave'),g.stage==='main'?String(g.wave||1):'王');
     const hull=$('#mHull');hull.querySelector('i').style.width=R.clamp(g.hull,0,100)+'%';hull.querySelector('b').textContent=Math.ceil(g.hull)+'%';
     hull.className='meter'+(g.hull<=30?' low':g.hull<=60?' mid':'');
     setHtml($('#score'),String(g.tally.kills));
@@ -239,7 +243,8 @@
       const n=Math.ceil((B.t1-g.ct)/1000);if(g.ph==='play'&&n<=10&&n>0&&n!==lastTick){lastTick=n;RA?.tick(n);}}
     let banner='';
     if(ph==='play'&&g.ct<C.WARM)banner='<b>练习瞄准</b> 手指拖动瞄准、放开发射 · 子弹打完就答题装弹';
-    else if(g.stage==='warn')banner='<b>⚠ 警报</b> 陨石王正在接近星环！';
+    else if(g.stage==='warn')banner='<b>⚠ 警报</b> 陨石王正在接近基地！';
+    else if(g.stage==='main'&&now-waveAt<4500)banner=WAVE_TXT[g.wave]||'';
     setHtml($('#banner'),banner);$('#banner').classList.toggle('hidden',!banner);$('#banner').classList.toggle('hot',g.stage==='warn');
     const c3=$('#count3');
     if(g.ph==='count'){const n=Math.max(1,Math.ceil(g.cd/1000));c3.classList.remove('hidden');

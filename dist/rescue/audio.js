@@ -47,6 +47,12 @@
     wrong(){tone(150,0.22,{type:'sawtooth',v:0.1,lp:700});tone(120,0.3,{type:'sawtooth',v:0.1,lp:600,at:0.18});},
     warn(){for(let i=0;i<4;i++){tone(440,0.28,{type:'sawtooth',v:0.07,f2:700,lp:1800,at:i*0.55});tone(700,0.25,{type:'sawtooth',v:0.07,f2:440,lp:1800,at:i*0.55+0.28});}},
     king(){[33,40,45].forEach(n=>tone(midi(n),2.2,{type:'sawtooth',v:0.09,lp:500,lp2:120}));noise(1.6,{f:150,f2:600,v:0.12});},
+    zap(){tone(1800,0.35,{type:'sawtooth',v:0.07,f2:120,lp:5000});noise(0.3,{f:2500,f2:400,v:0.12});},
+    ufo(){for(let i=0;i<6;i++)tone(i%2?660:880,0.12,{type:'sine',v:0.06,at:i*0.11});},
+    fleet(){[45,43,41,40].forEach((n,i)=>tone(midi(n),0.22,{type:'square',v:0.08,lp:700,at:i*0.3}));},
+    blast(){noise(1,{f:1500,f2:90,type:'lowpass',v:0.45});tone(110,0.8,{v:0.45,f2:30});tone(55,0.9,{type:'sawtooth',v:0.05,lp:300});},
+    rage(){tone(90,0.45,{type:'sawtooth',v:0.09,f2:260,lp:900});},
+    wave(){[57,60,64,69].forEach((n,i)=>tone(midi(n+12),0.16,{type:'square',v:0.06,lp:3000,at:i*0.09}));tone(midi(45),0.6,{type:'sawtooth',v:0.06,lp:600,at:0.36});},
     go(){[60,64,67,72].forEach((n,i)=>tone(midi(n+12),0.18,{type:'square',v:0.06,lp:3500,at:i*0.07}));},
     count(){tone(880,0.12,{type:'square',v:0.06,lp:2500});},
     full(){tone(990,0.07,{type:'square',v:0.04,lp:2500});}

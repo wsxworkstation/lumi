@@ -153,7 +153,8 @@
     if(ph==='lobby'){closeAsk();myShots=[];}
   }
   /* What happened that this student should hear about. */
-  let lastFx=-1;const sparks=[];
+  let lastFx=-1,waveAt=-1e9;const sparks=[];
+  const WAVE_NOTE={1:'第 1 波：陨石来袭！',2:'第 2 波：飞碟来袭！小心它锁定基地',3:'第 3 波：外星舰队来袭！'};
   function events(s){
     const top=s.fx.reduce((a,f)=>Math.max(a,f.id),0);if(lastFx<0){lastFx=top;return;}
     for(const f of s.fx){if(f.id<=lastFx)continue;const mineFx=f.by===myId();
@@ -162,6 +163,11 @@
       else if(f.k==='hit'&&mineFx)R.sfx.hit();
       else if(f.k==='ring'){R.sfx.ring();buzz(Number(f.w)>=20?150:60);}
       else if(f.k==='gold'){note(mineFx?'你打碎金色陨石！全员 +2 发':'金色陨石！全员 +2 发','gold');R.sfx.gold();buzz(40);}
+      else if(f.k==='wave'){note(WAVE_NOTE[f.w]||`第 ${f.w} 波`,'gold');R.sfx.wave();buzz(60);waveAt=now();}
+      else if(f.k==='ufo')R.sfx.ufo();
+      else if(f.k==='laser'){R.sfx.zap();buzz(40);}
+      else if(f.k==='blast'){R.sfx.blast();buzz(mineFx?120:40);if(mineFx)note('轰！连旁边的一起炸掉了','gold');}
+      else if(f.k==='rage'){R.sfx.rage();}
       else if(f.k==='warn'){note('⚠ 陨石王正在接近！','bad');R.sfx.warn();buzz(300);}
       else if(f.k==='king'){note('陨石王出现！全员集中火力！','bad');R.sfx.king();}}
     lastFx=Math.max(lastFx,top);
@@ -224,7 +230,7 @@
     for(const b of myShots){
       while(!b.te&&b.ck<t){const s=Math.min(t,b.ck+14);b.ck=s;const P=R.bPos(b,s);
         if(R.offScreen(P)||s-b.t0>C.SHOT.LIFE){b.te=s;break;}
-        for(const m of S.m){if(s<m.t0||m.hp<=0)continue;const M=R.mPos(m,s),r=C.KIND[m.k].r+C.SHOT.R;
+        for(const m of S.m){if(s<m.t0||m.hp<=0)continue;const M=R.ePos(m,s),r=C.KIND[m.k].r+C.SHOT.R;
           if((M.x-P.x)**2+(M.y-P.y)**2<=r*r){b.te=s;sparks.push({id:-sparks.length-1,k:'hit',x:P.x,y:P.y,at:s,w:m.k});break;}}}
     }
     myShots=myShots.filter(b=>!b.te||t-b.te<400);
@@ -296,7 +302,8 @@
   let hudKey='';
   function drawHud(){
     const a=ammo(),col=C.COLORS[mine?.col]||'#2ef2ff',B=S.m.find(m=>m.k==='b');
-    const key=[Math.ceil(S.hull),S.sc,a,col,S.st,B?B.hp:'',S.ph,$('#ask').classList.contains('hidden')].join('|');if(key===hudKey)return;hudKey=key;
+    const key=[Math.ceil(S.hull),S.sc,a,col,S.st,S.wv,now()-waveAt<4000,B?B.hp:'',S.ph,$('#ask').classList.contains('hidden')].join('|');if(key===hudKey)return;hudKey=key;
+    setText($('#hWave'),S.st==='main'?String(S.wv||1):'王');
     const h=$('#hHull');h.querySelector('i').style.width=R.clamp(S.hull,0,100)+'%';setText(h.querySelector('b'),Math.ceil(S.hull)+'%');h.className='mini'+(S.hull<=30?' low':S.hull<=60?' mid':'');
     setText($('#hKills'),String(S.sc||0));
     $('#game').style.setProperty('--me',col);
@@ -304,7 +311,7 @@
     $('#pips').innerHTML=Array.from({length:C.AMMO.MAX},(_,i)=>`<i class="${i<a?'on':''}"></i>`).join('');
     $('#reload').classList.toggle('glow',a===0);
     $('#boss').classList.toggle('hidden',!B);if(B){$('#boss i').style.width=(B.hp/B.max*100)+'%';setText($('#bossHp'),`${B.hp}/${B.max}`);}
-    const ban=S.ph==='play'&&S.ct<C.WARM?'练习：拖动瞄准，放开发射':S.st==='warn'?'⚠ 陨石王正在接近！':'';
+    const ban=S.ph==='play'&&S.ct<C.WARM?'练习：拖动瞄准，放开发射':S.st==='warn'?'⚠ 陨石王正在接近！':S.st==='main'&&S.wv&&now()-waveAt<4000?WAVE_NOTE[S.wv]:'';
     setText($('#banner'),ban);$('#banner').classList.toggle('hidden',!ban);$('#banner').classList.toggle('hot',S.st==='warn');
     $('#pause').classList.toggle('hidden',S.ph!=='pause');
   }
@@ -323,17 +330,19 @@
     const n=S.p.length,col=C.COLORS[mine?.col]||'#2ef2ff';
     screen(`${head()}<div class="my-turret" style="--c:${col}"><i></i></div><p class="small">你的炮台颜色 Your turret</p><p class="me-name" style="color:${col}">${esc(me?.name||'')}</p>
       <p class="sub dots">等老师开始 Waiting</p><p class="sub">防卫队 ${n} 人</p>
-      <ol class="tips"><li>手机<b>横拿</b>，手指<b>拖动瞄准、放开发射</b></li><li>子弹打完就<b>答题装弹</b>：答对 +3 发，不限时</li><li>大陨石要很多人一起打；<b>金色陨石</b>打碎全员 +2 发</li><li>最后<b>陨石王</b>来了，全班集中火力！</li></ol>`,'lobby:'+n+':'+col);
+      <ol class="tips"><li>手机<b>横拿</b>，手指<b>拖动瞄准、放开发射</b></li><li>子弹打完就<b>答题装弹</b>：答对 +3 发，不限时</li>
+        <li>紫色陨石会<b>分裂</b>，暗红陨石被打一下会<b>加速</b>，黄黑陨石打碎会<b>爆炸</b>；<b>金色</b>的打碎全员 +2 发</li>
+        <li>第 2 波有<b>飞碟</b>（锁定基地就快打掉它），第 3 波有<b>外星舰队</b></li><li>最后<b>陨石王</b>来了，全班集中火力！基地血打光就输了</li></ol>`,'lobby:'+n+':'+col);
   }
   function ending(){
     const e=S.end;if(!e)return;const m=e.me.get(myId());
-    const title={win:'陨石王被击碎了！星环守住了！',breach:'陨石王撞上星环……',lost:'星环被打穿了……',stop:'这一局结束了'}[e.o];
+    const title={win:'陨石王被击碎了！基地守住了！',breach:'陨石王撞上了基地……',lost:'基地被摧毁了……',stop:'这一局结束了'}[e.o];
     const acc=m&&m.shots?Math.round(m.hits/m.shots*100):0;
     screen(`${brand('STAR RING')}${e.o!=='stop'?`<p class="stars">${'★'.repeat(e.s)}<span>${'★'.repeat(3-e.s)}</span></p>`:''}<h2 class="end-title">${esc(title)}</h2>
       ${e.fin&&e.fin===myId()?'<p class="finisher">最后一击是你！</p>':''}
       ${m?`<div class="my"><p>第一次就答对 <b>${m.firstOk}/${m.firstN}</b> 题 · 一共答对 <b>${m.right}</b> 次${m.fixed?` · 订正 <b>${m.fixed}</b> 题`:''}</p>
         <p>开枪 <b>${m.shots}</b> · 命中 <b>${m.hits}</b>${m.shots?`（${acc}%）`:''} · 击碎 <b>${m.kills}</b></p></div>`:''}
-      <p class="sub">全班击碎 ${e.ta.kills} 颗陨石 · 答对 ${e.ta.right} 题 · 防线剩 ${e.hull}%</p><p class="sub dots">等老师开下一局 Waiting</p>`,'end:'+e.o+e.s+e.ta.kills);
+      <p class="sub">全班击碎 ${e.ta.kills} 个敌人 · 答对 ${e.ta.right} 题 · 基地剩 ${e.hull}%</p><p class="sub dots">等老师开下一局 Waiting</p>`,'end:'+e.o+e.s+e.ta.kills);
   }
 
   /* ── Drawing: every frame while playing ── */
