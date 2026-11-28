@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#121848">
+  <meta name="rescue-version" content="__V__">
+  <title>太空站救援 老师控制台</title>
+  <link rel="icon" href="../assets/studylog-starloop-96.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=ZCOOL+KuaiLe&display=swap">
+  <link rel="stylesheet" href="./rescue.css?v=__V__">
+</head>
+<body class="host">
+  <main class="console" id="setup">
+    <header><h1 class="logo">太空站救援</h1><span class="logo-en">Station Rescue · 老师控制台（测试版）</span><span class="ver-tag" id="ver"></span></header>
+    <aside>
+      <section class="panel join-card">
+        <h2>学生扫码加入</h2>
+        <img src="../assets/lumi-rescue-qr.png" alt="QR">
+        <p class="code" id="code">····</p>
+        <p class="url" id="url"></p>
+      </section>
+      <section class="panel">
+        <h2>题目</h2>
+        <div class="row">
+          <label class="btn">上传 Excel<input id="file" type="file" accept=".xlsx" hidden></label>
+          <button class="btn" id="demo">用示范题目</button>
+        </div>
+        <p class="msgs" id="qmsg">还没有题目。Excel 用线上练习同一个模板（Quizizz 格式）。</p>
+      </section>
+      <section class="panel">
+        <h2>设定</h2>
+        <p class="msgs">一局多长</p>
+        <div class="seg" id="len"><button data-l="short">短<small>约 6 分钟</small></button><button data-l="std" class="on">标准<small>约 8 分钟</small></button><button data-l="long">长<small>约 10 分钟</small></button></div>
+        <p class="msgs">声音（这台电脑）</p>
+        <div class="seg" id="sound"><button data-m="all" class="on">音乐＋音效</button><button data-m="sfx">只有音效</button><button data-m="off">静音</button></div>
+        <div class="row" style="margin-top:10px"><span class="msgs" style="margin:0">音乐大小</span><input id="musicVol" type="range" min="0" max="100" value="55" style="flex:1"><button class="btn" id="hear">试听</button></div>
+      </section>
+      <section class="panel how">
+        <h2>怎么玩</h2>
+        <ol>
+          <li>手机答对一题 = <b>1 格能量</b>，身上最多 3 格。答错要等 4 秒，这题等一下会再出现。</li>
+          <li>点地图上的房间走过去，把能量投进去：<b>灭火</b>、<b>挡陨石</b>、<b>补氧气</b>、<b>修引擎</b>。</li>
+          <li>火不灭会烧到隔壁，也会挡路；陨石没挡住，船体 −20 还会起火；氧气太低，答对只拿半格。</li>
+          <li>引擎修到 60% 时陨石群提前来了：全班投票<b>拼到底</b>（★★★）还是<b>坐逃生船</b>（★★）。</li>
+        </ol>
+      </section>
+    </aside>
+    <section class="panel">
+      <div class="row" style="justify-content:space-between;margin-top:0">
+        <h2 style="margin:0">船员 <span id="pcount"></span></h2>
+        <div class="row" style="margin:0"><button class="btn" id="bot1">+1 机器人</button><button class="btn" id="bot5">+5 机器人</button><button class="btn" id="nobots">清除机器人</button></div>
+      </div>
+      <div id="players"></div>
+      <button class="big-btn" id="start" disabled>开始 Start</button>
+      <p class="msgs" id="startHint"></p>
+      <p class="msgs" id="lastResults"></p>
+    </section>
+  </main>
+  <div id="stage" class="hidden">
+    <canvas id="cv"></canvas>
+    <div class="bar">
+      <div class="bar-left"><div class="clock" id="clock"></div><div class="phase" id="phase"></div></div>
+      <div class="meters">
+        <div class="meter" id="mHull"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.3-9.4C1.4 8.1 3.6 4.5 7.3 4.5c2 0 3.4 1.1 4.7 2.7 1.3-1.6 2.7-2.7 4.7-2.7 3.7 0 5.9 3.6 4.6 7.1C19.5 16.4 12 21 12 21z" fill="currentColor"/></svg></span><div class="track"><i></i></div><b></b><small>船体</small></div>
+        <div class="meter" id="mO2"><span class="ic">O₂</span><div class="track"><i></i></div><b></b><small>氧气</small></div>
+        <div class="meter" id="mEng"><span class="ic"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg></span><div class="track"><i></i><em></em></div><b></b><small>引擎</small></div>
+      </div>
+      <div class="ctrl"><span class="rate" id="rate"></span><button class="btn" id="hsound" data-quiet></button><button class="btn" id="pause">暂停</button><button class="btn danger" id="stop">结束</button></div>
+    </div>
+    <div id="banner" class="banner hidden"></div>
+    <div id="vote" class="vote hidden"></div>
+    <div id="count3" class="count-big hidden"></div>
+    <div class="end-panel hidden" id="end"></div>
+  </div>
+  <div id="update" class="update-bar hidden"><span><b>有新版本</b> 等这一局玩完、学生都离开后，按「更新」。</span><button class="btn primary" id="updateBtn">更新</button></div>
+  <div id="netWarn" class="net-warn hidden"><b>连不上云端，学生看不到这个房间</b>请检查这台电脑的网络：把 Wi-Fi 关掉再打开，或改用手机热点。<small>Can't reach the server. Students can't see this room. Check this computer's internet.</small></div>
+  <script src="../vendor/jszip.min.js?v=__V__"></script>
+  <script src="../xlsx-lite.js?v=__V__"></script>
+  <script src="../quiz-import.js?v=__V__"></script>
+  <script src="../cloud-config.js?v=__V__"></script>
+  <script src="./audio.js?v=__V__"></script>
+  <script src="./engine.js?v=__V__"></script>
+  <script src="./stage.js?v=__V__"></script>
+  <script src="./host.js?v=__V__"></script>
+</body>
+</html>
