@@ -267,7 +267,7 @@ test('the slime card is gone: an old one left in a hand is simply dropped', () =
   assert.ok(!('slow' in H.CARDS));a.cards=['slow'];assert.equal(g.useCard('a',0,0,100),false);assert.deepEqual(a.cards,[]);assert.equal(g.shots.length,0);
 });
 test('whirlpool: thrown anywhere, 4 s; enemies inside (answering too) are dragged in and walk at half speed; fish bunch up', () => {
-  assert.equal(C.WHIRL.LEN,4000);assert.equal(C.WHIRL.R,120,'about a quarter of the lake');
+  assert.equal(C.WHIRL.LEN,4000);assert.equal(C.WHIRL.R,150,'about a third of the lake');
   const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
   a.x=200;a.y=60;
   a.cards=['whirl'];assert.ok(g.useCard('a',0,0,300));run(g,C.WHIRL.FLY+40);

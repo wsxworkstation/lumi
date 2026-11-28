@@ -25,8 +25,8 @@
     SHOT:{RANGE:600,SPEED:1100,R:40},                          // freeze arrow: aimed, flies straight and far, a big arrow; freezes the first enemy it touches
     SLIME:{RANGE:380,FLY:550,R:110,LEN:4000,SLOW:0.4,ROD:0.5},  // slime ball: lands where aimed; sticky puddle 4 s (enemies walk at 40%, rods at half speed)
     // Whirlpool: thrown anywhere (shore or lake), turns for 4 s. Enemies inside (answering too) are dragged to its middle and walk
-    // at half speed; fish inside are pulled into a bunch and swim slowly. About a quarter of the lake.
-    WHIRL:{RANGE:380,FLY:450,R:120,BAND:1.6,LEN:4000,PULL:0.7,DRAG:110,SLOW:0.5},
+    // at half speed; fish inside are pulled into a bunch and swim slowly. About a third of the lake.
+    WHIRL:{RANGE:380,FLY:450,R:150,BAND:1.6,LEN:4000,PULL:0.7,DRAG:110,SLOW:0.5},
     BOMB:{LEN:15000,AX:90,AY:55},                              // bomb fish: looks like any fish to the other team; gone after 15 s
     // A glowing goldfish shows up now and then; answer it right and every fish is worth 2 for a while.
     RUSH:{FIRST:40000,AFTER:40000,LEN:15000},
