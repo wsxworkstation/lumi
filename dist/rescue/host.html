@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#121848">
+  <meta name="theme-color" content="#02030a">
   <meta name="rescue-version" content="__V__">
-  <title>太空站救援 老师控制台</title>
+  <title>星环防线 老师控制台</title>
   <link rel="icon" href="../assets/studylog-starloop-96.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=ZCOOL+KuaiLe&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Noto+Sans+SC:wght@500;700;900&display=swap">
   <link rel="stylesheet" href="./rescue.css?v=__V__">
 </head>
 <body class="host">
   <main class="console" id="setup">
-    <header><h1 class="logo">太空站救援</h1><span class="logo-en">Station Rescue · 老师控制台（测试版）</span><span class="ver-tag" id="ver"></span></header>
+    <header><h1 class="logo">星环防线</h1><span class="logo-en">STAR RING · 老师控制台（测试版）</span><span class="ver-tag" id="ver"></span></header>
     <aside>
       <section class="panel join-card">
         <h2>学生扫码加入</h2>
@@ -32,8 +32,8 @@
       </section>
       <section class="panel">
         <h2>设定</h2>
-        <p class="msgs">一局多长</p>
-        <div class="seg" id="len"><button data-l="short">短<small>约 6 分钟</small></button><button data-l="std" class="on">标准<small>约 8 分钟</small></button><button data-l="long">长<small>约 10 分钟</small></button></div>
+        <p class="msgs">一局多长（包括最后的陨石王）</p>
+        <div class="seg" id="len"><button data-l="short">短<small>约 4 分钟</small></button><button data-l="std" class="on">标准<small>约 6 分钟</small></button><button data-l="long">长<small>约 8 分钟</small></button></div>
         <p class="msgs">声音（这台电脑）</p>
         <div class="seg" id="sound"><button data-m="all" class="on">音乐＋音效</button><button data-m="sfx">只有音效</button><button data-m="off">静音</button></div>
         <div class="row" style="margin-top:10px"><span class="msgs" style="margin:0">音乐大小</span><input id="musicVol" type="range" min="0" max="100" value="55" style="flex:1"><button class="btn" id="hear">试听</button></div>
@@ -41,20 +41,20 @@
       <section class="panel how">
         <h2>怎么玩</h2>
         <ol>
-          <li>手机答对一题 = <b>1 格能量</b>，身上最多 3 格。答错要等 4 秒，这题等一下会再出现。</li>
-          <li>点地图上的房间走过去，把能量投进去：<b>灭火</b>、<b>挡陨石</b>、<b>补氧气</b>、<b>修引擎</b>。</li>
-          <li>火不灭会烧到隔壁，也会挡路；陨石没挡住，船体 −20 还会起火；氧气太低，答对只拿半格。</li>
-          <li>引擎修到 60% 时陨石群提前来了：全班投票<b>拼到底</b>（★★★）还是<b>坐逃生船</b>（★★）。</li>
+          <li>每个学生是星环上的一座<b>炮台</b>。手机横拿，手指<b>拖动瞄准、放开发射</b>。</li>
+          <li>子弹打完就答题：答对 <b>+3 发</b>（连对 3 题多 1 发），不限时；答错等 4 秒，这题等一下再出现。</li>
+          <li>小陨石一发就碎，大陨石要很多人一起打；<b>金色陨石</b>打碎后全员 +2 发。陨石撞到星环会扣防线。</li>
+          <li>最后<b>陨石王</b>降临：全班集中火力，在它撞上星环前打爆它。</li>
         </ol>
       </section>
     </aside>
     <section class="panel">
       <div class="row" style="justify-content:space-between;margin-top:0">
-        <h2 style="margin:0">船员 <span id="pcount"></span></h2>
+        <h2 style="margin:0">防卫队 <span id="pcount"></span></h2>
         <div class="row" style="margin:0"><button class="btn" id="bot1">+1 机器人</button><button class="btn" id="bot5">+5 机器人</button><button class="btn" id="nobots">清除机器人</button></div>
       </div>
       <div id="players"></div>
-      <button class="big-btn" id="start" disabled>开始 Start</button>
+      <button class="big-btn" id="start" disabled>开始 START</button>
       <p class="msgs" id="startHint"></p>
       <p class="msgs" id="lastResults"></p>
     </section>
@@ -64,14 +64,13 @@
     <div class="bar">
       <div class="bar-left"><div class="clock" id="clock"></div><div class="phase" id="phase"></div></div>
       <div class="meters">
-        <div class="meter" id="mHull"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.3-9.4C1.4 8.1 3.6 4.5 7.3 4.5c2 0 3.4 1.1 4.7 2.7 1.3-1.6 2.7-2.7 4.7-2.7 3.7 0 5.9 3.6 4.6 7.1C19.5 16.4 12 21 12 21z" fill="currentColor"/></svg></span><div class="track"><i></i></div><b></b><small>船体</small></div>
-        <div class="meter" id="mO2"><span class="ic">O₂</span><div class="track"><i></i></div><b></b><small>氧气</small></div>
-        <div class="meter" id="mEng"><span class="ic"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg></span><div class="track"><i></i><em></em></div><b></b><small>引擎</small></div>
+        <div class="meter" id="mHull"><small>防线 SHIELD</small><div class="track"><i></i></div><b></b></div>
+        <div class="score"><small>击碎 KILLS</small><b id="score">0</b></div>
       </div>
       <div class="ctrl"><span class="rate" id="rate"></span><button class="btn" id="hsound" data-quiet></button><button class="btn" id="pause">暂停</button><button class="btn danger" id="stop">结束</button></div>
     </div>
+    <div id="boss" class="boss-bar hidden"><span>陨石王 METEOR KING</span><div class="track"><i></i></div><b id="bossHp"></b><small id="bossEta"></small></div>
     <div id="banner" class="banner hidden"></div>
-    <div id="vote" class="vote hidden"></div>
     <div id="count3" class="count-big hidden"></div>
     <div class="end-panel hidden" id="end"></div>
   </div>

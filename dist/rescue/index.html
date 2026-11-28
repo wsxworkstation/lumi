@@ -3,33 +3,39 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <meta name="theme-color" content="#121848">
+  <meta name="theme-color" content="#02030a">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="rescue-version" content="__V__">
-  <title>太空站救援 Station Rescue</title>
+  <title>星环防线 STAR RING</title>
   <link rel="icon" href="../assets/studylog-starloop-96.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=ZCOOL+KuaiLe&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Noto+Sans+SC:wght@500;700;900&display=swap">
   <link rel="stylesheet" href="./rescue.css?v=__V__">
 </head>
 <body class="phone">
-  <div id="play" class="hidden">
-    <header id="hud"></header>
-    <div id="alerts"></div>
-    <main id="qbox"></main>
-    <footer id="dock"></footer>
-    <div id="map" class="sheet hidden"></div>
+  <div id="game" class="hidden">
+    <canvas id="cv"></canvas>
+    <div id="hud">
+      <div class="hud-l"><div class="mini" id="hHull"><span>防线</span><div class="track"><i></i></div><b></b></div><div class="kills"><small>击碎</small><b id="hKills">0</b></div></div>
+      <div id="banner" class="banner hidden"></div>
+      <div class="hud-r"><button class="icon-btn" id="flip" data-quiet aria-label="画面翻转 Flip" title="画面上下颠倒就按这里"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg></button><button class="icon-btn" id="mute" data-quiet aria-label="声音 Sound"></button></div>
+    </div>
+    <div id="boss" class="boss-bar hidden"><span>陨石王</span><div class="track"><i></i></div><b id="bossHp"></b></div>
+    <div id="side"><div class="ammo"><b id="ammoN">0</b><small>子弹 AMMO</small><div class="pips" id="pips"></div></div><button class="reload" id="reload" data-quiet><span>装弹</span><small>答题 RELOAD</small></button></div>
+    <div id="ask" class="hidden"></div>
+    <div id="count" class="hidden"></div>
     <div id="pause" class="pause-cover hidden"><div><b>老师暂停了</b><small>Paused by the teacher</small></div></div>
+    <div id="note"></div>
+    <div id="net" class="hidden">连线中… Reconnecting</div>
   </div>
   <div id="ui"></div>
-  <div id="note"></div>
-  <div id="net" class="hidden">连线中… Reconnecting</div>
   <div id="ver"></div>
   <script src="../cloud-config.js?v=__V__"></script>
   <script src="./audio.js?v=__V__"></script>
   <script src="./engine.js?v=__V__"></script>
+  <script src="./stage.js?v=__V__"></script>
   <script src="./player.js?v=__V__"></script>
 </body>
 </html>

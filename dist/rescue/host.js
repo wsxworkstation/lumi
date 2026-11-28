@@ -1,5 +1,5 @@
-/* 太空站救援 — the teacher's console. This computer is the referee: it runs the game, keeps the answers
-   (phones never get them), checks every answer and sends snapshots to the phones. The big screen shows the station. */
+/* 星环防线 — the teacher's console. This computer is the referee: it runs the game, keeps the answers (phones never
+   get them), checks every answer, decides every hit and sends snapshots to the phones. The big screen shows the ring. */
 (()=>{
   'use strict';
   const R=window.RescueGame,C=R.C,qp=new URLSearchParams(location.search),local=qp.has('local');
@@ -17,6 +17,7 @@
   // Opened from the computer's folder (file://…): students still need the website address.
   const joinUrl=/^https?:$/.test(location.protocol)?new URL('./',location.href).href:'https://wsxworkstation.github.io/lumi/rescue/';
   $('#url').textContent=joinUrl.replace(/^https?:\/\//,'')+(local?'?local':'');
+  const colorOf=p=>C.COLORS[p.col]||'#fff';
 
   /* ── The room ── */
   let code='',down='',up='',pack=[],botN=0,sent=0,recv=0,rateAt=performance.now(),lastSnap=0,dirty=false,lastAnnounce=0,lastPh='lobby',lastGid=0;
@@ -44,7 +45,6 @@
   const inUse=()=>new Set([...[...others].filter(([,o])=>Date.now()-o.at<6000&&o.ph!=='closed').map(([c])=>c),code].filter(Boolean));
   net.join('rescue-lobby',(ev,p)=>{
     if(ev!=='room'||!p?.room||p.hid===HID)return;const c=String(p.room);others.set(c,{ph:p.ph,at:Date.now()});
-    // Two empty rooms with the same number: one of them moves to the next number.
     if(c===code&&p.ph!=='closed'&&p.hid&&p.hid<HID&&!game.players.size&&game.ph==='lobby')openCode(R.pickRoom(inUse()));
   });
   setInterval(()=>{$('#netWarn').classList.toggle('hidden',net.downFor()<4000);},1000);
@@ -116,14 +116,14 @@
   $('#hear').onclick=()=>{if(!RA)return;RA.unlock();const on=RA.playing!=='main';RA.music(on?'main':null);$('#hear').textContent=on?'停':'试听';};
   showSound();
 
-  /* ── Crew ── */
-  const addBots=n=>{for(let i=0;i<n&&game.players.size<C.MAX_PLAYERS;i++){botN++;game.join('bot'+botN,'机器人 '+botN,Math.floor(Math.random()*R.ANIMALS.length),{bot:true});}drawPlayers();dirty=true;};
+  /* ── The defence team ── */
+  const addBots=n=>{for(let i=0;i<n&&game.players.size<C.MAX_PLAYERS;i++){botN++;game.join('bot'+botN,'机器人 '+botN,{bot:true});}drawPlayers();dirty=true;};
   $('#bot1').onclick=()=>addBots(1);$('#bot5').onclick=()=>addBots(5);
   $('#nobots').onclick=()=>{for(const p of [...game.players.values()])if(p.bot)game.kick(p.id);drawPlayers();dirty=true;};
   function drawPlayers(){
-    const list=[...game.players.values()];
+    const list=[...game.players.values()].sort((a,b)=>a.seq-b.seq);
     $('#pcount').textContent=list.length?`· ${list.length} 人`:'';
-    $('#players').innerHTML=list.length?`<div class="chips">${list.map(p=>`<div class="chip ${p.away?'off':''}"><img src="${R.avatarSrc(p.av)}" alt=""><span>${esc(p.name)}</span>${p.lv?`<small>${esc(p.lv)}</small>`:''}<button data-kick="${esc(p.id)}" title="移除">✕</button></div>`).join('')}</div>`
+    $('#players').innerHTML=list.length?`<div class="chips">${list.map(p=>`<div class="chip ${p.away?'off':''}" style="--c:${colorOf(p)}"><i></i><span>${esc(p.name)}</span>${p.lv?`<small>${esc(p.lv)}</small>`:''}<button data-kick="${esc(p.id)}" title="移除">✕</button></div>`).join('')}</div>`
       :`<p class="empty">学生扫码、点房间 ${esc(code||'····')}、点自己的名字以后就会出现在这里。也可以先加机器人试玩。</p>`;
     $('#players').querySelectorAll('[data-kick]').forEach(b=>b.onclick=()=>{game.kick(b.dataset.kick);drawPlayers();snapNow();});
     $('#start').disabled=!(game.qs.length&&list.length);
@@ -145,42 +145,43 @@
   }
   function phaseChanged(was,ph){
     if(ph==='end'){showEnd(false);save();}
-    else if(ph==='vote')R.sfx.twist();
-    else if(ph==='final'){R.sfx.go();}
+    else if(ph==='play'&&was==='count')R.sfx.go();
     if(ph==='lobby'||was==='lobby')view();
   }
 
-  /* ── Results: stars, the class's numbers, who carried the most energy, the hardest questions,
+  /* ── Results: stars, the class's numbers, the best shots, who broke the Meteor King, the hardest questions,
      and (for the teacher) everyone's own numbers. Kept on this computer (last 10 games) until saving to Lumi exists. ── */
-  const TITLE=e=>({saved:'太空站保住了！',escape:e.everyone?'全员坐逃生船撤离！':`逃生船出发了！救下 ${e.boarded}/${e.crew} 人`,
-    emerg:e.everyone?'千钧一发，全员逃出来了！':`千钧一发！救下 ${e.boarded}/${e.crew} 人`,stop:'老师结束了这一局'}[e.outcome]);
+  const TITLE=e=>({win:'陨石王被击碎了！星环守住了！',breach:'陨石王撞上星环……防线失守',lost:'星环被打穿了……防线失守',stop:'老师结束了这一局'}[e.outcome]);
   function showEnd(quiet){
     const e=game.end;if(!e)return;
     const real=e.players.filter(p=>!p.bot),pool=real.length?real:e.players;
-    const helpers=pool.filter(p=>p.energy>0).sort((a,b)=>b.energy-a.energy).slice(0,3);
+    const best=pool.filter(p=>p.hits>0).sort((a,b)=>b.hits-a.hits||b.kills-a.kills).slice(0,3);
+    const fin=e.players.find(p=>p.id===e.finisher);
     const stars=e.outcome==='stop'?'':`<p class="stars">${'★'.repeat(e.stars)}<span>${'★'.repeat(3-e.stars)}</span></p>`;
-    const t=e.tally,sub=[`引擎 ${e.eng}%`,`船体 ${e.hull}%`,`挡下 ${t.blocked} 颗陨石`,`灭了 ${t.out} 场火`,`全班答对 ${t.right} 题`].join(' · ');
+    const t=e.tally,acc=t.shots?Math.round(t.hits/t.shots*100):0;
+    const sub=[`防线剩 ${e.hull}%`,`击碎 ${t.kills} 颗陨石`,`命中率 ${acc}%`,`全班答对 ${t.right} 题`].concat(e.outcome==='breach'?[`陨石王还剩 ${e.bossLeft}%`]:[]).join(' · ');
     const pct=p=>p.firstN?Math.round(p.firstOk/p.firstN*100)+'%':'—';
     $('#end').innerHTML=`<div class="box">${stars}<p class="win-title">${esc(TITLE(e))}</p><p class="sub">${sub}</p>
-      ${helpers.length?`<div class="helpers"><h3>送出最多能量</h3><div>${helpers.map(p=>`<span><img src="${R.avatarSrc(p.av)}" alt=""><b>${esc(p.name)}</b><small>⚡ ${p.energy}</small></span>`).join('')}</div></div>`:''}
+      ${fin?`<p class="finisher">最后一击 <b style="color:${colorOf(fin)}">${esc(fin.name)}</b></p>`:''}
+      ${best.length?`<div class="helpers"><h3>命中最多</h3><div>${best.map((p,i)=>`<span style="--c:${colorOf(p)}"><em>${i+1}</em><b>${esc(p.name)}</b><small>命中 ${p.hits} · 击碎 ${p.kills}</small></span>`).join('')}</div></div>`:''}
       ${e.hard.length?`<div class="hard"><h3>最多人第一次答错的题</h3><ol>${e.hard.map(h=>`<li>${esc(h.text)}<small>第一次错 ${h.wrong}/${h.n} 人</small></li>`).join('')}</ol></div>`:''}
       <div class="row actions"><button class="btn primary" id="again">再来一局</button><button class="btn" id="lobby">回到房间（换题目）</button><button class="btn" id="mine">每个人的表现（老师看）</button></div>
       <div id="who" class="who hidden"><p class="msgs">第一次就答对＝每题第一次作答对了几题（最接近真实程度）；订正＝第一次错、后来答对的题；还不会＝第一次错、之后也没答对（题号）。机器人不列出。</p>
-        <table><tr><th>名字</th><th>第一次就答对</th><th>一共答对</th><th>答错</th><th>订正</th><th>还不会的题</th><th>能量</th></tr>
-        ${real.sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<tr><td>${esc(p.name)}</td><td>${p.firstOk}/${p.firstN} <small>${pct(p)}</small>${p.firstN&&p.firstN<5?' <small class="few">资料少</small>':''}</td><td>${p.right}</td><td>${p.wrong}</td><td>${p.fixed}</td><td>${p.still.map(i=>i+1).join('、')||'—'}</td><td>${p.energy}</td></tr>`).join('')||'<tr><td colspan="7">（只有机器人）</td></tr>'}</table>
+        <table><tr><th>名字</th><th>第一次就答对</th><th>一共答对</th><th>答错</th><th>订正</th><th>还不会的题</th><th>开枪</th><th>命中</th><th>击碎</th></tr>
+        ${real.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<tr><td>${esc(p.name)}</td><td>${p.firstOk}/${p.firstN} <small>${pct(p)}</small>${p.firstN&&p.firstN<5?' <small class="few">资料少</small>':''}</td><td>${p.right}</td><td>${p.wrong}</td><td>${p.fixed}</td><td>${p.still.map(i=>i+1).join('、')||'—'}</td><td>${p.shots}</td><td>${p.hits}</td><td>${p.kills}</td></tr>`).join('')||'<tr><td colspan="9">（只有机器人）</td></tr>'}</table>
         <button class="btn" id="copy">复制表格（可贴到 Excel）</button><span class="msgs" id="copied"></span></div></div>`;
     $('#end').classList.remove('hidden');
     $('#again').onclick=()=>startGame();$('#lobby').onclick=()=>{game.toLobby();snapNow();view();};
     $('#mine').onclick=()=>$('#who').classList.toggle('hidden');
     $('#copy').onclick=async()=>{const tsv=R.resultTable(e);try{await navigator.clipboard.writeText(tsv);$('#copied').textContent='已复制';}
       catch{const ta=document.createElement('textarea');ta.value=tsv;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');$('#copied').textContent='已复制';}catch{}ta.remove();}};
-    if(!quiet){RA?.music(null);RA?.jingle(e.stars>=2?'win':'lose');}
+    if(!quiet){RA?.music(null);if(e.outcome!=='stop')RA?.jingle(e.outcome==='win'?'win':'lose');}
   }
   function save(){
     const e=game.end;if(!e||e.outcome==='stop'&&!e.tally.right)return;
     try{const list=JSON.parse(localStorage.getItem('lumi-rescue-results')||'[]');
-      list.push({at:Date.now(),room:code,outcome:e.outcome,stars:e.stars,questions:game.qs.map(q=>q.text),
-        players:e.players.filter(p=>!p.bot).map(({bot,av,...p})=>p),hard:e.hard});
+      list.push({at:Date.now(),game:'star-ring',room:code,outcome:e.outcome,stars:e.stars,questions:game.qs.map(q=>q.text),
+        players:e.players.filter(p=>!p.bot).map(({bot,col,...p})=>p),hard:e.hard});
       localStorage.setItem('lumi-rescue-results',JSON.stringify(list.slice(-10)));}catch{}
   }
   function showLast(){
@@ -194,13 +195,13 @@
     const now=performance.now();let dt=Math.min(1000,now-last);last=now;
     while(dt>0){const s=Math.min(dt,50);game.tick(s);dt-=s;}
     if(game.ph!==lastPh){const was=lastPh;lastPh=game.ph;phaseChanged(was,game.ph);dirty=true;}
-    if(game.id!==lastGid){lastGid=game.id;dirty=true;}   // a new crisis or effect: tell the phones soon
+    if(game.id!==lastGid){lastGid=game.id;dirty=true;}   // a new meteor, bullet or effect: tell the phones soon
     const [minGap,every]=R.snapGaps(phones()),live=game.ph!=='lobby'&&game.ph!=='end';
     if((dirty&&now-lastSnap>=minGap)||now-lastSnap>=(live?every:1000))snapNow();
     if(code&&now-lastAnnounce>2000){lastAnnounce=now;net.push('rescue-lobby','room',{room:code,n:phones(),ph:game.ph,hid:HID,v:VER});}
     if(now-lastSweep>1000){lastSweep=now;if(game.sweep()){dirty=true;if(game.ph==='lobby')drawPlayers();}}
     if(now-rateAt>=2000){const rate=Math.round((sent+recv)/((now-rateAt)/1000)),el=$('#rate');
-      el.textContent=`≈ ${rate} 条/秒（上限 100）`;el.style.color=rate>85?'#ff8a9c':'';sent=recv=0;rateAt=now;}
+      el.textContent=`≈ ${rate} 条/秒`;el.style.color=rate>85?'#ff8a9c':'';sent=recv=0;rateAt=now;}
   }
   try{const w=new Worker(URL.createObjectURL(new Blob(['setInterval(()=>postMessage(0),33)'],{type:'text/javascript'})));w.onmessage=step;}
   catch{setInterval(step,33);}
@@ -211,42 +212,35 @@
   addEventListener('resize',resize);resize();
   const mmss=ms=>{const s=Math.max(0,Math.ceil(ms/1000));return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
   const setHtml=(el,h)=>{if(el.innerHTML!==h)el.innerHTML=h;};
-  function meter(id,v,cls){const el=$(id),i=el.querySelector('i');i.style.width=R.clamp(v,0,100)+'%';el.className='meter '+cls;el.querySelector('b').textContent=Math.floor(v)+'%';}
-  let lastFx=0,lastCount=-1,lastTick=0;
-  const SND={alarm:'alarm',fire:'fire',spread:'spread',hit:'hit',block:'block',out:'out',board:'board'};
+  let lastFx=0,lastCount=-1,lastTick=0,lastBullet=0,laserAt=0;
+  const SND={ring:'ring',gold:'gold',warn:'warn',king:'king'};
   function frame(){
     requestAnimationFrame(frame);
     if($('#stage').classList.contains('hidden'))return;
     const g=game,now=performance.now(),ph=g.ph==='pause'?g.paused:g.ph;
     window.RescueStage.render(ctx,innerWidth,innerHeight,cv.width/innerWidth,
-      {ct:g.ct,ph,mode:g.mode,hull:g.hull,o2:g.o2,eng:g.eng,crises:g.crises,players:[...g.players.values()],fx:g.fx},now,64);
-    for(const f of g.fx)if(f.id>lastFx){lastFx=f.id;if(SND[f.k])R.sfx[SND[f.k]]();else if(f.k==='put'&&Math.random()<0.5)R.sfx.put();}
-    RA?.music(g.ph==='play'||g.ph==='count'?'main':g.ph==='vote'||g.ph==='final'?'final':null);
-    // the top bar: clock, what is happening, hull / oxygen / engine
-    setHtml($('#clock'),ph==='final'?mmss(g.fin-g.ct):mmss(g.ct));
-    const phase=g.ph==='pause'?'暂停中':ph==='count'?'准备':ph==='vote'?'投票中':ph==='final'?{fight:'拼到底！',escape:'坐逃生船',emerg:'紧急逃生'}[g.mode]
-      :ph==='end'?'结束':g.ct<C.WARM?'暖身 · 先答题存能量':'救援中';
+      {ct:g.ct,hull:g.hull,st:g.stage,ms:g.ms,bs:g.bs,ps:[...g.players.values()].sort((a,b)=>a.seq-b.seq),fx:g.fx},now,{top:64});
+    // sounds: bursts and the ring being hit; lasers (at most a few a second, the class shoots a lot)
+    for(const f of g.fx)if(f.id>lastFx){lastFx=f.id;
+      if(SND[f.k])R.sfx[SND[f.k]]();else if(f.k==='boom')R.sfx[f.w==='b'||f.w==='l'?'big':'boom']();else if(f.k==='hit'&&Math.random()<0.5)R.sfx.hit();}
+    for(const b of g.bs)if(b.id>lastBullet){lastBullet=b.id;if(now-laserAt>140){laserAt=now;R.sfx.laser();}}
+    RA?.music(g.ph==='play'||g.ph==='count'?(g.stage==='boss'||g.stage==='warn'?'boss':'main'):null);
+    // the top bar
+    setHtml($('#clock'),mmss(g.ct));
+    const phase=g.ph==='pause'?'暂停中':ph==='count'?'准备':ph==='end'?'结束':g.stage==='boss'?'陨石王':g.stage==='warn'?'警报':g.ct<C.WARM?'练习瞄准':'防御中';
     setHtml($('#phase'),phase);
-    meter('#mHull',g.hull,g.hull<35?'hull low':'hull');meter('#mO2',g.o2,g.o2<C.O2.LOW?'o2 low':'o2');meter('#mEng',g.eng,g.eng>=C.TWIST_AT?'eng hot':'eng');
-    $('#mEng em').style.left=C.TWIST_AT+'%';
+    const hull=$('#mHull');hull.querySelector('i').style.width=R.clamp(g.hull,0,100)+'%';hull.querySelector('b').textContent=Math.ceil(g.hull)+'%';
+    hull.className='meter'+(g.hull<=30?' low':g.hull<=60?' mid':'');
+    setHtml($('#score'),String(g.tally.kills));
     $('#pause').textContent=g.ph==='pause'?'继续':'暂停';
-    // a banner for the warm-up and the last part of the game
+    // the Meteor King's health and how long until it reaches the ring
+    const B=g.boss&&g.ms.includes(g.boss)?g.boss:null,bb=$('#boss');bb.classList.toggle('hidden',!B);
+    if(B){bb.querySelector('i').style.width=(B.hp/B.max*100)+'%';setHtml($('#bossHp'),`${B.hp}/${B.max}`);setHtml($('#bossEta'),`撞击 ${mmss(B.t1-g.ct)}`);
+      const n=Math.ceil((B.t1-g.ct)/1000);if(g.ph==='play'&&n<=10&&n>0&&n!==lastTick){lastTick=n;RA?.tick(n);}}
     let banner='';
-    if(ph==='play'&&g.ct<C.WARM)banner=`<b>暖身</b> 先答题存满能量，看看地图（引擎预热中）· 第一颗陨石 ${mmss(C.WARM-g.ct)} 后到`;
-    else if(ph==='final'){const [b,n]=g.crew(),left=mmss(g.fin-g.ct);
-      banner=g.mode==='fight'?`<b>拼到底！</b> ${left} 内把引擎修到 100% · 引擎能量 ×${C.BOOST}`
-        :`<b>${g.mode==='escape'?'坐逃生船！':'紧急逃生！太空站撑不住了'}</b> 每人带 ${C.BOARD[g.mode]} 格能量到逃生舱 · 已上船 ${b}/${n} · ${left}`;}
-    setHtml($('#banner'),banner);$('#banner').classList.toggle('hidden',!banner);$('#banner').classList.toggle('hot',ph==='final');
-    // the last 10 seconds tick
-    if(g.ph==='final'){const n=Math.ceil((g.fin-g.ct)/1000);if(n<=10&&n>0&&n!==lastTick){lastTick=n;RA?.tick(n);}}
-    // the vote
-    const vote=$('#vote');
-    if(ph==='vote'){const [f,e]=g.votes();vote.classList.remove('hidden');
-      setHtml(vote,`<div class="vote-box"><h2>陨石群提前来了！</h2><p class="sub">全班用手机投票 · <b>${Math.max(0,Math.ceil(g.vt/1000))}</b> 秒</p>
-        <div class="choices"><div class="choice fight"><h3>拼到底</h3><p>${C.FIGHT/1000} 秒内把引擎修到 100%（引擎能量 ×${C.BOOST}）<br>成功：太空站保住 ★★★<br>失败：只能紧急逃生</p><b class="n">${f}</b></div>
-        <div class="choice escape"><h3>坐逃生船</h3><p>${C.ESCAPE/1000} 秒内每人带 ${C.BOARD.escape} 格能量到逃生舱<br>全员上船 ★★</p><b class="n">${e}</b></div></div>
-        <p class="sub small">${Math.round(g.eng)}% 的引擎 · 平手就拼到底</p></div>`);}
-    else vote.classList.add('hidden');
+    if(ph==='play'&&g.ct<C.WARM)banner='<b>练习瞄准</b> 手指拖动瞄准、放开发射 · 子弹打完就答题装弹';
+    else if(g.stage==='warn')banner='<b>⚠ 警报</b> 陨石王正在接近星环！';
+    setHtml($('#banner'),banner);$('#banner').classList.toggle('hidden',!banner);$('#banner').classList.toggle('hot',g.stage==='warn');
     const c3=$('#count3');
     if(g.ph==='count'){const n=Math.max(1,Math.ceil(g.cd/1000));c3.classList.remove('hidden');
       if(n!==lastCount){lastCount=n;c3.textContent=n;c3.classList.remove('bump');void c3.offsetWidth;c3.classList.add('bump');R.sfx.count();}}

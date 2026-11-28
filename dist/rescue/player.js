@@ -1,12 +1,14 @@
-/* 太空站救援 — the student's phone (held upright). Pick the teacher's room, pick your name (the same class list as the
-   online practice, so the results can go to Lumi later), then: answer for energy, tap a room on the map to walk there,
-   put the energy in. The phone never has the answers: the teacher's computer checks every one. */
+/* 星环防线 — the student's phone, held sideways. Pick the teacher's room, pick your name (the same class list as the
+   online practice, so results can go to Lumi later), then defend the ring: drag to aim, let go to shoot; out of bullets →
+   answer a question to reload. The phone draws everything itself from the teacher's snapshots (meteors and bullets
+   follow fixed paths) and shows its own bullets at once; the teacher's computer decides what really hit. It never has
+   the answers. */
 (()=>{
   'use strict';
   const R=window.RescueGame,C=R.C,qp=new URLSearchParams(location.search),local=qp.has('local');
   const net=local?R.createLocalNet():R.createNet(window.STUDYLOG_CLOUD||{});
   const cfg=window.STUDYLOG_CLOUD||{};
-  const $=s=>document.querySelector(s),ui=$('#ui');
+  const $=s=>document.querySelector(s),ui=$('#ui'),cv=$('#cv'),ctx=cv.getContext('2d');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const store=(k,v,s=localStorage)=>{try{if(v===undefined)return s.getItem(k);if(v===null)s.removeItem(k);else s.setItem(k,v);}catch{}return null;};
   const now=()=>performance.now();
@@ -16,21 +18,20 @@
   let me=readMe();
   const DEV=(()=>{let d=store('lumi-rescue-dev',undefined,sessionStorage);if(!d){d=Math.random().toString(36).slice(2,8);store('lumi-rescue-dev',d,sessionStorage);}return d;})();
   const myId=()=>me?(me.guest?'g:':'s:')+me.id:'';
-  const av=()=>{const v=Number(store('lumi-rescue-av'));return Number.isInteger(v)&&v>=0&&v<R.ANIMALS.length?v:R.avOf(myId()||DEV);};
   R.pressFeedback();
   const RA=window.RescueAudio;RA?.setup({key:'lumi-rescue-sound'});
   const buzz=ms=>{if(navigator.vibrate)try{navigator.vibrate(ms);}catch{}};
-  const roomName=i=>R.ROOMS[i]?.zh||'';
 
-  let room=null,host='',up='',S=null,recvAt=0,mine=null,joinedAt=0,kicked=false,lastSnapAt=0,lastPh='',lastSend=0;
+  let room=null,host='',up='',S=null,recvAt=0,off=null,mine=null,joinedAt=0,kicked=false,lastSnapAt=0,lastSend=0,otherDev=false;
   const qs=[];
   const send=m=>{lastSend=now();return net.post(up,'u',host?{...m,id:myId(),to:host}:{...m,id:myId()});};
+  const gameNow=()=>!S?0:S.ph==='play'&&off!=null?now()+off:S.ct;
 
   /* ── Screens outside the game (room list, name, lobby, end) ── */
-  const brand=sub=>`<div class="brand"><div class="logo-art" aria-hidden="true"><i></i></div><h1 class="logo">太空站救援</h1><p class="logo-en">${sub}</p></div>`;
+  const brand=sub=>`<div class="brand"><div class="logo-ring" aria-hidden="true"><i></i></div><h1 class="logo">星环防线</h1><p class="logo-en">${sub}</p></div>`;
   function screen(html,key=''){
     if(key&&ui.dataset.key===key)return false;ui.dataset.key=key;
-    ui.innerHTML=`<div class="screen"><div class="box">${html}</div></div>`;ui.classList.remove('hidden');$('#play').classList.add('hidden');document.body.classList.remove('playing');return true;
+    ui.innerHTML=`<div class="screen"><div class="box">${html}</div></div>`;ui.classList.remove('hidden');setPlaying(false);return true;
   }
 
   /* ── 1. Find the teacher's room ── */
@@ -45,7 +46,7 @@
     const best=new Map();for(const r of rooms.values()){if(Date.now()-r.at>=6000||r.ph==='closed')continue;const o=best.get(r.room);if(!o||r.at>o.at)best.set(r.room,r);}
     const list=[...best.values()].sort((a,b)=>a.room<b.room?-1:1),down=net.downFor()>4000;
     const key='rooms:'+(down?'down':list.map(r=>r.room+'/'+r.n+'/'+(r.hid||'')).join(','));
-    if(!screen(`${brand('Station Rescue')}${list.length?`<p class="sub">点老师的房间 Tap your teacher's room</p><div class="list">${list.map(r=>`<button class="room" data-room="${esc(r.room)}" data-hid="${esc(r.hid||'')}"><span>房间 ${esc(r.room)}</span><small>${r.n} 人</small></button>`).join('')}</div>`
+    if(!screen(`${brand('STAR RING')}${list.length?`<p class="sub">点老师的房间 Tap your teacher's room</p><div class="list">${list.map(r=>`<button class="room" data-room="${esc(r.room)}" data-hid="${esc(r.hid||'')}"><span>房间 ${esc(r.room)}</span><small>${r.n} 人</small></button>`).join('')}</div>`
       :down?`<p class="sub"><b class="warn">连不上网络</b><br>请检查 Wi-Fi 或流量<br><small>Can't connect. Check your internet.</small></p>`
       :`<p class="sub dots">等老师开房间 Waiting for the teacher</p>`}`,key))return;
     ui.querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>pickRoom(b.dataset.room,b.dataset.hid));
@@ -64,12 +65,12 @@
     catch{portal=null;}
     return portal;
   }
-  const head=()=>brand('房间 '+esc(room));
+  const head=()=>brand(`房间 <span class="n">${esc(room)}</span>`);
   function who(){
     me=readMe();
     if(!me)return pickLevel();
-    screen(`${head()}<img class="pet big" src="${R.avatarSrc(av())}" alt=""><p class="sub">你是 Are you</p><p class="me-name">${esc(me.name)}</p>${me.level?`<p class="sub">${esc(me.level)}</p>`:''}
-      <button class="big-btn" id="yes">是我，加入 Join</button><p class="again"><button class="ghost" id="notme">不是我 Not me</button>${qp.get('r')?'':'<button class="ghost" id="back">换房间 Other room</button>'}</p>`);
+    screen(`${head()}<p class="sub">你是 Are you</p><p class="me-name">${esc(me.name)}</p>${me.level?`<p class="sub">${esc(me.level)}</p>`:''}
+      <button class="big-btn" id="yes">是我，加入 JOIN</button><p class="again"><button class="ghost" id="notme">不是我 Not me</button>${qp.get('r')?'':'<button class="ghost" id="back">换房间 Other room</button>'}</p>`);
     $('#yes').onclick=()=>{R.sfx.unlock();joinRoom();};
     $('#notme').onclick=()=>{store(ME,null);me=null;pickLevel();};
     $('#back')&&($('#back').onclick=backToRooms);
@@ -94,7 +95,7 @@
     find.oninput=draw;draw();$('#lv').onclick=pickLevel;
   }
   function guest(){
-    screen(`${head()}<p class="sub">打你的名字 Your name</p><input class="field" id="gname" maxlength="16" autocomplete="off" placeholder="名字 Name"><button class="big-btn" id="go" disabled>加入 Join</button>
+    screen(`${head()}<p class="sub">打你的名字 Your name</p><input class="field" id="gname" maxlength="16" autocomplete="off" placeholder="名字 Name"><button class="big-btn" id="go" disabled>加入 JOIN</button>
       <p class="again"><button class="ghost" id="lv">← 用名单 Class list</button></p>`);
     const input=$('#gname'),go=$('#go');input.oninput=()=>{go.disabled=!input.value.trim();};
     input.onkeydown=e=>{if(e.key==='Enter'&&input.value.trim())go.click();};
@@ -103,14 +104,19 @@
   }
 
   /* ── 3. Join and listen ── */
-  const sendJoin=()=>send({k:'join',name:me.name,av:av(),dev:DEV,lv:me.level||''});
+  const sendJoin=()=>send({k:'join',name:me.name,dev:DEV,lv:me.level||''});
   function joinRoom(){
-    net.leave('rescue-lobby');up=`rescue-${room}-u`;joinedAt=now();
+    net.leave('rescue-lobby');up=`rescue-${room}-u`;joinedAt=now();goFullscreen();
     const mineHost=p=>!p?.hid||!host||p.hid===host;
     net.join(`rescue-${room}`,(ev,p)=>{if(ev==='snap')onSnap(p);else if(ev==='q'){if(mineHost(p))onQuestions(p);}else if(ev==='closed'){if(mineHost(p))closed();}});
     sendJoin();screen(`${head()}<p class="sub dots">正在加入 Joining</p>`,'joining');
   }
-  function message(text,btn,fn){screen(`${brand('Station Rescue')}<p class="sub">${text}</p><button class="big-btn" id="again">${btn}</button>`);$('#again').onclick=fn;}
+  function goFullscreen(){
+    if(!matchMedia('(pointer:coarse)').matches)return;
+    const el=document.documentElement;
+    try{(el.requestFullscreen?.({navigationUI:'hide'})||Promise.reject()).then(()=>window.screen.orientation?.lock?.('landscape')).catch(()=>{});}catch{}
+  }
+  function message(text,btn,fn){screen(`${brand('STAR RING')}<p class="sub">${text}</p><button class="big-btn" id="again">${btn}</button>`);$('#again').onclick=fn;}
   function closed(){up='';message('老师已经关掉房间。<br>The room is closed.','重新找房间 Find a room',()=>location.reload());}
   // Keep telling the teacher we are here (this also rejoins after the teacher's page reloads).
   // (Not while another phone has taken my place: only "use this phone" takes it back.)
@@ -118,203 +124,157 @@
   addEventListener('pagehide',()=>{if(up&&!kicked&&mine)send({k:'bye'});});
   setInterval(()=>{$('#net').classList.toggle('hidden',!up||!S||kicked||now()-lastSnapAt<4000||S.ph==='end');},1000);
 
-  let otherDev=false;
-  function onQuestions(p){for(const [i,q] of p.items||[])qs[i]=q;qKey='';draw();}
+  function onQuestions(p){for(const [i,q] of p.items||[])qs[i]=q;qKey='';drawAsk();}
+  let lastRs=null,lastPh='';
   function onSnap(raw){
     if(kicked||!up)return;
     if(raw.hid){if(!host)host=raw.hid;else if(raw.hid!==host){if(now()-Math.max(lastSnapAt,joinedAt)<8000)return;host=raw.hid;mine=null;}}
     const s=R.unpack(raw),t=now();lastSnapAt=t;
     if(s.k?.includes(myId())){kicked=true;up='';message('老师把你移出了房间。<br>The teacher removed you.','再加入 Join again',()=>location.reload());return;}
-    const was=S?.ph;S=s;recvAt=t;
+    const was=S?.ph;
+    // this phone's clock → the game's clock (the freshest snapshot wins, drifting slowly so a late one can't jerk it back)
+    const cand=s.ct-t;off=s.ph!==was||off==null?cand:Math.max(cand,off-4);
+    S=s;recvAt=t;
     const m=s.p.find(p=>p.id===myId());
     if(m&&m.dev&&m.dev!==DEV){mine=null;if(!otherDev){otherDev=true;
-      screen(`${brand('房间 '+esc(room))}<p class="sub">你在另一部手机加入了。<br>You joined on another phone.</p><button class="big-btn" id="here">用这部手机 Use this phone</button>`);
+      screen(`${head()}<p class="sub">你在另一部手机加入了。<br>You joined on another phone.</p><button class="big-btn" id="here">用这部手机 Use this phone</button>`);
       $('#here').onclick=()=>{otherDev=false;sendJoin();screen(`${head()}<p class="sub dots">正在加入 Joining</p>`,'joining');};}return;}
     if(otherDev)return;
     const first=!mine&&!!m;mine=m||null;
     if(m){if(first||lastRs==null)lastRs=m.rs;if(m.rs!==lastRs){lastRs=m.rs;result(m);}
-      if(m.walk||now()-goAt>1500)localWalk=null;
-      if(pend&&(m.e2!==pendBase||now()-pendAt>2000))pend=0;}
+      if(first)shotN=Math.max(shotN,m.ln||0);}   // (after a reload of this page, keep numbering shots after the last one seen)
     if(s.ph!==lastPh){phase(was,s.ph);lastPh=s.ph;}
-    events(s);draw();
+    events(s);screens();
   }
   function phase(was,ph){
-    if(ph==='vote'){R.sfx.twist();buzz(200);myVote='';}
-    if(ph==='final'&&was!=='pause'){R.sfx.go();buzz(120);}
-    if(ph==='play'&&was==='count')R.sfx.go();
-    if(ph==='end'&&S.end){const st=S.end.s;if(S.end.o!=='stop')RA?.jingle(st>=2?'win':'lose');}
-    if(ph==='lobby'){mapOpen=false;qKey='';}
-    if(ph!=='play'&&ph!=='final')mapOpen=false;
+    if(ph==='play'&&was==='count'){R.sfx.go();myShots=[];}
+    if(ph==='count'){myShots=[];shotN=mine?.ln||shotN;closeAsk();}
+    if(ph==='end'&&S.end&&S.end.o!=='stop')RA?.jingle(S.end.o==='win'?'win':'lose');
+    if(ph==='lobby'){closeAsk();myShots=[];}
   }
   /* What happened that this student should hear about. */
-  let lastFx=-1;
+  let lastFx=-1;const sparks=[];
   function events(s){
     const top=s.fx.reduce((a,f)=>Math.max(a,f.id),0);if(lastFx<0){lastFx=top;return;}
-    for(const f of s.fx){if(f.id<=lastFx)continue;const mineFx=f.by===myId(),where=roomName(f.room);
-      if(f.k==='alarm'){note(`陨石要撞${where}！去挡住 Meteor!`,'bad');R.sfx.alarm();buzz(60);}
-      else if(f.k==='hit'){note(`陨石撞到${where}！船体 -${C.METEOR.HIT}`,'bad');R.sfx.hit();buzz(160);}
-      else if(f.k==='fire'){note(`${where}着火了 Fire!`,'bad');R.sfx.fire();}
-      else if(f.k==='spread'){note(`火烧到${where}了`,'bad');}
-      else if(f.k==='block'){note(mineFx?'你挡住了陨石！':`${where}挡住陨石了！`,'good');R.sfx.block();}
-      else if(f.k==='out'){note(mineFx?'你灭了火！':`${where}的火灭了`,'good');if(mineFx)R.sfx.out();}
-      else if(f.k==='board'&&mineFx){note('上船了！Boarded','good');R.sfx.board();buzz(80);}
-      else if(f.k==='put'&&mineFx){R.sfx.put();}}
+    for(const f of s.fx){if(f.id<=lastFx)continue;const mineFx=f.by===myId();
+      if(f.k==='boom'){if(mineFx){R.sfx[f.w==='l'||f.w==='b'?'big':'boom']();buzz(f.w==='b'?200:25);if(f.w==='m'||f.w==='l')note(f.w==='l'?'击碎大陨石！':'击碎！','good');if(f.w==='b')note('最后一击！你击碎了陨石王！','gold');}
+        else if(f.w==='b'||f.w==='l')R.sfx.big();}
+      else if(f.k==='hit'&&mineFx)R.sfx.hit();
+      else if(f.k==='ring'){R.sfx.ring();buzz(Number(f.w)>=20?150:60);}
+      else if(f.k==='gold'){note(mineFx?'你打碎金色陨石！全员 +2 发':'金色陨石！全员 +2 发','gold');R.sfx.gold();buzz(40);}
+      else if(f.k==='warn'){note('⚠ 陨石王正在接近！','bad');R.sfx.warn();buzz(300);}
+      else if(f.k==='king'){note('陨石王出现！全员集中火力！','bad');R.sfx.king();}}
     lastFx=Math.max(lastFx,top);
   }
   let noteTimer=0;
-  function note(text,kind=''){const n=$('#note');n.textContent=text;n.className='show '+kind;clearTimeout(noteTimer);noteTimer=setTimeout(()=>{n.className='';},2400);}
+  function note(text,kind=''){const n=$('#note');n.textContent=text;n.className='show '+kind;clearTimeout(noteTimer);noteTimer=setTimeout(()=>{n.className='';},2200);}
 
-  /* ── The game screen ── */
-  let mapOpen=false,qKey='',busyAns=false,ansAt=0,pend=0,pendBase=0,pendAt=0,localWalk=null,goAt=0,lastRs=null,myVote='',built=false,alertKey='',panelKey='';
-  const live=()=>S&&(S.ph==='play'||S.ph==='final');
-  const ct=()=>!S?0:live()?S.ct+Math.min(3000,now()-recvAt):S.ct;
-  const walk=()=>mine?.walk||localWalk;
-  const walking=()=>{const w=walk();return !!w&&ct()<w.t1;};
-  const whereNow=()=>{const w=walk();return w&&ct()>=w.t1?w.to:mine?.room??C.START;};
-  const energy=()=>Math.max(0,(mine?.e2||0)-pend);
-  const fireIn=r=>S.c.find(c=>c.k==='f'&&c.room===r),meteorIn=r=>S.c.find(c=>c.k==='m'&&c.room===r);
-  const burning=()=>new Set(S.c.filter(c=>c.k==='f').map(c=>c.room));
-  const escaping=()=>S.ph==='final'&&S.md!=='fight';
-  const secs=ms=>Math.max(0,Math.ceil(ms/1000));
-  const mmss=ms=>{const s=secs(ms);return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
-  const ICON={
-    f:'<svg viewBox="0 0 24 24"><path d="M12 2.5c1 3.4 5.5 5.6 5.5 11a5.5 5.5 0 0 1-11 0c0-2.6 1.3-4.1 2.6-5.6.2 1.6.9 2.7 2 3.2-.4-3.4.2-6 .9-8.6z" fill="currentColor"/></svg>',
-    m:'<svg viewBox="0 0 24 24"><circle cx="15" cy="9" r="5.5" fill="currentColor"/><path d="M11 13 3 21M9 9.5 4 14.5M14.5 15 9.5 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
-    e:'<svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg>',
-    o:'<b class="o2">O₂</b>',
-    p:'<svg viewBox="0 0 24 24"><path d="M12 2c3 2.5 4.5 6 4.5 10.5L19 15v3l-3-1-1 3H9l-1-3-3 1v-3l2.5-2.5C7.5 8 9 4.5 12 2z" fill="currentColor"/><circle cx="12" cy="9.5" r="2" fill="#fff"/></svg>',
-    on:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.2 6.5a8 8 0 0 1 0 11"/></svg>',
-    off:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>'};
-  const setHtml=(el,h)=>{if(el&&el.innerHTML!==h)el.innerHTML=h;};
-  const setText=(el,t)=>{if(el&&el.textContent!==t)el.textContent=t;};
+  /* ── Playing sideways ── Rotation lock on, or a scanner / chat app's browser that never turns: the page stays tall even
+     when the phone is held sideways. Then the game itself is turned 90° (the name and lobby screens stay as they are).
+     Which way round comes from the motion sensor where the phone gives it freely (Android); the ↻ button flips it. */
+  const coarse=matchMedia('(pointer:coarse)').matches;let turn=0,tilt=1,tiltSet=false;
+  try{tilt=store('lumi-rescue-tilt')==='-1'?-1:1;tiltSet=store('lumi-rescue-tilt')!=null;}catch{}
+  addEventListener('devicemotion',e=>{if(tiltSet)return;const x=e.accelerationIncludingGravity?.x;if(x==null||Math.abs(x)<6)return;const t=x>0?1:-1;if(t!==tilt){tilt=t;applyTurn();}});
+  const GW=()=>turn?innerHeight:innerWidth,GH=()=>turn?innerWidth:innerHeight;
+  function pt(e){const x=e.clientX,y=e.clientY;return turn===1?{x:y,y:innerWidth-x}:turn===-1?{x:innerHeight-y,y:x}:{x,y};}
+  function applyTurn(){
+    const want=document.body.classList.contains('playing')&&coarse&&innerHeight>innerWidth?tilt:0,g=$('#game');
+    turn=want;document.body.classList.toggle('turned',!!turn);
+    g.style.cssText=turn?`width:${innerHeight}px;height:${innerWidth}px;left:${turn===1?innerWidth:0}px;top:${turn===1?0:innerHeight}px;transform:rotate(${turn*90}deg)`:'';
+    resize();
+  }
+  $('#flip').onclick=()=>{tilt=-tilt;tiltSet=true;store('lumi-rescue-tilt',String(tilt));applyTurn();};
+  function setPlaying(on){
+    if(document.body.classList.contains('playing')===on)return;
+    document.body.classList.toggle('playing',on);$('#game').classList.toggle('hidden',!on);if(on){ui.classList.add('hidden');ui.dataset.key='';}applyTurn();
+  }
+  function resize(){const dpr=Math.min(2,devicePixelRatio||1);cv.width=Math.round(GW()*dpr);cv.height=Math.round(GH()*dpr);}
+  addEventListener('resize',()=>applyTurn());
 
-  function build(){
-    built=true;
-    $('#hud').innerHTML=['hull:船体','o2:氧气','eng:引擎'].map(x=>{const [k,t]=x.split(':');return `<div class="mini ${k}" id="h-${k}"><span>${t}</span><div class="track"><i></i>${k==='eng'?'<em></em>':''}</div><b></b></div>`;}).join('')
-      +`<span class="clock" id="hclock"></span><button class="icon-btn" id="mute" data-quiet aria-label="声音 Sound"></button>`;
-    $('#dock').innerHTML=`<div class="cells" id="cells"></div><div class="where" id="where"></div><button class="map-btn" id="mapBtn"><span></span></button>`;
-    $('#map').innerHTML=`<div class="sheet-head"><b>太空站地图 <small>点房间走过去 Tap a room</small></b><button class="ghost" id="mapClose">回去答题 ✕</button></div>
-      <div class="grid map-grid">${R.ROOMS.map((r,i)=>`<button class="tile room-${r.k}" data-go="${i}"><b>${r.zh}</b><small>${r.en}</small><span class="st"></span><span class="eta"></span><span class="ppl"></span></button>`).join('')}</div>
-      <div class="room-panel" id="rp"></div>`;
-    $('#mapBtn').onclick=()=>{mapOpen=!mapOpen;draw();};
-    $('#mapClose').onclick=()=>{mapOpen=false;draw();};
-    $('#map').addEventListener('click',e=>{const t=e.target.closest('[data-go]');if(t)return goTo(Number(t.dataset.go));const a=e.target.closest('[data-put]');if(a&&!a.disabled)putIn(a.dataset.put);});
-    $('#alerts').addEventListener('click',e=>{const t=e.target.closest('[data-room]');if(!t)return;mapOpen=true;goTo(Number(t.dataset.room));});
-    const showMute=()=>{$('#mute').innerHTML=RA?.mode==='off'?ICON.off:ICON.on;};
-    $('#mute').onclick=()=>{if(!RA)return;RA.unlock();RA.mode=RA.mode==='off'?'all':'off';showMute();};showMute();
-    $('#qbox').addEventListener('click',e=>{const v=e.target.closest('[data-vote]');if(v&&S?.ph==='vote'){myVote=v.dataset.vote;send({k:'vote',v:myVote});R.sfx.vote();draw();}
-      if(e.target.closest('#openMap')){mapOpen=true;draw();}});
+  /* ── Shooting ── Drag to aim (a dashed line), let go to shoot. My bullets are drawn at once and checked against the
+     meteors here too, so a hit sparks immediately; the teacher's computer has the final say. */
+  const SIDE=118;   // the bullet column on the right (CSS px)
+  let aim=null,myShots=[],shotN=0,lastShotAt=0;
+  const view=()=>window.RescueStage.viewport(GW(),GH(),{padR:SIDE});
+  const order=()=>S?S.p.slice().sort((a,b)=>a.seq-b.seq):[];
+  function myTurret(){const list=order(),i=list.findIndex(p=>p.id===myId());return i<0?null:R.turretAt(i,list.length);}
+  function aimAt(e){const P=pt(e),v=view(),T=myTurret();if(!T)return null;const wx=(P.x-v.ox)/v.k,wy=(P.y-v.oy)/v.k;return R.aimLimit(Math.atan2(wy-T.y,wx-T.x));}
+  const pending=()=>Math.max(0,shotN-(mine?.ln||0));
+  const ammo=()=>Math.max(0,(mine?.ammo||0)-pending());
+  const canShoot=()=>S&&S.ph==='play'&&mine&&$('#ask').classList.contains('hidden');
+  cv.addEventListener('pointerdown',e=>{
+    if(!canShoot())return;e.preventDefault();R.sfx.unlock();
+    if(ammo()<=0){R.sfx.empty();openAsk();return;}
+    const a=aimAt(e);if(a==null)return;aim={id:e.pointerId,a};cv.setPointerCapture?.(e.pointerId);
+  });
+  cv.addEventListener('pointermove',e=>{if(aim&&aim.id===e.pointerId){const a=aimAt(e);if(a!=null)aim.a=a;}});
+  const release=e=>{if(!aim||aim.id!==e.pointerId)return;const a=aim.a;aim=null;if(e.type==='pointerup')shoot(a);};
+  cv.addEventListener('pointerup',release);cv.addEventListener('pointercancel',release);
+  function shoot(a){
+    if(!canShoot()||ammo()<=0||now()-lastShotAt<C.SHOT.COOL)return;
+    const T=myTurret();if(!T)return;lastShotAt=now();
+    const t=gameNow(),from=R.muzzle(T,a);shotN++;
+    myShots.push({id:'L'+shotN,by:myId(),x:from.x,y:from.y,a,t0:t,te:0,ck:t});
+    send({k:'fire',a:Math.round(a*1000)/1000,t:Math.round(t),n:shotN});
+    R.sfx.laser();buzz(6);
+    if(ammo()<=0)setTimeout(()=>{if(ammo()<=0&&canShoot())openAsk();},450);
   }
-  function goTo(r){
-    if(!mine||!live()||mine.pod)return;
-    if(walking()){note('走到了再换 Wait until you arrive');return;}
-    const here=whereNow();if(r===here){draw();return;}
-    send({k:'go',room:r});localWalk=R.plan(here,r,burning(),ct());goAt=now();draw();
-  }
-  function putIn(task){
-    const cost=task==='board'?C.BOARD[S.md]*2:2;if(energy()<cost||walking())return;
-    if(!pend)pendBase=mine.e2;pend+=cost;pendAt=now();send({k:'put',task});R.sfx.put();buzz(15);draw();
+  // My bullets flying: the first meteor they touch (as far as this phone knows) stops them with a spark.
+  function flyMine(t){
+    for(const b of myShots){
+      while(!b.te&&b.ck<t){const s=Math.min(t,b.ck+14);b.ck=s;const P=R.bPos(b,s);
+        if(R.offScreen(P)||s-b.t0>C.SHOT.LIFE){b.te=s;break;}
+        for(const m of S.m){if(s<m.t0||m.hp<=0)continue;const M=R.mPos(m,s),r=C.KIND[m.k].r+C.SHOT.R;
+          if((M.x-P.x)**2+(M.y-P.y)**2<=r*r){b.te=s;sparks.push({id:-sparks.length-1,k:'hit',x:P.x,y:P.y,at:s,w:m.k});break;}}}
+    }
+    myShots=myShots.filter(b=>!b.te||t-b.te<400);
+    while(sparks.length&&t-sparks[0].at>500)sparks.shift();
   }
 
-  /* What a room needs now, and what this student can do there. */
-  function tasks(r){
-    const list=[],f=fireIn(r),m=meteorIn(r);
-    if(f)list.push({t:'fire',label:`灭火 Put out fire`,n:`${f.got}/${f.need}`,cls:'f'});
-    if(m)list.push({t:'shield',label:`护盾 Shield`,n:`${m.got}/${m.need} · ${secs(m.t1-ct())} 秒`,cls:'m'});
-    const warm=S.ph==='play'&&ct()<C.WARM;
-    if(r===C.ENGINE&&!escaping()&&S.eng<100)list.push({t:'engine',label:S.md==='fight'?`修引擎 ×${C.BOOST}`:'修引擎 Repair',n:`${Math.floor(S.eng)}%`,cls:'e',off:!!f||warm,why:f?'先灭火':'暖身后才能修'});
-    if(r===C.OXYGEN&&S.o2<100)list.push({t:'o2',label:`补氧气 +${C.O2.CELL}%`,n:`${Math.floor(S.o2)}%`,cls:'o',off:!!f,why:'先灭火'});
-    if(r===C.POD&&escaping()&&!mine.pod)list.push({t:'board',label:`上船 Board`,n:`要 ${C.BOARD[S.md]} 格`,cls:'p',off:!!f,why:'先灭火',cost:C.BOARD[S.md]*2});
-    return list;
-  }
-  function drawMap(){
-    const map=$('#map');map.classList.toggle('hidden',!mapOpen);if(!mapOpen)return;
-    const here=whereNow(),w=walk(),go=walking(),fires=burning(),t=ct();
-    const ppl=R.ROOMS.map(()=>0);for(const p of S.p)if(!p.pod){const x=p.walk&&t<p.walk.t1?p.walk.to:p.room;ppl[x]++;}
-    map.querySelectorAll('[data-go]').forEach(b=>{const i=Number(b.dataset.go),f=fireIn(i),m=meteorIn(i);
-      b.classList.toggle('here',!go&&i===here);b.classList.toggle('dest',go&&w&&i===w.to);b.classList.toggle('fire',!!f);b.classList.toggle('meteor',!!m);
-      const st=[f?`<i class="b f">${ICON.f}${f.got}/${f.need}</i>`:'',m?`<i class="b m">${ICON.m}${secs(m.t1-t)}s ${m.got}/${m.need}</i>`:'',
-        i===C.ENGINE?`<i class="b e">${ICON.e}${Math.floor(S.eng)}%</i>`:'',i===C.OXYGEN?`<i class="b o ${S.o2<C.O2.LOW?'low':''}">O₂ ${Math.floor(S.o2)}%</i>`:'',
-        i===C.POD&&escaping()?`<i class="b p">${ICON.p}${(S.cr||[0])[0]}</i>`:''].join('');
-      setHtml(b.querySelector('.st'),st);
-      const r=!go&&i!==here?R.route(here,i,fires):null;
-      setText(b.querySelector('.eta'),!go&&i===here?'你在这里':go&&w&&i===w.to?`走路中 ${secs(w.t1-t)} 秒`:r?`走 ${secs(r.ms)} 秒${r.path.slice(1,-1).some(x=>fires.has(x))?' 穿过火场':''}`:'');
-      setText(b.querySelector('.ppl'),ppl[i]?`${ppl[i]} 人`:'');});
-    // the room I'm in: what I can put my energy into
-    const rp=$('#rp');
-    if(go){setHtml(rp,`<p class="walking">正在去 <b>${roomName(w.to)}</b> · ${secs(w.t1-t)} 秒</p>`);panelKey='';return;}
-    const list=tasks(here),key=here+':'+list.map(x=>x.t+(x.off?'!':'')).join(',');
-    if(key!==panelKey){panelKey=key;
-      rp.innerHTML=`<p class="rp-title">你在 <b>${roomName(here)}</b></p>`+(list.length?list.map(x=>`<button class="act ${x.cls}" data-put="${x.t}" data-cost="${x.cost||2}"><span class="a-ic">${ICON[x.cls]}</span><span class="a-l"></span><span class="a-n"></span><span class="a-c">${x.off?x.why:x.t==='board'?'':'投 1 格'}</span></button>`).join('')
-        :`<p class="rp-empty">这里现在没事。看看别的房间？<br><small>Nothing to do here.</small></p>`);}
-    rp.querySelectorAll('[data-put]').forEach(b=>{const x=list.find(y=>y.t===b.dataset.put);if(!x)return;setText(b.querySelector('.a-l'),x.label);setText(b.querySelector('.a-n'),x.n);
-      b.disabled=!!x.off||energy()<Number(b.dataset.cost);});
-  }
-  function drawAlerts(){
-    const box=$('#alerts'),t=ct(),list=[...S.c].sort((a,b)=>(a.k==='m'?a.t1:a.t1+1e7)-(b.k==='m'?b.t1:b.t1+1e7));
-    let top='';
-    if(S.ph==='final'){const cr=S.cr||[0,0];top=S.md==='fight'?`<div class="final fight"><b>拼到底！</b> ${mmss(S.fin-t)} 内修好引擎 · 引擎能量 ×${C.BOOST}</div>`
-      :`<div class="final escape"><b>${S.md==='escape'?'坐逃生船！':'紧急逃生！'}</b> 带 ${C.BOARD[S.md]} 格能量去逃生舱 · 已上船 ${cr[0]}/${cr[1]} · ${mmss(S.fin-t)}</div>`;}
-    else if(S.ph==='play'&&t<C.WARM)top=`<div class="final warm"><b>暖身</b> 先答题存满能量（引擎预热中）· 第一颗陨石 ${mmss(C.WARM-t)} 后到</div>`;
-    const lowAir=S.o2<C.O2.LOW&&!escaping();
-    const key=top.replace(/\d+/g,'')+'|'+list.map(c=>c.id).join(',')+'|'+lowAir;
-    if(key!==alertKey){alertKey=key;
-      box.innerHTML=`<div class="top-line"></div>`+list.slice(0,3).map(c=>`<button class="alert ${c.k}" data-room="${c.room}" data-id="${c.id}">${ICON[c.k]}<span class="a-t"></span></button>`).join('')
-        +(list.length>3?`<span class="more">+${list.length-3}</span>`:'')+(lowAir?`<button class="alert o" data-room="${C.OXYGEN}"><b class="o2">O₂</b><span>缺氧！答对只拿半格 → 氧气站</span></button>`:'');}
-    setHtml(box.querySelector('.top-line'),top);
-    box.querySelectorAll('[data-id]').forEach(b=>{const c=S.c.find(x=>x.id===Number(b.dataset.id));if(!c)return;
-      setText(b.querySelector('.a-t'),c.k==='m'?`${roomName(c.room)} ${secs(c.t1-t)} 秒 · 护盾 ${c.got}/${c.need}`:`${roomName(c.room)} 着火 · ${c.got}/${c.need}`);
-      b.classList.toggle('urgent',c.k==='m'&&c.t1-t<12000);});
-  }
-  function drawHud(){
-    const bar=(k,v,low)=>{const el=$('#h-'+k);el.querySelector('i').style.width=R.clamp(v,0,100)+'%';setText(el.querySelector('b'),Math.floor(v)+'%');el.classList.toggle('low',!!low);};
-    bar('hull',S.hull,S.hull<35);bar('o2',S.o2,S.o2<C.O2.LOW);bar('eng',S.eng,false);$('#h-eng em').style.left=C.TWIST_AT+'%';
-    setText($('#hclock'),S.ph==='final'?mmss(S.fin-ct()):'');
-  }
-  function drawDock(){
-    const e=energy(),go=walking(),w=walk();
-    setHtml($('#cells'),[0,1,2].map(k=>{const f=R.clamp(e/2-k,0,1);return `<i class="cell ${f>=1?'full':f>0?'half':''}"></i>`;}).join('')+`<span class="cell-n">${e/2}</span>`);
-    setHtml($('#where'),mine.pod?'<b>已上船 ✓</b>':go?`去 <b>${roomName(w.to)}</b> ${secs(w.t1-ct())}s`:`你在 <b>${roomName(whereNow())}</b>`);
-    const b=$('#mapBtn');setText(b.querySelector('span'),mapOpen?'回去答题':e>=2&&!mine.pod?'去送能量 ▸':'看地图 ▸');b.classList.toggle('glow',e>=C.E_MAX&&!mapOpen);
-    b.classList.toggle('hidden',S.ph==='vote');   // voting: nothing to walk to
-  }
-  /* The middle of the screen: the question (only redrawn when it changes, so typing is never lost). */
-  function qState(){
-    if(S.ph==='vote')return 'vote';
+  /* ── The question card (reloading) ── Opens by itself when the bullets run out, or with 装弹. No time limit.
+     Redrawn only when the question changes, so typing is never lost. */
+  let qKey='',busyAns=false,ansAt=0,needAt=0,autoClose=0;
+  // (For 0.7 s after opening the card ignores touches: a student still tapping to shoot must not pick an answer by accident.)
+  let armTimer=0;
+  function openAsk(){if(!mine||S?.ph!=='play')return;const box=$('#ask');box.classList.remove('hidden');box.classList.add('arming');
+    clearTimeout(armTimer);armTimer=setTimeout(()=>box.classList.remove('arming'),700);aim=null;qKey='';drawAsk();}
+  function closeAsk(){$('#ask').classList.add('hidden');qKey='';}
+  $('#reload').onclick=()=>{R.sfx.unlock();if($('#ask').classList.contains('hidden'))openAsk();else if(ammo()>0)closeAsk();};
+  function askState(){
     if(!mine)return 'none';
-    if(mine.e2>=C.E_MAX)return 'full';
-    if(ct()<mine.cd)return 'cool:'+mine.q;
-    if(mine.q<0)return 'noq';
+    if(mine.ammo>=C.AMMO.MAX)return 'full';
+    if(gameNow()<mine.cd)return 'cool:'+mine.q;
+    if(mine.q<0)return 'none';
     if(!qs[mine.q])return 'load:'+mine.q;
     return `q:${mine.q}:${mine.rs}`;
   }
-  let needAt=0;
-  function drawQ(){
-    const box=$('#qbox'),key=qState();
-    if(key==='vote'){drawVote(box);return;}
+  function drawAsk(){
+    const box=$('#ask');if(box.classList.contains('hidden')||!S)return;
+    const key=askState();
     if(key.startsWith('load')&&now()-needAt>1500){needAt=now();send({k:'need',q:mine.q});}
-    if(key===qKey){if(key.startsWith('cool'))setText($('#coolN'),String(secs(mine.cd-ct())));return;}
+    if(key===qKey){if(key.startsWith('cool'))setText($('#coolN'),String(Math.max(0,Math.ceil((mine.cd-gameNow())/1000))));return;}
     qKey=key;busyAns=false;
-    const pod=mine?.pod?'<p class="ribbon">已上船 ✓ 可以继续练习 Keep practising</p>':'';
-    if(key==='full')box.innerHTML=`<div class="center"><div class="big-cells">${'<i class="cell full"></i>'.repeat(3)}</div><h2>能量满了！</h2><p class="sub">先去把能量送出去，才能拿新的题目。<br>Energy full: go and use it.</p><button class="big-btn" id="openMap">打开地图 ▸</button></div>`;
-    else if(key.startsWith('cool'))box.innerHTML=`<div class="center">${pod}<div class="wrong-face">✗</div><h2>答错了</h2><p class="sub">这题等一下会再出现。<br>This question will come back.</p><p class="cool"><b id="coolN">${secs(mine.cd-ct())}</b> 秒</p></div>`;
-    else if(key.startsWith('load'))box.innerHTML=`<div class="center"><p class="sub dots">题目加载中 Loading</p></div>`;
-    else if(key==='none'||key==='noq')box.innerHTML=`<div class="center"><p class="sub dots">等一下 Wait</p></div>`;
-    else{const q=qs[mine.q];box.innerHTML=pod+questionHtml(q);wireQuestion(q,mine.q);}
+    const close=ammo()>0?`<button class="ghost close" id="askClose">回去战斗 ✕</button>`:'';
+    if(key==='full')box.innerHTML=`<div class="card center"><h2>子弹满了！</h2><p class="sub">最多 ${C.AMMO.MAX} 发，先去打陨石。</p><button class="big-btn" id="askBack">回去战斗</button></div>`;
+    else if(key.startsWith('cool'))box.innerHTML=`<div class="card center">${close}<div class="wrong-face">✗</div><h2>答错了</h2><p class="sub">这题等一下会再出现。This question will come back.</p><p class="cool"><b id="coolN">${Math.max(0,Math.ceil((mine.cd-gameNow())/1000))}</b> 秒后下一题</p></div>`;
+    else if(key.startsWith('load')||key==='none')box.innerHTML=`<div class="card center">${close}<p class="sub dots">题目加载中 Loading</p></div>`;
+    else{const q=qs[mine.q];box.innerHTML=`<div class="card">${close}<p class="tag">装弹：答对 +${C.AMMO.ANSWER} 发${(mine.streak||0)%C.AMMO.STREAK===C.AMMO.STREAK-1?'（再对一题多 1 发！）':''}</p>${questionHtml(q)}</div>`;wireQuestion(q,mine.q);}
+    $('#askClose')&&($('#askClose').onclick=closeAsk);$('#askBack')&&($('#askBack').onclick=closeAsk);
   }
+  const setText=(el,t)=>{if(el&&el.textContent!==t)el.textContent=t;};
   function questionHtml(q){
     const letter=k=>'ABCDE'[k];
     const body=q.type==='fill'?`<div class="fill-row"><input class="fill" id="fill" autocomplete="off" autocapitalize="off" placeholder="写答案 Your answer"><button class="go" id="send">确定</button></div>`
-      :`<div class="opts">${q.options.map((o,k)=>`<button class="opt" data-n="${k+1}"><span class="k">${letter(k)}</span><span>${esc(o)}</span></button>`).join('')}</div>${q.type==='multi'?'<button class="go wide" id="send" disabled>确定 Check</button>':''}`;
-    return `<div class="qcard"><p class="q">${esc(q.text)}</p>${q.img?`<img class="q-img" src="${esc(q.img)}" alt="">`:''}${q.type==='multi'?'<p class="hint">选出全部正确答案 Choose all correct answers</p>':''}${body}<p class="msg" id="msg"></p></div>`;
+      :`<div class="opts ${q.options.every(o=>String(o).length<=18)?'two':''}">${q.options.map((o,k)=>`<button class="opt" data-n="${k+1}"><span class="k">${letter(k)}</span><span>${esc(o)}</span></button>`).join('')}</div>${q.type==='multi'?'<button class="go wide" id="send" disabled>确定 Check</button>':''}`;
+    return `<p class="q">${esc(q.text)}</p>${q.img?`<img class="q-img" src="${esc(q.img)}" alt="">`:''}${q.type==='multi'?'<p class="hint">选出全部正确答案 Choose all correct answers</p>':''}${body}<p class="msg" id="msg"></p>`;
   }
   function wireQuestion(q,i){
-    const box=$('#qbox');
-    const submit=(v,els)=>{if(busyAns||!live())return;busyAns=true;ansAt=now();els.forEach(e=>e.classList.add('sent'));box.querySelectorAll('.opt,#send,#fill').forEach(e=>e.disabled=true);
+    const box=$('#ask');
+    const submit=(v,els)=>{if(busyAns||S?.ph!=='play')return;busyAns=true;ansAt=now();els.forEach(e=>e.classList.add('sent'));box.querySelectorAll('.opt,#send,#fill').forEach(e=>e.disabled=true);
       setText($('#msg'),'检查中… Checking');send({k:'ans',q:i,v});
       setTimeout(()=>{if(busyAns&&now()-ansAt>=2900&&qKey===`q:${mine?.q}:${mine?.rs}`){busyAns=false;box.querySelectorAll('.opt,#send,#fill').forEach(e=>e.disabled=false);
         box.querySelectorAll('.sent').forEach(e=>e.classList.remove('sent'));setText($('#msg'),'没收到，再按一次 Try again');}},3000);};
-    if(q.type==='fill'){const inp=$('#fill'),go=()=>inp.value.trim()&&submit(inp.value,[inp]);$('#send').onclick=go;inp.onkeydown=e=>{if(e.key==='Enter')go();};if(!('ontouchstart' in window))inp.focus();}
+    if(q.type==='fill'){const inp=$('#fill'),go=()=>inp.value.trim()&&submit(inp.value,[inp]);$('#send').onclick=go;inp.onkeydown=e=>{if(e.key==='Enter')go();};if(!coarse)inp.focus();}
     else if(q.type==='multi'){const send2=$('#send'),opts=[...box.querySelectorAll('.opt')];
       opts.forEach(b=>b.onclick=()=>{b.classList.toggle('sel');send2.disabled=!opts.some(o=>o.classList.contains('sel'));});
       send2.onclick=()=>{const sel=opts.filter(o=>o.classList.contains('sel'));submit(sel.map(o=>Number(o.dataset.n)),sel);};}
@@ -322,48 +282,73 @@
   }
   function result(m){
     busyAns=false;qKey='';
-    if(m.rk===1){note(m.gain>=2?'答对了！+1 格能量 ⚡':'答对了！缺氧只拿半格 ⚡','good');R.sfx.right();R.sfx.gain();buzz(30);}
+    if(m.rk===1){note(`装弹 +${m.gain} 发！${m.gain>C.AMMO.ANSWER?' 连对奖励':''}`,'good');R.sfx.reload();buzz(30);
+      clearTimeout(autoClose);autoClose=setTimeout(()=>{if(ammo()>0)closeAsk();},550);}   // back to shooting
     else if(m.rk===0){R.sfx.wrong();buzz(90);}
-  }
-  function drawVote(box){
-    const v=S.v||[0,0];
-    if(qKey!=='vote'){qKey='vote';
-      box.innerHTML=`<div class="vote-ph"><h2>陨石群提前来了！</h2><p class="sub">全班投票 Vote · <b id="vt"></b> 秒</p>
-        <button class="vote-btn fight" data-vote="f"><b>拼到底</b><small>${C.FIGHT/1000} 秒内把引擎修到 100%（能量 ×${C.BOOST}）<br>成功 ★★★ · 失败要紧急逃生</small><span class="n" id="vf"></span></button>
-        <button class="vote-btn escape" data-vote="e"><b>坐逃生船</b><small>每人带 ${C.BOARD.escape} 格能量到逃生舱上船<br>全员上船 ★★</small><span class="n" id="ve"></span></button>
-        <p class="sub small">引擎现在 <b id="veng"></b> · 平手就拼到底</p></div>`;}
-    setText($('#vt'),String(secs(S.vt)));setText($('#vf'),String(v[0]));setText($('#ve'),String(v[1]));setText($('#veng'),Math.floor(S.eng)+'%');
-    box.querySelectorAll('[data-vote]').forEach(b=>b.classList.toggle('on',b.dataset.vote===myVote));
+    drawAsk();
   }
 
+  /* ── HUD ── */
+  const showMute=()=>{$('#mute').innerHTML=RA?.mode==='off'
+    ?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>'
+    :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.2 6.5a8 8 0 0 1 0 11"/></svg>';};
+  $('#mute').onclick=()=>{if(!RA)return;RA.unlock();RA.mode=RA.mode==='off'?'all':'off';showMute();};showMute();
+  let hudKey='';
+  function drawHud(){
+    const a=ammo(),col=C.COLORS[mine?.col]||'#2ef2ff',B=S.m.find(m=>m.k==='b');
+    const key=[Math.ceil(S.hull),S.sc,a,col,S.st,B?B.hp:'',S.ph,$('#ask').classList.contains('hidden')].join('|');if(key===hudKey)return;hudKey=key;
+    const h=$('#hHull');h.querySelector('i').style.width=R.clamp(S.hull,0,100)+'%';setText(h.querySelector('b'),Math.ceil(S.hull)+'%');h.className='mini'+(S.hull<=30?' low':S.hull<=60?' mid':'');
+    setText($('#hKills'),String(S.sc||0));
+    $('#game').style.setProperty('--me',col);
+    setText($('#ammoN'),String(a));
+    $('#pips').innerHTML=Array.from({length:C.AMMO.MAX},(_,i)=>`<i class="${i<a?'on':''}"></i>`).join('');
+    $('#reload').classList.toggle('glow',a===0);
+    $('#boss').classList.toggle('hidden',!B);if(B){$('#boss i').style.width=(B.hp/B.max*100)+'%';setText($('#bossHp'),`${B.hp}/${B.max}`);}
+    const ban=S.ph==='play'&&S.ct<C.WARM?'练习：拖动瞄准，放开发射':S.st==='warn'?'⚠ 陨石王正在接近！':'';
+    setText($('#banner'),ban);$('#banner').classList.toggle('hidden',!ban);$('#banner').classList.toggle('hot',S.st==='warn');
+    $('#pause').classList.toggle('hidden',S.ph!=='pause');
+  }
+
+  /* ── Screens by phase ── */
+  function screens(){
+    if(!S||!up||kicked||otherDev)return;
+    if(S.ph==='lobby')return lobby();
+    if(S.ph==='end')return ending();
+    if(!mine){screen(`${head()}<p class="sub dots">正在加入 Joining</p>`,'joining');return;}
+    setPlaying(true);
+    const c=$('#count');if(S.ph==='count'){c.classList.remove('hidden');setText(c,String(Math.max(1,Math.ceil(S.cd/1000))));}else c.classList.add('hidden');
+    drawHud();drawAsk();
+  }
   function lobby(){
-    const n=S.p.length,A=R.ANIMALS[av()];
-    if(screen(`${head()}<button class="pet-btn" id="pet" data-quiet aria-label="换一只 Change"><img class="pet big" src="${R.avatarSrc(av())}" alt=""></button>
-      <p class="small">${A.zh} ${A.en} · 点一下换一只</p><p class="me-name">${esc(me?.name||'')}</p><p class="sub dots">等老师开始 Waiting</p><p class="sub">船员 ${n} 人</p>
-      <ol class="tips"><li>答对一题 = <b>1 格能量</b>（最多 3 格）</li><li>点地图上的房间走过去，<b>投能量</b>：灭火、挡陨石、补氧气、修引擎</li><li>大家要分工：一个人挡不住陨石！</li></ol>`,'lobby:'+n+':'+av())){
-      $('#pet').onclick=()=>{R.sfx.unlock();R.sfx.tap();store('lumi-rescue-av',String((av()+1)%R.ANIMALS.length));sendJoin();ui.dataset.key='';lobby();};}
+    const n=S.p.length,col=C.COLORS[mine?.col]||'#2ef2ff';
+    screen(`${head()}<div class="my-turret" style="--c:${col}"><i></i></div><p class="small">你的炮台颜色 Your turret</p><p class="me-name" style="color:${col}">${esc(me?.name||'')}</p>
+      <p class="sub dots">等老师开始 Waiting</p><p class="sub">防卫队 ${n} 人</p>
+      <ol class="tips"><li>手机<b>横拿</b>，手指<b>拖动瞄准、放开发射</b></li><li>子弹打完就<b>答题装弹</b>：答对 +3 发，不限时</li><li>大陨石要很多人一起打；<b>金色陨石</b>打碎全员 +2 发</li><li>最后<b>陨石王</b>来了，全班集中火力！</li></ol>`,'lobby:'+n+':'+col);
   }
   function ending(){
     const e=S.end;if(!e)return;const m=e.me.get(myId());
-    const title={saved:'太空站保住了！',escape:e.b>=e.n?'全员坐逃生船撤离！':`逃生船出发了！救下 ${e.b}/${e.n} 人`,emerg:e.b>=e.n?'千钧一发，全员逃出来了！':`千钧一发！救下 ${e.b}/${e.n} 人`,stop:'这一局结束了'}[e.o];
-    screen(`${brand('Station Rescue')}${e.o!=='stop'?`<p class="stars">${'★'.repeat(e.s)}<span>${'★'.repeat(3-e.s)}</span></p>`:''}<h2 class="end-title">${esc(title)}</h2>
-      ${m?`<div class="my"><p>第一次就答对 <b>${m.firstOk}/${m.firstN}</b> 题</p><p>一共答对 <b>${m.right}</b> 次${m.fixed?` · 订正 <b>${m.fixed}</b> 题`:''}</p><p>送出能量 <b>⚡ ${m.energy}</b></p></div>`:''}
-      <p class="sub">全班答对 ${e.ta.right} 题 · 挡下 ${e.ta.blocked} 颗陨石 · 灭了 ${e.ta.out} 场火</p><p class="sub dots">等老师开下一局 Waiting</p>`,'end:'+e.o+e.s);
+    const title={win:'陨石王被击碎了！星环守住了！',breach:'陨石王撞上星环……',lost:'星环被打穿了……',stop:'这一局结束了'}[e.o];
+    const acc=m&&m.shots?Math.round(m.hits/m.shots*100):0;
+    screen(`${brand('STAR RING')}${e.o!=='stop'?`<p class="stars">${'★'.repeat(e.s)}<span>${'★'.repeat(3-e.s)}</span></p>`:''}<h2 class="end-title">${esc(title)}</h2>
+      ${e.fin&&e.fin===myId()?'<p class="finisher">最后一击是你！</p>':''}
+      ${m?`<div class="my"><p>第一次就答对 <b>${m.firstOk}/${m.firstN}</b> 题 · 一共答对 <b>${m.right}</b> 次${m.fixed?` · 订正 <b>${m.fixed}</b> 题`:''}</p>
+        <p>开枪 <b>${m.shots}</b> · 命中 <b>${m.hits}</b>${m.shots?`（${acc}%）`:''} · 击碎 <b>${m.kills}</b></p></div>`:''}
+      <p class="sub">全班击碎 ${e.ta.kills} 颗陨石 · 答对 ${e.ta.right} 题 · 防线剩 ${e.hull}%</p><p class="sub dots">等老师开下一局 Waiting</p>`,'end:'+e.o+e.s+e.ta.kills);
   }
-  function draw(){
-    if(!S||!up||kicked||otherDev)return;
-    $('#pause').classList.toggle('hidden',S.ph!=='pause');
-    if(S.ph==='lobby'){lobby();return;}
-    if(S.ph==='end'){ending();return;}
-    if(S.ph==='count'){screen(`${head()}<p class="count-n">${Math.max(1,secs(S.cd))}</p><p class="sub">准备 Get ready</p>`,'count'+secs(S.cd));return;}
-    if(!mine){screen(`${head()}<p class="sub dots">正在加入 Joining</p>`,'joining');return;}
-    if(!built)build();
-    ui.classList.add('hidden');ui.dataset.key='';$('#play').classList.remove('hidden');document.body.classList.add('playing');
-    drawHud();drawAlerts();drawDock();drawQ();drawMap();
+
+  /* ── Drawing: every frame while playing ── */
+  function frame(){
+    requestAnimationFrame(frame);
+    if(!S||$('#game').classList.contains('hidden'))return;
+    const t=gameNow();if(S.ph==='play')flyMine(t);
+    const dpr=cv.width/GW();
+    window.RescueStage.render(ctx,GW(),GH(),dpr,{ct:t,hull:S.hull,st:S.st,ms:S.m,bs:S.b.filter(b=>b.by!==myId()),ps:order(),fx:S.fx.concat(sparks)},now(),
+      {padR:SIDE,me:myId(),aim:aim?aim.a:null,mine:myShots});
   }
-  setInterval(()=>{if(S&&(live()||S.ph==='vote'||S.ph==='count'))draw();},250);
+  requestAnimationFrame(frame);
+  setInterval(()=>{if(S&&(S.ph==='play'||S.ph==='count'||S.ph==='pause')&&mine&&!otherDev){drawHud();drawAsk();}},250);
 
   findRooms();
   const ver=R.freshen(()=>!!room);if(ver)$('#ver').textContent='版本 '+ver;
-  if(local){window.__phone={get S(){return S;},get mine(){return mine;},id:myId};}   // test mode only
+  if(local){window.__phone={get S(){return S;},get mine(){return mine;},id:myId,shoot,ammo,aimAtWorld:(x,y)=>{const T=myTurret();return T?R.aimLimit(Math.atan2(y-T.y,x-T.x)):null;},openAsk};}   // test mode only
 })();
