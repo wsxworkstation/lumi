@@ -234,10 +234,10 @@ test('knock-back: every enemy in the aimed fan flies to the edge of the map, wha
 test('freeze is aimed: a big arrow flies far and freezes the first enemy on its path for 3 s', () => {
   assert.equal(C.SHOT.RANGE,600);assert.equal(C.SHOT.R,40);assert.equal(C.CARD.ICE,3000);
   const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
-  a.x=200;a.y=60;b.x=a.x+150;b.y=a.y;c.x=a.x+60;c.y=a.y;d.x=a.x+100;d.y=a.y;Object.assign(d,{st:1,until:g.t+C.ANSWER});
+  a.x=200;a.y=60;b.x=a.x+150;b.y=a.y;c.x=a.x+60;c.y=a.y;d.x=a.x+100;d.y=a.y+200;Object.assign(d,{st:1,until:g.t+C.ANSWER});
   a.cards=['ice'];assert.ok(g.useCard('a',0,0));assert.deepEqual(a.cards,[],'card used');assert.equal(g.shots.length,1);
   run(g,300);
-  assert.equal(b.st,2,'enemy on the path is frozen');assert.equal(c.st,0,'passes through a teammate');assert.equal(d.st,1,'passes someone answering');
+  assert.equal(b.st,2,'enemy on the path is frozen');assert.equal(c.st,0,'passes through a teammate');
   assert.ok(Math.abs(b.until-g.t-C.CARD.ICE)<=300,'about 3 s');assert.equal(g.shots.length,0,'arrow gone after hitting');
   run(g,C.CARD.ICE);assert.equal(b.st,0);
   // Far away (550) and a little off the line (35): the big arrow still gets them.
@@ -247,12 +247,27 @@ test('freeze is aimed: a big arrow flies far and freezes the first enemy on its 
   b.x=a.x+80;b.y=a.y+80;a.cards=['ice'];g.useCard('a',0);run(g,300);assert.equal(b.st,2,'auto-aim');
   const s=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));assert.ok(Array.isArray(s.s)&&Array.isArray(s.z)&&Array.isArray(s.l));
 });
+test('a freeze arrow that hits someone answering ices their question card for 1.5 s: no answering, then at least 3 s left', () => {
+  const g=playing(['a','b','c']),[a,b,c]=['a','b','c'].map(id=>g.players.get(id));
+  a.x=200;a.y=60;b.x=320;b.y=60;c.x=600;c.y=60;   // b answering in front, c (b's teammate) further on the same line
+  const o=g.orbs[0];give(g,b,o);b.until=g.t+2000;   // only 2 s left on the clock
+  a.cards=['ice'];g.useCard('a',0,0);run(g,250);
+  assert.equal(b.st,1,'still answering');assert.ok(b.lock>g.t&&b.lock-g.t<=C.CARD.LOCK,'question card iced');assert.equal(c.st,0,'the arrow stopped at b');
+  assert.ok(b.until>=b.lock+C.CARD.AFTER_LOCK,'at least 3 s left once the ice melts');
+  assert.deepEqual(g.fx.filter(f=>f.k==='ice').map(f=>[f.to,f.w]),[[['b'],'q']]);
+  assert.equal(g.answer('b',b.qn,g.qs[b.q].answer),false,'answers refused while iced');assert.equal(b.st,1);
+  const s=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));assert.ok(s.p.find(p=>p.id==='b').lock>g.t,'phones see the ice');
+  run(g,C.CARD.LOCK);assert.ok(g.answer('b',b.qn,g.qs[b.q].answer),'answer accepted after it melts');assert.ok(g.sc[b.team]>0,'scored');
+  // A shield takes it instead.
+  give(g,b,g.orbs[1]);b.sh=g.t+5000;a.cards=['ice'];g.useCard('a',0,0);run(g,250);assert.ok(!(b.lock>g.t),'shield stopped it');assert.equal(b.sh,0);
+});
+
 test('the slime card is gone: an old one left in a hand is simply dropped', () => {
   const g=playing(['a','b']),a=g.players.get('a');
   assert.ok(!('slow' in H.CARDS));a.cards=['slow'];assert.equal(g.useCard('a',0,0,100),false);assert.deepEqual(a.cards,[]);assert.equal(g.shots.length,0);
 });
 test('whirlpool: thrown anywhere, 4 s; enemies inside (answering too) are dragged in and walk at half speed; fish bunch up', () => {
-  assert.equal(C.WHIRL.LEN,4000);assert.ok(C.WHIRL.R>=70&&C.WHIRL.R<=110,'about a fifth of the lake');
+  assert.equal(C.WHIRL.LEN,4000);assert.equal(C.WHIRL.R,120,'about a quarter of the lake');
   const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
   a.x=200;a.y=60;
   a.cards=['whirl'];assert.ok(g.useCard('a',0,0,300));run(g,C.WHIRL.FLY+40);

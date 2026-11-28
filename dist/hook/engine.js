@@ -15,7 +15,9 @@
     AWAY:10000,TAKEOVER:7000,   // silent this long = left (phones say "hi" every 4 s); the same name may take over a player silent 7 s
     // Item cards: hold up to 2, tap (or hold and aim) to use. Knock-back throws every enemy in a fan in front of you to the
     // edge of the map, whatever they are doing; freeze 3 s; bomb fish stuns 2 s and costs that team 2 points; ink covers enemy phones 2.5 s.
-    CARD:{ICE:3000,SHIELD:10000,MAX:2,FLY:1600,STUN:2000,INK:2500,BOMB_PTS:2},
+    // LOCK: a freeze arrow that hits someone answering ices their question card for 1.5 s (no answering), and leaves
+    // them at least 3 s to answer once it melts.
+    CARD:{ICE:3000,SHIELD:10000,MAX:2,FLY:1600,STUN:2000,INK:2500,BOMB_PTS:2,LOCK:1500,AFTER_LOCK:3000},
     FAN:{R:260,HALF:0.6},                                      // knock-back: a fan 260 long, about 70° wide
     // Things floating in the lake, caught with the rod like fish (no question): "?" boxes give a card,
     // the bubble gives 10 s of shield. 1 box at the start, at most 2; a new one 6 s after one is taken; the bubble returns 15 s after.
@@ -23,8 +25,8 @@
     SHOT:{RANGE:600,SPEED:1100,R:40},                          // freeze arrow: aimed, flies straight and far, a big arrow; freezes the first enemy it touches
     SLIME:{RANGE:380,FLY:550,R:110,LEN:4000,SLOW:0.4,ROD:0.5},  // slime ball: lands where aimed; sticky puddle 4 s (enemies walk at 40%, rods at half speed)
     // Whirlpool: thrown anywhere (shore or lake), turns for 4 s. Enemies inside (answering too) are dragged to its middle and walk
-    // at half speed; fish inside are pulled into a bunch and swim slowly. About a fifth of the lake across.
-    WHIRL:{RANGE:380,FLY:450,R:90,BAND:1.6,LEN:4000,PULL:0.7,DRAG:110,SLOW:0.5},
+    // at half speed; fish inside are pulled into a bunch and swim slowly. About a quarter of the lake.
+    WHIRL:{RANGE:380,FLY:450,R:120,BAND:1.6,LEN:4000,PULL:0.7,DRAG:110,SLOW:0.5},
     BOMB:{LEN:15000,AX:90,AY:55},                              // bomb fish: looks like any fish to the other team; gone after 15 s
     // A glowing goldfish shows up now and then; answer it right and every fish is worth 2 for a while.
     RUSH:{FIRST:40000,AFTER:40000,LEN:15000},
@@ -149,7 +151,8 @@
     const nameKey=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
     // st: 0 free, 1 answering, 2 frozen, 3 knocked back (flying, kb = the flight), 5 stunned by a bomb fish.
     // kb: flying from a knock-back (in any state, even answering); ink: phone covered in ink until then.
-    const fresh=()=>({st:0,until:0,q:-1,orb:0,ok:0,bad:0,rk:0,goal:null,cool:800,botAt:0,cards:[],sh:0,x2:0,useAt:0,kb:null,ink:0});
+    // lock: question card iced by a freeze arrow until then (can't answer).
+    const fresh=()=>({st:0,until:0,q:-1,orb:0,ok:0,bad:0,rk:0,goal:null,cool:800,botAt:0,cards:[],sh:0,x2:0,useAt:0,kb:null,ink:0,lock:0});
     const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
     const seed=()=>Math.floor(rnd()*2**31);
     // Start positions on the team's picnic blanket, rows far enough apart that names don't cover the animal below.
@@ -310,14 +313,19 @@
           const w=s.k==='whirl';
           g.zones.push({id:s.id,k:w?'w':'s',team:s.team,x:s.tx,y:s.ty,from:s.land,until:s.land+(w?C.WHIRL.LEN:C.SLIME.LEN),safe:[]});
           addFx(w?'whirl':'slime',{id:s.o,x:s.tx,y:s.ty});return false;}
-        // The arrow's path since the last tick: the first enemy on it (not answering, not in the air) is frozen.
+        // The arrow's path since the last tick: the first enemy on it (not in the air) is hit. Someone answering gets
+        // their question card iced for 1.5 s instead of being frozen.
         const d0=Math.min(C.SHOT.RANGE,C.SHOT.SPEED*(s.lt-s.t0)/1000),d1=Math.min(C.SHOT.RANGE,C.SHOT.SPEED*(t-s.t0)/1000);s.lt=t;
         const A={x:s.x+Math.cos(s.a)*d0,y:s.y+Math.sin(s.a)*d0},B={x:s.x+Math.cos(s.a)*d1,y:s.y+Math.sin(s.a)*d1};
         let best=null;
-        for(const q of g.players.values()){if(q.team===s.team||(q.st!==0&&q.st!==2&&q.st!==5))continue;
+        for(const q of g.players.values()){if(q.team===s.team||q.kb||q.st===3)continue;
           const [dist,f]=segDist(A,B,{x:q.x,y:q.y-10});if(dist<=C.SHOT.R&&(!best||f<best.f))best={q,f};}
-        if(best){const q=best.q,by=g.players.get(s.o)||{id:s.o,x:s.x,y:s.y};
-          addFx('ice',by,hit(q,'ice')?[q.id]:[],{tx:Math.round(q.x),ty:Math.round(q.y)});return false;}
+        if(best){const q=best.q,by=g.players.get(s.o)||{id:s.o,x:s.x,y:s.y},at={tx:Math.round(q.x),ty:Math.round(q.y)};
+          if(q.st===1){let got=true;
+            if(q.sh>g.t){q.sh=0;addFx('block',q,[q.id]);got=false;}
+            else{q.lock=g.t+C.CARD.LOCK;q.until=Math.max(q.until,q.lock+C.CARD.AFTER_LOCK);}
+            addFx('ice',by,got?[q.id]:[],{...at,w:'q'});return false;}
+          addFx('ice',by,hit(q,'ice')?[q.id]:[],at);return false;}
         return d1<C.SHOT.RANGE;
       });
       if(g.zones.length)g.zones=g.zones.filter(z=>t<z.until);
@@ -367,7 +375,7 @@
       if(!ok){p.st=2;p.until=g.t+C.FREEZE;}   // a wrong answer (or no answer in time) freezes for 3 s
       if(g.mode!=='time'&&g.sc[p.team]>=g.target)finish('target');
     }
-    g.answer=(id,qn,v)=>{const p=g.players.get(id);if(!p||g.ph!=='play'||p.st!==1||qn!==p.qn)return false;settle(p,!!check(g.qs[p.q],v));return true;};
+    g.answer=(id,qn,v)=>{const p=g.players.get(id);if(!p||g.ph!=='play'||p.st!==1||qn!==p.qn||p.lock>g.t/* iced: not yet */)return false;settle(p,!!check(g.qs[p.q],v));return true;};
     g.input=m=>{
       const p=m&&g.players.get(String(m.id));
       if(m?.k==='join')return g.join(m.id,m.name,false,m.av);
@@ -386,7 +394,7 @@
     g.slowed=id=>{const p=g.players.get(id);return !!p&&slowed(p);};
     function botThink(p,dt){
       if(p.st===1){if(!p.botAt)p.botAt=g.t+2000+rnd()*6000;
-        if(g.t>=p.botAt){const q=g.qs[p.q],good=rnd()<0.65;let v;
+        if(g.t>=p.botAt&&!(p.lock>g.t)){const q=g.qs[p.q],good=rnd()<0.65;let v;
           if(q.type==='fill')v=good?q.accept[0]:'?';else if(good)v=q.answer;else{const wrong=q.options.map((_,i)=>i+1).filter(n=>!q.answer.includes(n));v=[wrong[0]||1];}
           settle(p,!!check(q,v));}
         return;}
@@ -479,7 +487,7 @@
         p:[...g.players.values()].map(p=>[p.id,p.name,p.team,Math.round(p.x),Math.round(p.y),+p.dx.toFixed(2),+p.dy.toFixed(2),p.st,Math.round(p.until),p.q,p.ok,p.rs,p.rk,p.qn,p.av,
           p.cards.join(','),p.sh>g.t?Math.round(p.sh):0,p.x2?1:0,
           p.kb?[Math.round(p.kb.x0),Math.round(p.kb.y0),Math.round(p.kb.x1),Math.round(p.kb.y1),Math.round(p.kb.t0),Math.round(p.kb.t1)]:0,
-          p.ink>g.t?Math.round(p.ink):0]),
+          p.ink>g.t?Math.round(p.ink):0,p.lock>g.t?Math.round(p.lock):0]),
         // A bomb fish also carries its team and the spot it swims around (the other team's phones draw it as a plain fish).
         o:g.orbs.map(o=>{const a=[o.id,o.k,o.s,Math.round(o.b),o.hk,o.by];if(o.bomb!=null)a.push(o.bomb,o.c[0],o.c[1]);return a;}),
         h:g.hooks.map(h=>[h.o,Math.round(h.x),Math.round(h.y),+h.a.toFixed(4),Math.round(h.t0),Math.round(h.tt),Math.round(h.d),h.orb,h.sp||1,h.loot||0]),
@@ -502,7 +510,7 @@
     return {...s,
       p:s.p.map(a=>({id:a[0],name:a[1],team:a[2],x:a[3],y:a[4],dx:a[5],dy:a[6],st:a[7],until:a[8],q:a[9],ok:a[10],rs:a[11],rk:a[12],qn:a[13],av:a[14]??avOf(a[0]),
         cards:a[15]?String(a[15]).split(','):[],sh:a[16]||0,x2:!!(a[17]&1),
-        kb:Array.isArray(a[18])?{x0:a[18][0],y0:a[18][1],x1:a[18][2],y1:a[18][3],t0:a[18][4],t1:a[18][5]}:null,ink:a[19]||0})),
+        kb:Array.isArray(a[18])?{x0:a[18][0],y0:a[18][1],x1:a[18][2],y1:a[18][3],t0:a[18][4],t1:a[18][5]}:null,ink:a[19]||0,lock:a[20]||0})),
       l:(s.l||[]).map(a=>({id:a[0],k:a[1],s:a[2],b:a[3],hk:a[4]})),
       s:(s.s||[]).map(a=>a[1]==='i'?{id:a[0],k:'ice',x:a[2],y:a[3],a:a[4],t0:a[5],team:a[6]}:{id:a[0],k:a[1]==='w'?'whirl':'slime',x:a[2],y:a[3],tx:a[4],ty:a[5],t0:a[6],land:a[7],team:a[8]}),
       z:(s.z||[]).map(a=>({id:a[0],team:a[1],x:a[2],y:a[3],from:a[4],until:a[5],k:a[6]||'s',safe:a[7]||[]})),
@@ -860,7 +868,9 @@
       ctx.font=`700 13px ${FUN}`;const bw=ctx.measureText(txt).width+12;rr(ctx,bx,y-10,bw,20,10);ctx.fillStyle=col;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
       ctx.fillStyle='#fff';ctx.textAlign='left';ctx.fillText(txt,bx+6,y+1);ctx.textAlign='center';bx+=bw+3;}
     ctx.font=`600 16px ${FUN}`;
-    if(p.st===1)thinking(ctx,p.x+26,p.y-36,now);
+    if(p.st===1){thinking(ctx,p.x+26,p.y-36,now);
+      if(p.locked){ctx.save();ctx.globalAlpha=0.85;ctx.fillStyle='rgba(200,240,255,.7)';rr(ctx,p.x+20,p.y-52,42,28,12);ctx.fill();
+        flake(ctx,p.x+30,p.y-38,6,now/500);flake(ctx,p.x+52,p.y-40,5,-now/600);ctx.restore();}}
     else if(p.me){const b=Math.sin(now/220)*3,ty=p.y-60+b;ctx.fillStyle='#fff';ctx.strokeStyle=T.color;ctx.lineWidth=3;ctx.lineJoin='round';
       ctx.beginPath();ctx.moveTo(p.x-9,ty);ctx.lineTo(p.x+9,ty);ctx.lineTo(p.x,ty+11);ctx.closePath();ctx.stroke();ctx.fill();}
     if(m.rk>0&&since<1100){const k=since/1100,ty=p.y-62-k*34;ctx.globalAlpha=1-k*k;
@@ -1108,7 +1118,7 @@
     const hookBy=new Map(V.hooks.map(h=>[h.o,h])),tips=new Map(),mem=new Map(),ps=[...V.players].sort((a,b)=>a.y-b.y);
     for(const p of ps){const m=pState(p,now);mem.set(p.id,m);
       // Knocked back: an arc to the edge of the map with one somersault; dizzy for a moment after landing; ink over the head.
-      const q={...p,inked:p.ink>gt};
+      const q={...p,inked:p.ink>gt,locked:p.lock>gt};
       if(p.kb){const k=clamp((gt-p.kb.t0)/Math.max(1,p.kb.t1-p.kb.t0),0,1),dir=Math.atan2(p.kb.y1-p.kb.y0,p.kb.x1-p.kb.x0);
         Object.assign(q,{lift:Math.sin(Math.PI*k)*(36+Math.min(60,Math.hypot(p.kb.x1-p.kb.x0,p.kb.y1-p.kb.y0)*0.08)),fly:dir,spin:(Math.cos(dir)>=0?1:-1)*k*TAU});}
       tips.set(p.id,drawBody(ctx,q,now,m,hookBy.get(p.id)));}

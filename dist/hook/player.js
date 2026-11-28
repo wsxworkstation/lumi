@@ -141,14 +141,14 @@
     for(const f of s.fx){
       if(f.id<=lastFx)continue;const hitMe=f.to.includes(myId),mineFx=f.by===myId;
       if(f.k==='up'&&hitMe){note(`被 ${nameOf(f.by)} 击飞了！`,'bad');G.sfx.boom();buzz(120);}
-      else if(f.k==='ice'&&hitMe){note(`被 ${nameOf(f.by)} 冻住了！`,'bad');G.sfx.freeze();buzz(120);}
+      else if(f.k==='ice'&&hitMe){note(f.w==='q'?`题目被 ${nameOf(f.by)} 冻住了！`:`被 ${nameOf(f.by)} 冻住了！`,'bad');G.sfx.freeze();buzz(120);}
       else if(f.k==='bomb'&&hitMe){note(f.w&&f.w!=='0'?`钓到炸弹鱼！晕 2 秒，扣 ${f.w} 分`:'钓到炸弹鱼！晕 2 秒','bad');G.sfx.bomb();buzz(200);}
       else if(f.k==='steal'&&hitMe){note(f.w==='p'?`被 ${nameOf(f.by)} 偷了 1 分！`:`被 ${nameOf(f.by)} 偷了「${G.CARDS[f.w]?.zh||'卡'}」卡！`,'bad');G.sfx.steal();buzz(120);}
       else if(f.k==='steal'&&mineFx){if(f.w==='x')note('被保护罩挡住了','bad');else{note(f.w==='p'?'偷到 1 分！':`偷到「${G.CARDS[f.w]?.zh||'卡'}」卡！`,'good');if(f.w!=='p')stoleCard=true;}G.sfx.steal();}
       else if(f.k==='ink'&&hitMe){note(`被 ${nameOf(f.by)} 喷墨水了！`,'bad');G.sfx.ink();buzz(80);}
       else if(f.k==='block'&&mineFx){note('保护罩挡住了！','good');G.sfx.block();}
       else if(f.k==='up'&&mineFx){note(f.to.length?`击飞了 ${f.to.length} 人！`:'被保护罩挡住了','good');G.sfx.boom();}
-      else if(f.k==='ice'&&mineFx){note(f.to.length?`冻住了 ${nameOf(f.to[0])}！`:'被保护罩挡住了','good');G.sfx.freeze();}
+      else if(f.k==='ice'&&mineFx){note(!f.to.length?'被保护罩挡住了':f.w==='q'?`冻住了 ${nameOf(f.to[0])} 的题目！`:`冻住了 ${nameOf(f.to[0])}！`,'good');G.sfx.freeze();}
       else if(f.k==='ink'&&mineFx){note(f.to.length?`墨水喷中 ${f.to.length} 人！`:'都被保护罩挡住了','good');G.sfx.ink();}
       else if(f.k==='bomb'&&mineFx){note(f.to.length?`${nameOf(f.to[0])} 钓到你的炸弹鱼！`:'炸弹鱼被保护罩挡住了','good');G.sfx.bomb();}
       else if(f.k==='bomb'){const p=S.p.find(x=>x.id===f.by);if(p&&mine&&p.team===mine.team)note(`${nameOf(f.to[0])||'敌人'} 钓到我们的炸弹鱼！`,'good');G.sfx.bomb();}
@@ -201,7 +201,7 @@
   function cardTarget(c){
     if(c.a!=null)return {a:c.a,d:c.d};
     const range=RANGE[c.k];let best=null;
-    if(c.k!=='whirl')for(const p of S.p){if(p.team===mine.team||p.kb||(c.k==='ice'&&p.st===1))continue;const q=where(p),d=Math.hypot(q.x-me.x,q.y-me.y);if(d<=range&&(!best||d<best.d))best={d,a:Math.atan2(q.y-me.y,q.x-me.x)};}
+    if(c.k!=='whirl')for(const p of S.p){if(p.team===mine.team||p.kb)continue;const q=where(p),d=Math.hypot(q.x-me.x,q.y-me.y);if(d<=range&&(!best||d<best.d))best={d,a:Math.atan2(q.y-me.y,q.x-me.x)};}
     return best||{a:Math.atan2(C.SEA.y-me.y,C.SEA.x-me.x),d:range*0.7};
   }
   // Where a thrown whirlpool lands (the teacher's computer works it out the same way).
@@ -296,6 +296,13 @@
       opts.forEach(b=>b.onclick=()=>{b.classList.toggle('sel');sendB.disabled=!opts.some(o=>o.classList.contains('sel'));});
       sendB.onclick=()=>submit(opts.filter(o=>o.classList.contains('sel')).map(o=>Number(o.dataset.n)));}
     else box.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{b.classList.add('sel');submit([Number(b.dataset.n)]);});
+  }
+  // A freeze arrow iced my question card: cover it and lock the answers until it melts (the teacher's computer refuses them meanwhile).
+  let iced=false;
+  function lockAnswers(on){
+    const box=$('#ask');if(on===iced&&box.classList.contains('iced')===on)return;iced=on;box.classList.toggle('iced',on);if(answerSent)return;
+    box.querySelectorAll('.opt,#fill').forEach(e=>e.disabled=on);
+    const sb=$('#send');if(sb)sb.disabled=on||(!!box.querySelector('.opt')&&!box.querySelector('.opt.sel'));
   }
   function hideQuestion(){$('#ask').classList.add('hidden');$('#ask').innerHTML='';if(shownQn===-2)shownQn=-1;}
   function result(rk){
@@ -476,6 +483,7 @@
     if(S.ph==='count'){const n=Math.max(1,Math.ceil((S.cd-(now()-recvAt))/1000));
       if(n!==lastCount){lastCount=n;cnt.textContent=n;cnt.classList.remove('bump');void cnt.offsetWidth;cnt.classList.add('bump');G.sfx.tick();}cnt.classList.remove('hidden');}
     else{cnt.classList.add('hidden');lastCount=-1;}
+    lockAnswers(mine.st===1&&mine.lock>t);
     if(mine.st===1){const bar=$('#tbar');if(bar){const pct=Math.max(0,(mine.until-t)/C.ANSWER*100);bar.style.width=pct+'%';bar.style.background=pct>50?'#3cc895':pct>25?'#ffc93c':'#ff7096';}}
   }
   requestAnimationFrame(frame);
