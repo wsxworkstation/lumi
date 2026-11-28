@@ -20,9 +20,9 @@
     CARD:{ICE:3000,SHIELD:10000,MAX:2,FLY:1600,STUN:2000,INK:2500,BOMB_PTS:2,LOCK:1500,AFTER_LOCK:3000},
     FAN:{R:260,HALF:0.6},                                      // knock-back: a fan 260 long, about 70° wide
     // Things floating in the lake, caught with the rod like fish (no question): "?" boxes give a card,
-    // the bubble gives 10 s of shield. 1 box at the start, at most 2; a new one 6 s after one is taken; the bubble returns 15 s after.
-    LOOT:{R:22,BOXES:2,BOX_EVERY:6000,BUB_EVERY:15000},
-    SHOT:{RANGE:600,SPEED:1100,R:40},                          // freeze arrow: aimed, flies straight and far, a big arrow; freezes the first enemy it touches
+    // the bubble gives 10 s of shield. 2 boxes at the start, at most 3; a new one 4 s after one is taken; the bubble returns 15 s after.
+    LOOT:{R:22,START:2,BOXES:3,BOX_EVERY:4000,BUB_EVERY:15000},
+    SHOT:{RANGE:600,SPEED:1100,R:55},                          // freeze arrow: aimed, flies straight and far, a big arrow; freezes the first enemy it touches
     SLIME:{RANGE:380,FLY:550,R:110,LEN:4000,SLOW:0.4,ROD:0.5},  // slime ball: lands where aimed; sticky puddle 4 s (enemies walk at 40%, rods at half speed)
     // Whirlpool: thrown anywhere (shore or lake), turns for 4 s. Enemies inside (answering too) are dragged to its middle and walk
     // at half speed; fish inside are pulled into a bunch and swim slowly. About a third of the lake.
@@ -206,10 +206,10 @@
       g.fx=[];g.rush=0;g.glowAt=C.RUSH.FIRST;g.gone.clear();g.shots=[];g.zones=[];g.loot=[];
       for(const p of g.players.values())Object.assign(p,fresh());
       placeAll();
-      const n=clamp(Math.round(g.players.size*0.5)+3,5,13),fast=Math.max(1,Math.round(n/4));
+      const n=clamp(Math.round(g.players.size*0.65)+5,8,20),fast=Math.max(1,Math.round(n/4));   // 10 players → 12 fish, 20 → 18, at most 20
       g.orbs=Array.from({length:n},(_,i)=>({id:i+1,k:i<fast?'f':'n',s:seed(),b:0,hk:'',by:''}));
       // In the lake from the start: one "?" box and the shield bubble; the second box comes 6 s later.
-      if(g.items){spawnLoot('c');spawnLoot('b');}g.boxAt=C.LOOT.BOX_EVERY;g.bubAt=Infinity;
+      if(g.items){for(let i=0;i<C.LOOT.START;i++)spawnLoot('c');spawnLoot('b');}g.boxAt=C.LOOT.BOX_EVERY;g.bubAt=Infinity;
     };
     g.pause=()=>{if(g.ph==='play')g.ph='pause';};
     g.resume=()=>{if(g.ph==='pause')g.ph='play';};
@@ -1004,9 +1004,9 @@
       if(globalThis.HookArt?.get('fx-ice-arrow')){
         ctx.strokeStyle='#e6faff';ctx.lineWidth=4;ctx.lineCap='round';
         for(let i=0;i<3;i++){ctx.globalAlpha=0.45-i*0.1;ctx.beginPath();ctx.moveTo(-20-i*9,(i-1)*5);ctx.lineTo(-55-i*8,(i-1)*5);ctx.stroke();}
-        ctx.globalAlpha=1;effectSprite(ctx,'fx-ice-arrow',0,0,96,48);ctx.restore();return;
+        ctx.globalAlpha=1;effectSprite(ctx,'fx-ice-arrow',0,0,128,64);ctx.restore();return;
       }
-      ctx.globalAlpha=1;const gr=ctx.createLinearGradient(-22,0,22,0);gr.addColorStop(0,'#bfe8ff');gr.addColorStop(1,'#ffffff');
+      ctx.globalAlpha=1;ctx.scale(1.6,1.6);const gr=ctx.createLinearGradient(-22,0,22,0);gr.addColorStop(0,'#bfe8ff');gr.addColorStop(1,'#ffffff');
       ctx.fillStyle=gr;ctx.strokeStyle='#4fb3f2';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(24,0);ctx.lineTo(4,-10);ctx.lineTo(-18,-5);ctx.lineTo(-14,0);ctx.lineTo(-18,5);ctx.lineTo(4,10);ctx.closePath();ctx.fill();ctx.stroke();
       ctx.restore();return;}
     const k=clamp((t-s.t0)/(s.land-s.t0),0,1),x=s.x+(s.tx-s.x)*k,y=s.y+(s.ty-s.y)*k,h=Math.sin(Math.PI*k)*80;

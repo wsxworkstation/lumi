@@ -151,23 +151,26 @@ function castAt(g,p,at,orb){g.hooks=g.hooks.filter(h=>h.o!==p.id);let x=at.x,y=a
   if(orb){const d=Math.hypot(x-p.x,y-p.y),f=H.fishPos(orb,g.t+d/C.OUT*1000,g.zones);x=f.x;y=f.y;}
   return g.input({k:'fire',id:p.id,x:p.x,y:p.y,a:Math.atan2(y-p.y,x-p.x),t:g.t});}
 
-test('the lake: one "?" box and the shield bubble at the start, a second box 6 s later, never more than 2 boxes', () => {
+test('the lake: two "?" boxes and the shield bubble at the start, a third box 4 s later, never more than 3 boxes; more fish', () => {
+  assert.deepEqual([C.LOOT.START,C.LOOT.BOXES,C.LOOT.BOX_EVERY],[2,3,4000]);
   const g=game();g.join('a','A');g.join('b','B');g.start();
-  assert.deepEqual(g.loot.map(l=>l.k).sort(),['b','c'],'a box and the bubble from the very start');
-  run(g,C.COUNT+C.LOOT.BOX_EVERY+50);assert.equal(g.loot.filter(l=>l.k==='c').length,2,'second box after 6 s');
-  run(g,30000);assert.equal(g.loot.filter(l=>l.k==='c').length,2,'at most 2 boxes');assert.equal(g.loot.filter(l=>l.k==='b').length,1,'one bubble');
+  assert.deepEqual(g.loot.map(l=>l.k).sort(),['b','c','c'],'two boxes and the bubble from the very start');
+  run(g,C.COUNT+C.LOOT.BOX_EVERY+50);assert.equal(g.loot.filter(l=>l.k==='c').length,3,'third box after 4 s');
+  run(g,30000);assert.equal(g.loot.filter(l=>l.k==='c').length,3,'at most 3 boxes');assert.equal(g.loot.filter(l=>l.k==='b').length,1,'one bubble');
+  // Fish: 10 students → 12, 20 → 18, never more than 20 (and at least 8).
+  for(const [n,fish] of [[1,8],[10,12],[20,18],[30,20]]){const f=game();for(let i=0;i<n;i++)f.join('p'+i,'P'+i,true);f.start();assert.equal(f.orbs.length,fish,n+' players → '+fish+' fish');}
   const s=C.SEA;for(const l of g.loot)for(let t=0;t<60000;t+=1234){const p=H.lootPos(l,t);assert.ok(((p.x-s.x)/s.rx)**2+((p.y-s.y)/s.ry)**2<1,'floats inside the lake');}
-  const u=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));assert.equal(u.l.length,3);assert.deepEqual(H.lootPos(u.l[0],g.t),H.lootPos(g.loot[0],g.t),'phones can follow them');
+  const u=H.unpack(JSON.parse(JSON.stringify(g.snapshot())));assert.equal(u.l.length,4);assert.deepEqual(H.lootPos(u.l[0],g.t),H.lootPos(g.loot[0],g.t),'phones can follow them');
   const off=game();off.items=false;off.join('a','A');off.start();run(off,C.COUNT+20000);assert.equal(off.loot.length,0,'teacher switched items off');
 });
 
 test('a box caught with the rod gives a card at once (no question); hands full: the line passes through it', () => {
-  const g=game();g.join('a','A');g.join('b','B');g.start();run(g,C.COUNT+10);g.glowAt=1e9;g.orbs=[];   // nothing else in the water
+  const g=game();g.join('a','A');g.join('b','B');g.start();run(g,C.COUNT+10);g.glowAt=1e9;g.orbs=[];g.loot=g.loot.filter(l=>l.k==='c');g.bubAt=1e9;   // nothing else in the water (boxes only)
   const a=g.players.get('a'),box=g.loot.find(l=>l.k==='c'),at=g.lootAt(box);shoreNear(a,at);
   assert.ok(castAt(g,a,at));for(let i=0;i<90&&!a.cards.length;i++)g.tick(33);
   assert.equal(a.cards.length,1,'got a card');assert.equal(a.st,0,'no question for a box');assert.ok(!g.loot.includes(box),'box taken');
   assert.ok(g.fx.some(f=>f.k==='box'&&f.by==='a'));
-  run(g,C.LOOT.BOX_EVERY+100);assert.equal(g.loot.filter(l=>l.k==='c').length,1,'a new box 6 s after it was taken');
+  const left=g.loot.filter(l=>l.k==='c').length;run(g,C.LOOT.BOX_EVERY+100);assert.equal(g.loot.filter(l=>l.k==='c').length,Math.min(C.LOOT.BOXES,left+1),'a new box 4 s after it was taken');
   // Hands full: the line goes through the box, which stays in the lake, and the phone is told.
   a.cards=['up','ice'];const box2=g.loot.find(l=>l.k==='c');run(g,1000);const at2=g.lootAt(box2);shoreNear(a,at2);
   castAt(g,a,at2);for(let i=0;i<60;i++)g.tick(33);
@@ -232,7 +235,7 @@ test('knock-back: every enemy in the aimed fan flies to the edge of the map, wha
   b.x=a.x+100;b.y=a.y+100;b.sh=g.t+5000;assert.ok(g.useCard('a',0));assert.equal(b.kb,null,'shield took it');assert.equal(b.sh,0);
 });
 test('freeze is aimed: a big arrow flies far and freezes the first enemy on its path for 3 s', () => {
-  assert.equal(C.SHOT.RANGE,600);assert.equal(C.SHOT.R,40);assert.equal(C.CARD.ICE,3000);
+  assert.equal(C.SHOT.RANGE,600);assert.equal(C.SHOT.R,55);assert.equal(C.CARD.ICE,3000);
   const g=playing(['a','b','c','d']),[a,b,c,d]=['a','b','c','d'].map(id=>g.players.get(id));
   a.x=200;a.y=60;b.x=a.x+150;b.y=a.y;c.x=a.x+60;c.y=a.y;d.x=a.x+100;d.y=a.y+200;Object.assign(d,{st:1,until:g.t+C.ANSWER});
   a.cards=['ice'];assert.ok(g.useCard('a',0,0));assert.deepEqual(a.cards,[],'card used');assert.equal(g.shots.length,1);
