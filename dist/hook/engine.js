@@ -1036,7 +1036,7 @@
     // Thief glove: a little glove flies from the victim back to the thief with what it took.
     if(f.k==='steal'&&a<900){const q=Math.min(1,a/700),e=q<0.5?2*q*q:1-(-2*q+2)**2/2,x=f.tx+(f.x-f.tx)*e,y=f.ty-20+(f.y-20-f.ty+20)*e-Math.sin(Math.PI*q)*60;
       ctx.save();ctx.globalAlpha=a>700?1-(a-700)/200:1;
-      if(!effectSprite(ctx,'fx-glove',x,y,44,44,Math.sin(a/80)*0.3))glove(ctx,x,y,a);
+      if(!effectSprite(ctx,'fx-glove',x,y,54,54,Math.sin(a/80)*0.3))glove(ctx,x,y,a);
       if(f.w&&f.w!=='x'){ctx.font=`700 16px ${FUN}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=4;ctx.strokeStyle='#fff';ctx.fillStyle='#a0785a';
         const lab=f.w==='p'?'+1':(CARDS[f.w]?.zh||'卡');ctx.strokeText(lab,x,y-26);ctx.fillText(lab,x,y-26);}
       ctx.restore();
